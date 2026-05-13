@@ -292,6 +292,9 @@ document.addEventListener('DOMContentLoaded', checkLogin);
   <div class="edit-modal-box">
     <div class="edit-modal-title">Edit Entry</div>
     <input type="hidden" id="edit-entry-id">
+    <input type="hidden" id="edit-original-project">
+    <input type="hidden" id="edit-original-desc">
+    <input type="hidden" id="edit-original-time">
     <div class="form-row two-col">
       <div><label>Date</label><input type="date" id="edit-date"></div>
       <div><label>Time</label><input type="time" id="edit-time"></div>
@@ -643,6 +646,10 @@ function editEntry(btn){
       document.getElementById('edit-date').value=parts[2]+'-'+parts[0].padStart(2,'0')+'-'+parts[1].padStart(2,'0');
     }
   }
+  // Store originals for Sheet matching
+  document.getElementById('edit-original-project').value = e.project||'';
+  document.getElementById('edit-original-desc').value = e.desc||'';
+  document.getElementById('edit-original-time').value = e.time||'';
   document.getElementById('edit-modal').classList.add('open');
 }
 
@@ -680,9 +687,9 @@ function saveEditEntry(){
   if(GOOGLE_SCRIPT_URL){
     const editPayload = {
       action:'updateEntry',
-      originalTimestamp: entries[idx].timestamp || '',
-      originalProject: entries[idx].project || '',
-      originalDesc: entries[idx].desc || '',
+      originalProject: document.getElementById('edit-original-project').value,
+      originalDesc: document.getElementById('edit-original-desc').value,
+      originalTime: document.getElementById('edit-original-time').value,
       date: entries[idx].date,
       time: entries[idx].time,
       inspector: entries[idx].inspector,
