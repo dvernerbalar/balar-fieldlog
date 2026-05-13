@@ -140,6 +140,7 @@
       <div class="photo-previews" id="photo-previews"></div>
     </div>
     <button class="btn-submit" onclick="submitEntry()">+ Add Entry to Log</button>
+    <div id="submit-error" style="display:none;background:#fde8ea;border:1px solid #f5b7bc;color:#9b1c2e;border-radius:7px;padding:12px 16px;margin-top:10px;font-size:14px;font-weight:600;"></div>
     <div id="entries-section" style="margin-top:36px;">
       <div class="entries-header">
         <div class="section-label" style="margin-bottom:0;flex:1;">Today's Entries</div>
@@ -300,7 +301,20 @@ function submitEntry(){
   const pn=document.getElementById('project-number').value.trim();
   const pname=document.getElementById('project-name').value.trim();
   const desc=document.getElementById('work-desc').value.trim();
-  if(!pn||!pname||!desc){alert('Please select a Project Number, Project Name, and enter a Description.');return;}
+  const errDiv=document.getElementById('submit-error');
+  errDiv.style.display='none';
+  if(!pn||!pname||!desc){
+    let msg='Please fill in: ';
+    const missing=[];
+    if(!pn)missing.push('Project Number');
+    if(!pname)missing.push('Project Name');
+    if(!desc)missing.push('Description of Work');
+    errDiv.textContent=msg+missing.join(', ');
+    errDiv.style.display='block';
+    errDiv.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+  errDiv.style.display='none';
   const checks=Array.from(document.querySelectorAll('.check-item.checked')).map(el=>CHECKLIST_ITEMS[el.dataset.index]);
   const entry={
     id:Date.now(),projectNumber:pn,project:pname,
@@ -323,6 +337,7 @@ function submitEntry(){
 }
 
 function clearForm(){
+  const se=document.getElementById('submit-error');if(se)se.style.display='none';
   ['work-desc','notes','station','contractor'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('contractor-select').selectedIndex=0;
   document.getElementById('contractor').style.display='none';
