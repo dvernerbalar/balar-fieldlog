@@ -487,30 +487,13 @@ function submitEntry(){
     try { localStorage.setItem('balar_fieldlog_v2', JSON.stringify(entriesNoPhotos)); } catch(e2) {}
   }
   if(GOOGLE_SCRIPT_URL){
-    // Send entry data first (no photo)
-    const entryForSheet = {...entry, photos:[]};
-    fetch(GOOGLE_SCRIPT_URL, {method:'POST', body:JSON.stringify(entryForSheet)})
-    .then(r=>r.json())
-    .then(result=>{
-      // If entry saved and has a photo, send photo separately
-      if(result.rowIndex && entry.photos.length > 0){
-        fetch(GOOGLE_SCRIPT_URL, {
-          method:'POST',
-          body:JSON.stringify({
-            action:'savePhoto',
-            rowIndex: result.rowIndex,
-            photo: entry.photos[0],
-            project: entry.project,
-            projectNumber: entry.projectNumber,
-            date: entry.date,
-            station: entry.station,
-            time: entry.time,
-            inspector: entry.inspector
-          })
-        }).catch(()=>{});
-      }
-    })
-    .catch(()=>{});
+    // Send entry with photo as separate field (script handles both in one call)
+    const entryForSheet = {
+      ...entry,
+      photos:[], // Drive upload handled server-side
+      photoBase64: entry.photos.length > 0 ? entry.photos[0] : ''
+    };
+    fetch(GOOGLE_SCRIPT_URL, {method:'POST', body:JSON.stringify(entryForSheet)}).catch(()=>{});
   }
   clearForm();renderEntries();showToast('Entry added to log',false);
 }
