@@ -281,7 +281,7 @@ document.addEventListener('DOMContentLoaded', checkLogin);
     </div>
     <div class="modal-field">
       <label>Project</label>
-      <select id="report-project">
+      <select id="report-project" onchange="document.getElementById('btn-generate').disabled=!this.value;">
         <option value="">Select a date first...</option>
       </select>
     </div>
@@ -596,6 +596,8 @@ async function loadReportProjects(){
     if(projects.length===1){
       projSel.selectedIndex=1;
       document.getElementById('btn-generate').disabled=false;
+    } else {
+      document.getElementById('btn-generate').disabled=true;
     }
   }catch(err){
     projSel.innerHTML='<option value="">Could not load projects</option>';
