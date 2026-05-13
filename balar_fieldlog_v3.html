@@ -118,6 +118,46 @@
   }
   .btn-login:hover { background:#7a1522; }
   .login-footer { font-size:11px;color:#bbb;margin-top:20px; }
+
+  /* ── REPORT MODAL ── */
+  .modal-overlay {
+    position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:500;
+    display:none;align-items:center;justify-content:center;padding:20px;
+  }
+  .modal-overlay.open { display:flex; }
+  .modal-box {
+    background:#fff;border-radius:12px;padding:28px 24px;
+    max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);
+  }
+  .modal-title {
+    font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;
+    color:#0d1b2a;margin-bottom:4px;letter-spacing:0.5px;
+  }
+  .modal-sub { font-size:12px;color:#999;margin-bottom:20px; }
+  .modal-field { margin-bottom:16px; }
+  .modal-field label { display:block;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#667;margin-bottom:5px; }
+  .modal-field input, .modal-field select {
+    width:100%;padding:10px 13px;border:1px solid #d0d7de;border-radius:7px;
+    font-family:'Barlow',sans-serif;font-size:15px;color:#222;
+    background:#f8fafc;outline:none;transition:border-color 0.2s;-webkit-appearance:none;
+  }
+  .modal-field input:focus, .modal-field select:focus { border-color:#9b1c2e;box-shadow:0 0 0 3px rgba(155,28,46,0.08); }
+  .modal-actions { display:flex;gap:10px;margin-top:20px; }
+  .btn-modal-cancel {
+    flex:1;background:#f0f2f5;color:#555;border:1px solid #ddd;border-radius:7px;
+    padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;
+    font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;
+  }
+  .btn-modal-generate {
+    flex:2;background:#9b1c2e;color:white;border:none;border-radius:7px;
+    padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;
+    font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;
+    transition:background 0.2s;
+  }
+  .btn-modal-generate:hover { background:#7a1522; }
+  .btn-modal-generate:disabled { background:#ccc;cursor:not-allowed; }
+  .modal-loading { text-align:center;padding:16px 0;color:#888;font-size:13px; }
+  .modal-error { background:#fde8ea;border:1px solid #f5b7bc;color:#9b1c2e;border-radius:6px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none; }
 </style>
 </head>
 <body>
@@ -200,9 +240,32 @@
         <span class="entry-count" id="entry-count">0</span>
       </div>
       <div id="entries-list"><div class="empty-state"><div class="empty-icon">📋</div>No entries yet.</div></div>
-      <div style="margin-top:20px;"><button class="btn-report" onclick="openReport()"><span>📄</span> Generate End-of-Day Report</button></div>
+      <div style="margin-top:20px;"><button class="btn-report" onclick="openReportModal()"><span>📄</span> Generate End-of-Day Report</button></div>
     </div>
   </div>
+
+<!-- REPORT MODAL -->
+<div class="modal-overlay" id="report-modal">
+  <div class="modal-box">
+    <div class="modal-title">Generate Inspection Report</div>
+    <div class="modal-sub">Select a date and project to generate the report.</div>
+    <div class="modal-error" id="modal-error"></div>
+    <div class="modal-field">
+      <label>Report Date</label>
+      <input type="date" id="report-date" onchange="loadReportProjects()">
+    </div>
+    <div class="modal-field">
+      <label>Project</label>
+      <select id="report-project">
+        <option value="">Select a date first...</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeReportModal()">Cancel</button>
+      <button class="btn-modal-generate" id="btn-generate" onclick="generateReport()">Generate Report</button>
+    </div>
+  </div>
+</div>
 </main>
 <div id="report-container"></div>
 <div class="toast" id="toast"></div>
@@ -442,6 +505,178 @@ function renderEntries(){
     '</div>'
   ).join('');
 }
+
+function formatTime(t){
+  if(!t)return'';const p=t.split(':');const hr=parseInt(p[0]);
+  return(hr>12?hr-12:hr||12)+':'+p[1]+' '+(hr>=12?'PM':'AM');
+}
+
+function showToast(msg,isError){
+  const t=document.getElementById('toast');t.textContent=msg;
+  t.className='toast'+(isError?' error':'');t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+function openReportModal(){
+  const modal=document.getElementById('report-modal');
+  const dateInput=document.getElementById('report-date');
+  // Default to today
+  const now=new Date();
+  const yyyy=now.getFullYear(),mm=String(now.getMonth()+1).padStart(2,'0'),dd=String(now.getDate()).padStart(2,'0');
+  dateInput.value=yyyy+'-'+mm+'-'+dd;
+  document.getElementById('report-project').innerHTML='<option value="">Loading...</option>';
+  document.getElementById('modal-error').style.display='none';
+  modal.classList.add('open');
+  loadReportProjects();
+}
+
+function closeReportModal(){
+  document.getElementById('report-modal').classList.remove('open');
+}
+
+async function loadReportProjects(){
+  const dateVal=document.getElementById('report-date').value;
+  if(!dateVal)return;
+  const projSel=document.getElementById('report-project');
+  projSel.innerHTML='<option value="">Loading projects...</option>';
+  document.getElementById('btn-generate').disabled=true;
+
+  // Convert date input (yyyy-mm-dd) to locale string for matching
+  const[y,mo,d]=dateVal.split('-');
+  const dateLocale=new Date(y,mo-1,d).toLocaleDateString('en-US');
+
+  // Get currently selected inspector
+  const inspector=document.getElementById('inspector-name').value.trim();
+
+  try{
+    const url=GOOGLE_SCRIPT_URL+'?action=getProjects&date='+encodeURIComponent(dateLocale)+'&inspector='+encodeURIComponent(inspector);
+    const resp=await fetch(url);
+    const data=await resp.json();
+    const projects=data.projects||[];
+
+    if(projects.length===0){
+      projSel.innerHTML='<option value="">No entries found for this date</option>';
+      return;
+    }
+
+    projSel.innerHTML='<option value="">Select project...</option>';
+    projects.forEach(p=>{
+      const o=document.createElement('option');
+      o.value=JSON.stringify(p);
+      o.textContent=(p.number?p.number+' — ':'')+p.name;
+      projSel.appendChild(o);
+    });
+
+    // Auto-select if only one
+    if(projects.length===1){
+      projSel.selectedIndex=1;
+      document.getElementById('btn-generate').disabled=false;
+    }
+  }catch(err){
+    projSel.innerHTML='<option value="">Could not load projects</option>';
+    showModalError('Error loading projects: '+err.message);
+  }
+}
+
+function showModalError(msg){
+  const e=document.getElementById('modal-error');
+  e.textContent=msg;e.style.display='block';
+}
+
+async function generateReport(){
+  const dateVal=document.getElementById('report-date').value;
+  const projVal=document.getElementById('report-project').value;
+  if(!dateVal||!projVal||projVal===''){showModalError('Please select a date and project.');return;}
+
+  const proj=JSON.parse(projVal);
+  const[y,mo,d]=dateVal.split('-');
+  const dateLocale=new Date(y,mo-1,d).toLocaleDateString('en-US');
+
+  const btn=document.getElementById('btn-generate');
+  btn.disabled=true;btn.textContent='Loading...';
+  document.getElementById('modal-error').style.display='none';
+
+  try{
+    const url=GOOGLE_SCRIPT_URL+'?action=getEntries&date='+encodeURIComponent(dateLocale)+'&projectNumber='+encodeURIComponent(proj.number||'')+'&projectName='+encodeURIComponent(proj.name);
+    const resp=await fetch(url);
+    const data=await resp.json();
+    const rowEntries=data.entries||[];
+
+    if(rowEntries.length===0){showModalError('No entries found for this project and date.');btn.disabled=false;btn.textContent='Generate Report';return;}
+
+    closeReportModal();
+    buildAndPrintReport(rowEntries, proj, dateLocale);
+  }catch(err){
+    showModalError('Error fetching entries: '+err.message);
+  }finally{
+    btn.disabled=false;btn.textContent='Generate Report';
+  }
+}
+
+function buildAndPrintReport(rowEntries, proj, dateLocale){
+  const dateStr=new Date(dateLocale).toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const inspectors=[...new Set(rowEntries.map(e=>e.inspector).filter(Boolean))];
+  const totalPhotos=rowEntries.reduce((a,e)=>a+(parseInt(e.photoCount)||0),0);
+
+  let entriesHtml='';
+  rowEntries.forEach(e=>{
+    const photoLinksHtml=e.photoLinks&&e.photoLinks.length>0
+      ?'<div style="margin-top:8px;">'+e.photoLinks.map((link,i)=>'<a href="'+link+'" style="display:inline-block;margin-right:8px;margin-bottom:4px;"><img src="'+link+'" style="width:100%;max-width:280px;height:200px;object-fit:cover;border-radius:5px;border:1px solid #ddd;display:block;" onerror="this.style.display='none'"></a>').join('')+'</div>'
+      :'';
+    entriesHtml+=
+      '<div style="border:1px solid #ddd;border-left:4px solid #9b1c2e;border-radius:5px;padding:10px 13px;margin-bottom:10px;page-break-inside:avoid;break-inside:avoid;">'+
+      '<div style="font-size:12px;color:#444;margin-bottom:5px;"><strong>'+e.time+'</strong>'+
+      (e.inspector?' | Inspector: <strong>'+e.inspector+'</strong>':'')+
+      (e.weather?' | '+e.weather:'')+(e.temperature?' · '+e.temperature+'°F':'')+'</div>'+
+      (e.station?'<div style="font-size:11px;color:#888;margin-bottom:3px;">📍 '+e.station+'</div>':'')+
+      (e.contractor?'<div style="font-size:11px;color:#888;margin-bottom:6px;">🏗 Contractor: '+e.contractor+'</div>':'')+
+      '<div style="font-size:13px;color:#111;line-height:1.6;margin-bottom:8px;">'+e.desc+'</div>'+
+      (e.checks&&e.checks.length?'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:7px;">'+e.checks.map(c=>'<span style="background:#e8f5e9;border:1px solid #a5d6a7;color:#1e7e34;font-size:10px;font-weight:bold;padding:2px 6px;border-radius:3px;">✓ '+c+'</span>').join('')+'</div>':'')+
+      (e.notes?'<div style="background:#fff8f0;border:1px solid #ffe0b2;border-radius:4px;padding:6px 10px;font-size:12px;color:#555;margin-bottom:7px;"><strong>Notes:</strong> '+e.notes+'</div>':'')+
+      photoLinksHtml+'</div>';
+  });
+
+  const sumHtml='<table style="width:100%;border-collapse:collapse;border:1px solid #ddd;border-radius:6px;margin-bottom:14px;font-family:Arial,sans-serif;overflow:hidden;">'+
+    '<tr>'+[['Entries',rowEntries.length],['Photos',totalPhotos],['Inspectors',inspectors.length]].map(([l,v])=>
+      '<td style="text-align:center;padding:10px;border-right:1px solid #ddd;"><div style="font-size:22px;font-weight:bold;color:#9b1c2e;">'+v+'</div><div style="font-size:10px;color:#888;text-transform:uppercase;">'+l+'</div></td>'
+    ).join('')+'</tr></table>';
+
+  const doc='<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+    '<style>html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}body{font-family:Georgia,serif;color:#222;margin:0;padding:0;}@page{margin:0.55in 0.7in;}</style>'+
+    '</head><body>'+
+    '<div style="text-align:center;padding-bottom:8px;border-bottom:2px solid #9b1c2e;margin-bottom:10px;">'+
+    '<img src="data:image/jpeg;base64,'+LOGO_B64+'" style="height:60px;margin-bottom:4px;display:block;margin-left:auto;margin-right:auto;">'+
+    '<div style="font-size:10px;color:#555;margin-top:4px;">BALAR ASSOCIATES, INC. &nbsp;&#9654;&nbsp; 631 MILAM STREET, SUITE 300 &nbsp;&#9654;&nbsp; SHREVEPORT, LOUISIANA 71101</div>'+
+    '<div style="font-size:10px;color:#555;">PHONE: 318-221-8312 &nbsp;&#9654;&nbsp; FAX: 318-424-6508 &nbsp;&#9654;&nbsp; www.balar-engineers.com</div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px;">'+
+    '<div style="font-size:20px;font-weight:bold;color:#0d1b2a;margin-bottom:2px;">Daily Inspection Report</div>'+
+    '<div style="font-size:12px;color:#555;">'+dateStr+'</div>'+
+    '<div style="font-size:11px;color:#888;margin-bottom:10px;">Prepared by: '+(inspectors.join(', ')||'Balar Associates, Inc.')+'</div>'+
+    sumHtml+
+    '</div>'+
+    '<div style="background:#0d1b2a;color:#fff;padding:8px 14px;border-radius:5px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">'+
+    '<div><strong style="font-size:15px;">'+(proj.number?proj.number+' &nbsp;—&nbsp; ':'')+proj.name+'</strong>'+
+    (proj.client?'<span style="font-size:11px;color:#bbb;margin-left:10px;">Client: '+proj.client+'</span>':'')+
+    '</div><span style="font-size:11px;color:#aaa;">'+rowEntries.length+' entr'+(rowEntries.length===1?'y':'ies')+'</span></div>'+
+    entriesHtml+
+    '<div style="margin-top:28px;display:flex;gap:40px;">'+
+    '<div style="flex:1;border-top:1px solid #333;padding-top:5px;font-size:11px;color:#555;">Inspector Signature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div>'+
+    '<div style="flex:1;border-top:1px solid #333;padding-top:5px;font-size:11px;color:#555;">Reviewed By &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date</div>'+
+    '</div>'+
+    '<div style="text-align:center;font-size:9px;color:#aaa;margin-top:18px;padding-top:10px;border-top:1px solid #eee;">Balar Associates, Inc. &nbsp;·&nbsp; Daily Field Inspection Report &nbsp;·&nbsp; Generated '+new Date().toLocaleString()+'</div>'+
+    '</body></html>';
+
+  const iframe=document.createElement('iframe');
+  iframe.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;border:none;z-index:9999;';
+  document.body.appendChild(iframe);
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(doc);
+  iframe.contentDocument.close();
+  iframe.contentWindow.focus();
+  setTimeout(()=>{iframe.contentWindow.print();setTimeout(()=>document.body.removeChild(iframe),500);},400);
+}
+
 
 function formatTime(t){
   if(!t)return'';const p=t.split(':');const hr=parseInt(p[0]);
