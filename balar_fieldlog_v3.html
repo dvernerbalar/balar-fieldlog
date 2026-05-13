@@ -542,7 +542,8 @@ function submitEntry(){
     // Send entry with photo as separate field (script handles both in one call)
     const entryForSheet = {
       ...entry,
-      photos:[], // Drive upload handled server-side
+      entryId: entry.id, // unique ID for reliable row matching
+      photos:[],
       photoBase64: entry.photos.length > 0 ? entry.photos[0] : ''
     };
     fetch(GOOGLE_SCRIPT_URL, {method:'POST', body:JSON.stringify(entryForSheet)}).catch(()=>{});
@@ -650,6 +651,7 @@ function editEntry(btn){
   document.getElementById('edit-original-project').value = e.project||'';
   document.getElementById('edit-original-desc').value = e.desc||'';
   document.getElementById('edit-original-time').value = e.time||'';
+  document.getElementById('edit-entry-id').value = e.id||''; // use ID as primary match key
   document.getElementById('edit-modal').classList.add('open');
 }
 
@@ -687,6 +689,7 @@ function saveEditEntry(){
   if(GOOGLE_SCRIPT_URL){
     const editPayload = {
       action:'updateEntry',
+      entryId: document.getElementById('edit-entry-id').value,
       originalProject: document.getElementById('edit-original-project').value,
       originalDesc: document.getElementById('edit-original-desc').value,
       originalTime: document.getElementById('edit-original-time').value,
