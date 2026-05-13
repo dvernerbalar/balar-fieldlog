@@ -136,7 +136,7 @@
     <div class="card"><div class="checklist-grid" id="checklist-grid"></div></div>
     <div class="section-label">Photos</div>
     <div class="card">
-      <div class="photo-upload-zone"><input type="file" id="photo-input" accept="image/*" multiple><div class="upload-icon">📷</div><div class="upload-text"><strong>Tap to take or upload photos</strong><br>Supports multiple files</div></div>
+      <div class="photo-upload-zone"><input type="file" id="photo-input" accept="image/*"><div class="upload-icon">📷</div><div class="upload-text"><strong>Tap to take or select a photo</strong><br>One photo per entry — add multiple entries for more photos</div></div>
       <div class="photo-previews" id="photo-previews"></div>
     </div>
     <button class="btn-submit" onclick="submitEntry()">+ Add Entry to Log</button>
@@ -286,9 +286,29 @@ function buildChecklist(){
 }
 
 function handlePhotos(e){
-  Array.from(e.target.files).forEach(file=>{
-    const r=new FileReader();r.onload=ev=>{photoDataUrls.push(ev.target.result);renderPreviews();};r.readAsDataURL(file);
-  });
+  const files=Array.from(e.target.files);
+  if(files.length===0)return;
+  // Take only the first file, compress it
+  const file=files[0];
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>{
+      const canvas=document.createElement('canvas');
+      const MAX=1200;
+      let w=img.width,h=img.height;
+      if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+      if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}
+      canvas.width=w;canvas.height=h;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(img,0,0,w,h);
+      const compressed=canvas.toDataURL('image/jpeg',0.7);
+      photoDataUrls=[compressed];
+      renderPreviews();
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 function renderPreviews(){
   document.getElementById('photo-previews').innerHTML=photoDataUrls.map((url,i)=>
@@ -299,33 +319,20 @@ function removePhoto(i){photoDataUrls.splice(i,1);renderPreviews();}
 
 function submitEntry(){
   const errDiv=document.getElementById('submit-error');
-  errDiv.style.display='block';
-  errDiv.style.background='#e8f4fd';
-  errDiv.style.color='#0d1b2a';
-  errDiv.style.borderColor='#90caf9';
-
-  try {
-    const pnEl=document.getElementById('project-number');
-    const pnameEl=document.getElementById('project-name');
-    const descEl=document.getElementById('work-desc');
-    const pn=pnEl?pnEl.value.trim():'MISSING_ELEMENT';
-    const pname=pnameEl?pnameEl.value.trim():'MISSING_ELEMENT';
-    const desc=descEl?descEl.value.trim():'MISSING_ELEMENT';
-
-    errDiv.textContent='DEBUG: pn="'+pn+'" pname="'+pname+'" desc="'+desc.substring(0,20)+'"';
-
-    if(!pn||!pname||!desc){
-      const missing=[];
-      if(!pn)missing.push('Project Number');
-      if(!pname)missing.push('Project Name');
-      if(!desc)missing.push('Description of Work');
-      errDiv.textContent='Missing: '+missing.join(', ');
-      errDiv.style.background='#fde8ea';
-      errDiv.style.color='#9b1c2e';
-      errDiv.style.borderColor='#f5b7bc';
-      errDiv.scrollIntoView({behavior:'smooth',block:'center'});
-      return;
-    }
+  errDiv.style.display='none';
+  const pn=document.getElementById('project-number').value.trim();
+  const pname=document.getElementById('project-name').value.trim();
+  const desc=document.getElementById('work-desc').value.trim();
+  if(!pn||!pname||!desc){
+    const missing=[];
+    if(!pn)missing.push('Project Number');
+    if(!pname)missing.push('Project Name');
+    if(!desc)missing.push('Description of Work');
+    errDiv.textContent='Please fill in: '+missing.join(', ');
+    errDiv.style.display='block';
+    errDiv.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
   const checks=Array.from(document.querySelectorAll('.check-item.checked')).map(el=>CHECKLIST_ITEMS[el.dataset.index]);
   const entry={
     id:Date.now(),projectNumber:pn,project:pname,
@@ -342,16 +349,11 @@ function submitEntry(){
     date:(()=>{const d=document.getElementById('entry-date').value;if(!d)return new Date().toLocaleDateString('en-US');const[y,mo,dy]=d.split('-');return new Date(y,mo-1,dy).toLocaleDateString('en-US');})(),
   };
   entries.unshift(entry);
-  localStorage.setItem('balar_fieldlog_v2',JSON.stringify(entries));
+  // Save to localStorage without photos (photos go to Drive only)
+  const entriesForStorage = entries.map(e => ({...e, photos:[]}));
+  try { localStorage.setItem('balar_fieldlog_v2',JSON.stringify(entriesForStorage)); } catch(e) { console.warn('localStorage full, clearing old entries'); localStorage.removeItem('balar_fieldlog_v2'); }
   if(GOOGLE_SCRIPT_URL){fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entry)}).catch(()=>{});}
   clearForm();renderEntries();showToast('Entry added to log',false);
-  } catch(err) {
-    const errDiv=document.getElementById('submit-error');
-    errDiv.style.display='block';
-    errDiv.style.background='#fde8ea';
-    errDiv.style.color='#9b1c2e';
-    errDiv.textContent='Error: '+err.message+' | '+err.stack;
-  }
 }
 
 function clearForm(){
