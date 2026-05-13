@@ -576,7 +576,15 @@ function renderEntries(){
       filterInput.value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
     }
   }
-  const te=entries.filter(e=>e.date===filterDate);
+  const te=entries.filter(e=>e.date===filterDate).sort((a,b)=>{
+    // Convert HH:MM to minutes for proper numeric sort
+    function toMins(t){
+      if(!t)return 0;
+      const p=t.split(':');
+      return parseInt(p[0]||0)*60+parseInt((p[1]||'0').substring(0,2));
+    }
+    return toMins(a.time)-toMins(b.time);
+  });
   document.getElementById('entry-count').textContent=te.length;
   const list=document.getElementById('entries-list');
   if(te.length===0){list.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div>No entries for this date.</div>';return;}
@@ -660,6 +668,19 @@ function saveEditEntry(){
   };
 
   try { localStorage.setItem('balar_fieldlog_v2',JSON.stringify(entries)); } catch(e){}
+
+  // Push edit to Google Sheet
+  if(GOOGLE_SCRIPT_URL){
+    fetch(GOOGLE_SCRIPT_URL, {
+      method:'POST',
+      body:JSON.stringify({
+        action:'updateEntry',
+        ...entries[idx],
+        photoBase64: entries[idx].photos && entries[idx].photos.length > 0 ? entries[idx].photos[0] : ''
+      })
+    }).catch(()=>{});
+  }
+
   closeEditModal();
   renderEntries();
   showToast('Entry updated',false);
