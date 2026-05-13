@@ -585,7 +585,7 @@ function renderEntries(){
     '<div class="entry-meta"><div class="entry-project">'+(e.projectNumber?e.projectNumber+' — ':'')+e.project+'</div>'+
     '<div style="display:flex;align-items:center;gap:8px;">'+
     '<div class="entry-time">'+formatTime(e.time)+(e.weather?' · '+e.weather:'')+(e.temperature?' · '+e.temperature+'F':'')+'</div>'+
-    '<button onclick="editEntry(''+e.id+'')" style="background:none;border:1px solid #d0d7de;border-radius:4px;padding:2px 8px;font-size:11px;color:#667;cursor:pointer;">Edit</button>'+
+    '<button onclick="editEntry(this)" data-id="'+e.id+'" style="background:none;border:1px solid #d0d7de;border-radius:4px;padding:2px 8px;font-size:11px;color:#667;cursor:pointer;">Edit</button>'+
     '</div></div>'+
     (e.inspector?'<div class="entry-sub">'+e.inspector+(e.contractor?' · '+e.contractor:'')+'</div>':'')+
     (e.station?'<div class="entry-sub" style="color:#888;">'+e.station+'</div>':'')+
@@ -609,7 +609,8 @@ function showToast(msg,isError){
 }
 
 
-function editEntry(id){
+function editEntry(btn){
+  const id=btn ? (btn.dataset ? btn.dataset.id : btn) : btn;
   const e=entries.find(en=>String(en.id)===String(id));
   if(!e)return;
   document.getElementById('edit-entry-id').value=e.id;
