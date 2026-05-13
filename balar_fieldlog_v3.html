@@ -429,25 +429,12 @@ function buildChecklist(){
 function handlePhotos(e){
   const files=Array.from(e.target.files);
   if(files.length===0)return;
-  // Take only the first file, compress it
+  // One photo per entry, full quality
   const file=files[0];
   const reader=new FileReader();
   reader.onload=ev=>{
-    const img=new Image();
-    img.onload=()=>{
-      const canvas=document.createElement('canvas');
-      const MAX=1200;
-      let w=img.width,h=img.height;
-      if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}
-      if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}
-      canvas.width=w;canvas.height=h;
-      const ctx=canvas.getContext('2d');
-      ctx.drawImage(img,0,0,w,h);
-      const compressed=canvas.toDataURL('image/jpeg',0.7);
-      photoDataUrls=[compressed];
-      renderPreviews();
-    };
-    img.src=ev.target.result;
+    photoDataUrls=[ev.target.result];
+    renderPreviews();
   };
   reader.readAsDataURL(file);
 }
@@ -490,10 +477,41 @@ function submitEntry(){
     date:(()=>{const d=document.getElementById('entry-date').value;if(!d)return new Date().toLocaleDateString('en-US');const[y,mo,dy]=d.split('-');return new Date(y,mo-1,dy).toLocaleDateString('en-US');})(),
   };
   entries.unshift(entry);
-  // Save to localStorage without photos (photos go to Drive only)
-  const entriesForStorage = entries.map(e => ({...e, photos:[]}));
-  try { localStorage.setItem('balar_fieldlog_v2',JSON.stringify(entriesForStorage)); } catch(e) { console.warn('localStorage full, clearing old entries'); localStorage.removeItem('balar_fieldlog_v2'); }
-  if(GOOGLE_SCRIPT_URL){fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entry)}).catch(()=>{});}
+  // Save with compressed photo — single photo per entry is safe after compression
+  try {
+    localStorage.setItem('balar_fieldlog_v2', JSON.stringify(entries));
+  } catch(e) {
+    // If still too large, save without photos as fallback
+    console.warn('localStorage full, saving without photos');
+    const entriesNoPhotos = entries.map(en => ({...en, photos:[]}));
+    try { localStorage.setItem('balar_fieldlog_v2', JSON.stringify(entriesNoPhotos)); } catch(e2) {}
+  }
+  if(GOOGLE_SCRIPT_URL){
+    // Send entry data first (no photo)
+    const entryForSheet = {...entry, photos:[]};
+    fetch(GOOGLE_SCRIPT_URL, {method:'POST', body:JSON.stringify(entryForSheet)})
+    .then(r=>r.json())
+    .then(result=>{
+      // If entry saved and has a photo, send photo separately
+      if(result.rowIndex && entry.photos.length > 0){
+        fetch(GOOGLE_SCRIPT_URL, {
+          method:'POST',
+          body:JSON.stringify({
+            action:'savePhoto',
+            rowIndex: result.rowIndex,
+            photo: entry.photos[0],
+            project: entry.project,
+            projectNumber: entry.projectNumber,
+            date: entry.date,
+            station: entry.station,
+            time: entry.time,
+            inspector: entry.inspector
+          })
+        }).catch(()=>{});
+      }
+    })
+    .catch(()=>{});
+  }
   clearForm();renderEntries();showToast('Entry added to log',false);
 }
 
@@ -632,6 +650,20 @@ async function generateReport(){
     if(rowEntries.length===0){showModalError('No entries found for this project and date.');btn.disabled=false;btn.textContent='Generate Report';return;}
 
     closeReportModal();
+    // Enrich sheet entries with local photos where available
+    const today = new Date().toLocaleDateString('en-US');
+    if(dateLocale === today) {
+      rowEntries.forEach(re => {
+        const localMatch = entries.find(le =>
+          le.project === re.project &&
+          le.time === re.time &&
+          le.desc === re.desc
+        );
+        if(localMatch && localMatch.photos && localMatch.photos.length > 0) {
+          re.photos = localMatch.photos;
+        }
+      });
+    }
     buildAndPrintReport(rowEntries, proj, dateLocale);
   }catch(err){
     showModalError('Error fetching entries: '+err.message);
@@ -647,20 +679,18 @@ function buildAndPrintReport(rowEntries, proj, dateLocale){
 
   let entriesHtml='';
   rowEntries.forEach(e=>{
+    // Photos: use base64 if available, Drive links as fallback for past entries
+    const entryPhotos = e.photos && e.photos.length > 0 ? e.photos : [];
     const photoLinksHtml=(function(){
-      if(!e.photoLinks||e.photoLinks.length===0)return'';
-      function driveEmbed(url){
-        var m=url.match(/\/file\/d\/([^\/]+)/);
-        if(m)return'https://drive.google.com/uc?export=view&id='+m[1];
-        var m2=url.match(/id=([^&]+)/);
-        if(m2)return'https://drive.google.com/uc?export=view&id='+m2[1];
-        return url;
+      if(entryPhotos.length > 0){
+        return '<div style="margin-top:10px;"><img src="'+entryPhotos[0]+'" style="width:100%;max-width:340px;height:220px;object-fit:cover;border-radius:5px;border:1px solid #ddd;display:block;"></div>';
+      } else if(e.photoLinks && e.photoLinks.length > 0){
+        return '<div style="margin-top:8px;padding:8px 10px;background:#f0f4f8;border-radius:5px;font-size:12px;color:#555;">'+
+          '📷 '+e.photoLinks.length+' photo(s) in Drive: '+
+          e.photoLinks.map(function(link,i){return '<a href="'+link+'" target="_blank" style="color:#1565c0;">View Photo '+(i+1)+'</a>';}).join(' &nbsp;')+
+          '</div>';
       }
-      var imgs=e.photoLinks.map(function(link){
-        var src=driveEmbed(link);
-        return '<div style="flex:1;max-width:280px;"><img src="'+src+'" style="width:100%;height:200px;object-fit:cover;border-radius:5px;border:1px solid #ddd;display:block;"></div>';
-      }).join('');
-      return '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">'+imgs+'</div>';
+      return '';
     })();
     entriesHtml+=
       '<div style="border:1px solid #ddd;border-left:4px solid #9b1c2e;border-radius:5px;padding:10px 13px;margin-bottom:10px;page-break-inside:avoid;break-inside:avoid;">'+
