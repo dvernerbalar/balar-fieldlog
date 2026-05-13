@@ -577,11 +577,18 @@ function renderEntries(){
     }
   }
   const te=entries.filter(e=>e.date===filterDate).sort((a,b)=>{
-    // Convert HH:MM to minutes for proper numeric sort
     function toMins(t){
       if(!t)return 0;
-      const p=t.split(':');
-      return parseInt(p[0]||0)*60+parseInt((p[1]||'0').substring(0,2));
+      const upper=t.toUpperCase();
+      const isPM=upper.includes('PM');
+      const isAM=upper.includes('AM');
+      const clean=t.replace(/\s*(AM|PM|CST).*/i,'').trim();
+      const p=clean.split(':');
+      let h=parseInt(p[0]||0);
+      const m=parseInt((p[1]||'0').substring(0,2));
+      if(isPM && h!==12) h+=12;
+      if(isAM && h===12) h=0;
+      return h*60+m;
     }
     return toMins(a.time)-toMins(b.time);
   });
@@ -671,14 +678,26 @@ function saveEditEntry(){
 
   // Push edit to Google Sheet
   if(GOOGLE_SCRIPT_URL){
-    fetch(GOOGLE_SCRIPT_URL, {
-      method:'POST',
-      body:JSON.stringify({
-        action:'updateEntry',
-        ...entries[idx],
-        photoBase64: entries[idx].photos && entries[idx].photos.length > 0 ? entries[idx].photos[0] : ''
-      })
-    }).catch(()=>{});
+    const editPayload = {
+      action:'updateEntry',
+      originalTimestamp: entries[idx].timestamp || '',
+      originalProject: entries[idx].project || '',
+      originalDesc: entries[idx].desc || '',
+      date: entries[idx].date,
+      time: entries[idx].time,
+      inspector: entries[idx].inspector,
+      weather: entries[idx].weather,
+      temperature: entries[idx].temperature,
+      station: entries[idx].station,
+      contractor: entries[idx].contractor,
+      desc: entries[idx].desc,
+      notes: entries[idx].notes,
+      photoBase64: entries[idx].photos && entries[idx].photos.length > 0 ? entries[idx].photos[0] : ''
+    };
+    fetch(GOOGLE_SCRIPT_URL, {method:'POST', body:JSON.stringify(editPayload)})
+      .then(r=>r.json())
+      .then(result=>{ if(!result.success) console.warn('Edit sync failed:', result); })
+      .catch(err=>console.warn('Edit sync error:', err));
   }
 
   closeEditModal();
