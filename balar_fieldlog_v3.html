@@ -159,6 +159,31 @@
   .modal-loading { text-align:center;padding:16px 0;color:#888;font-size:13px; }
   .modal-error { background:#fde8ea;border:1px solid #f5b7bc;color:#9b1c2e;border-radius:6px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none; }
 </style>
+
+<script>
+// LOGIN — loads immediately before any other script
+const ACCESS_PASSWORD = 'balar2026';
+function checkLogin() {
+  if (sessionStorage.getItem('balar_authed') === 'yes') {
+    var ls = document.getElementById('login-screen');
+    if (ls) ls.style.display = 'none';
+  }
+}
+function attemptLogin() {
+  var pw = document.getElementById('login-password').value;
+  var errDiv = document.getElementById('login-error');
+  if (pw === ACCESS_PASSWORD) {
+    sessionStorage.setItem('balar_authed', 'yes');
+    document.getElementById('login-screen').style.display = 'none';
+    errDiv.style.display = 'none';
+  } else {
+    errDiv.style.display = 'block';
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-password').focus();
+  }
+}
+document.addEventListener('DOMContentLoaded', checkLogin);
+</script>
 </head>
 <body>
 
@@ -799,30 +824,6 @@ function openReport(){
 }
 
 
-// ── LOGIN ──────────────────────────────────────────────────
-const ACCESS_PASSWORD = 'balar2026'; // Change this to your preferred password
-
-function checkLogin() {
-  const authed = sessionStorage.getItem('balar_authed');
-  if (authed === 'yes') {
-    document.getElementById('login-screen').style.display = 'none';
-  }
-}
-
-function attemptLogin() {
-  const pw = document.getElementById('login-password').value;
-  if (pw === ACCESS_PASSWORD) {
-    sessionStorage.setItem('balar_authed', 'yes');
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('login-error').style.display = 'none';
-  } else {
-    document.getElementById('login-error').style.display = 'block';
-    document.getElementById('login-password').value = '';
-    document.getElementById('login-password').focus();
-  }
-}
-
-checkLogin();
 init();
 </script>
 </body>
