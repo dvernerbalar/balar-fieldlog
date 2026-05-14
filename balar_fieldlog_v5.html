@@ -563,25 +563,35 @@ function getItemName(selId,customId){
   return sel.value==='__other__'?custom.value.trim():(sel.value||custom.value.trim());
 }
 function renderEquipmentList(listId,items){
-  const list=document.getElementById(listId);if(!list)return;
-  if(!items||items.length===0){list.innerHTML='<div style="color:#aaa;font-size:13px;padding:4px 0;">No equipment added yet.</div>';return;}
-  let html='';
-  items.forEach((eq,i)=>{
-    html+='<div class="item-row"><span class="item-row-name">'+eq.name+'</span><div class="item-row-right"><span class="item-row-count">'+eq.count+'</span>';
-    html+='<button class="item-row-remove" data-list="'+listId+'" data-idx="'+i+'" onclick="removeEquipmentFrom(this.dataset.list,this.dataset.idx)">x</button></div></div>';
-  });
+  var list=document.getElementById(listId);if(!list)return;
+  if(!items||items.length===0){list.innerHTML="<div style='color:#aaa;font-size:13px;padding:4px 0;'>No equipment added yet.</div>";return;}
+  var html="";
+  for(var i=0;i<items.length;i++){
+    html+="<div class='item-row'>";
+    html+="<span class='item-row-name'>"+items[i].name+"</span>";
+    html+="<div class='item-row-right'>";
+    html+="<span class='item-row-count'>"+items[i].count+"</span>";
+    html+="<button class='item-row-remove' data-list='"+listId+"' data-idx='"+i+"' onclick='removeEquipmentFrom(this.dataset.list,this.dataset.idx)'>x</button>";
+    html+="</div></div>";
+  }
   list.innerHTML=html;
 }
+
 function renderWorkforceList(listId,items){
-  const list=document.getElementById(listId);if(!list)return;
-  if(!items||items.length===0){list.innerHTML='<div style="color:#aaa;font-size:13px;padding:4px 0;">No workforce added yet.</div>';return;}
-  let html='';
-  items.forEach((wf,i)=>{
-    html+='<div class="item-row"><span class="item-row-name">'+wf.classification+'</span><div class="item-row-right"><span class="item-row-count">'+wf.count+'</span>';
-    html+='<button class="item-row-remove" onclick="removeWorkforceFrom(''+listId+'','+i+')">x</button></div></div>';
-  });
+  var list=document.getElementById(listId);if(!list)return;
+  if(!items||items.length===0){list.innerHTML="<div style='color:#aaa;font-size:13px;padding:4px 0;'>No workforce added yet.</div>";return;}
+  var html="";
+  for(var i=0;i<items.length;i++){
+    html+="<div class='item-row'>";
+    html+="<span class='item-row-name'>"+items[i].classification+"</span>";
+    html+="<div class='item-row-right'>";
+    html+="<span class='item-row-count'>"+items[i].count+"</span>";
+    html+="<button class='item-row-remove' data-list='"+listId+"' data-idx='"+i+"' onclick='removeWorkforceFrom(this.dataset.list,this.dataset.idx)'>x</button>";
+    html+="</div></div>";
+  }
   list.innerHTML=html;
 }
+
 function removeEquipmentFrom(listId,i){
   const idx=parseInt(i);
   if(listId==='equipment-list'){equipmentItems.splice(idx,1);renderEquipmentList('equipment-list',equipmentItems);}
@@ -881,7 +891,7 @@ function renderEntries(){
     const displayTemp=e.entryTemperature||'';
     html+='<div class="entry-log-card">';
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
-    html+='<div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--navy);">'+formatTime(e.time)+(e.station?' &nbsp;·&nbsp; '+e.station:'')+'</div>';
+    html+='<div style="font-size:15px;font-weight:700;color:#0d1b2a;">'+formatTime(e.time)+(e.station?' &nbsp;&middot;&nbsp; '+e.station:'')+'</div>';
     html+='<button onclick="editEntry(this)" data-id="'+e.id+'" style="background:none;border:1px solid #d0d7de;border-radius:4px;padding:2px 8px;font-size:11px;color:#667;cursor:pointer;">Edit</button></div>';
     if(displayWeather||displayTemp)html+='<div style="font-size:12px;color:#888;margin-bottom:6px;">'+displayWeather+(displayTemp?' · '+displayTemp+'°F':'')+'</div>';
     html+='<div style="font-size:14px;color:#333;line-height:1.5;margin-bottom:8px;">'+e.desc+'</div>';
