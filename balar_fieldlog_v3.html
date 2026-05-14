@@ -533,14 +533,17 @@ function addEquipmentItem(){
 function renderEquipmentList(){
   const list=document.getElementById('equipment-list');
   if(equipmentItems.length===0){list.innerHTML='<div style="color:#aaa;font-size:13px;padding:4px 0;">No equipment added yet.</div>';return;}
-  list.innerHTML=equipmentItems.map((e,i)=>
-    '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f8fafc;border:1px solid #e0e5ea;border-radius:6px;margin-bottom:6px;">'+
-    '<span style="font-size:14px;color:#222;font-weight:500;">'+e.name+'</span>'+
-    '<div style="display:flex;align-items:center;gap:8px;">'+
-    '<span style="font-size:16px;font-weight:700;color:#9b1c2e;">'+e.count+'</span>'+
-    '<button onclick="removeEquipment('+i+')" style="background:none;border:none;color:#bbb;cursor:pointer;font-size:16px;padding:0 4px;">✕</button>'+
-    '</div></div>'
-  ).join('');
+  let html='';
+  for(let i=0;i<equipmentItems.length;i++){
+    const eq=equipmentItems[i];
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f8fafc;border:1px solid #e0e5ea;border-radius:6px;margin-bottom:6px;">';
+    html+='<span style="font-size:14px;color:#222;font-weight:500;">'+eq.name+'</span>';
+    html+='<div style="display:flex;align-items:center;gap:8px;">';
+    html+='<span style="font-size:16px;font-weight:700;color:#9b1c2e;">'+eq.count+'</span>';
+    html+='<button onclick="removeEquipment('+i+')" style="background:none;border:none;color:#bbb;cursor:pointer;font-size:16px;padding:0 4px;">x</button>';
+    html+='</div></div>';
+  }
+  list.innerHTML=html;
 }
 
 function removeEquipment(i){equipmentItems.splice(i,1);renderEquipmentList();}
@@ -565,14 +568,17 @@ function addWorkforceItem(){
 function renderWorkforceList(){
   const list=document.getElementById('workforce-list');
   if(workforceItems.length===0){list.innerHTML='<div style="color:#aaa;font-size:13px;padding:4px 0;">No workforce added yet.</div>';return;}
-  list.innerHTML=workforceItems.map((w,i)=>
-    '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f8fafc;border:1px solid #e0e5ea;border-radius:6px;margin-bottom:6px;">'+
-    '<span style="font-size:14px;color:#222;font-weight:500;">'+w.classification+'</span>'+
-    '<div style="display:flex;align-items:center;gap:8px;">'+
-    '<span style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:var(--red);">'+w.count+'</span>'+
-    '<button onclick="removeWorkforce('+i+')" style="background:none;border:none;color:#bbb;cursor:pointer;font-size:16px;padding:0 4px;">✕</button>'+
-    '</div></div>'
-  ).join('');
+  let html='';
+  for(let i=0;i<workforceItems.length;i++){
+    const wf=workforceItems[i];
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f8fafc;border:1px solid #e0e5ea;border-radius:6px;margin-bottom:6px;">';
+    html+='<span style="font-size:14px;color:#222;font-weight:500;">'+wf.classification+'</span>';
+    html+='<div style="display:flex;align-items:center;gap:8px;">';
+    html+='<span style="font-size:16px;font-weight:700;color:#9b1c2e;">'+wf.count+'</span>';
+    html+='<button onclick="removeWorkforce('+i+')" style="background:none;border:none;color:#bbb;cursor:pointer;font-size:16px;padding:0 4px;">x</button>';
+    html+='</div></div>';
+  }
+  list.innerHTML=html;
 }
 
 function removeWorkforce(i){workforceItems.splice(i,1);renderWorkforceList();}
