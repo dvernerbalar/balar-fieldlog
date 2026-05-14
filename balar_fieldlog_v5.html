@@ -176,7 +176,10 @@ textarea{resize:vertical;min-height:90px;}
       <div class="card posted">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
           <div class="posted-badge">✓ Daily Header Posted</div>
-          <button class="btn-edit-header" onclick="editDailyHeader()">Edit Header</button>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-edit-header" onclick="editDailyHeader()">Edit Header</button>
+            <button class="btn-edit-header" onclick="openSwitchProject()" style="border-color:var(--red);color:var(--red);">Switch Project</button>
+          </div>
         </div>
         <div id="header-summary" style="font-size:13px;color:#333;line-height:1.8;"></div>
       </div>
@@ -312,6 +315,20 @@ textarea{resize:vertical;min-height:90px;}
   </div>
 </main>
 
+
+<!-- SWITCH PROJECT MODAL -->
+<div class="modal-overlay" id="switch-project-modal">
+  <div class="modal-box">
+    <div class="modal-title">Switch Project</div>
+    <div class="modal-sub">Select an existing project header or start a new one.</div>
+    <div id="switch-project-list" style="margin-bottom:16px;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeSwitchProject()">Cancel</button>
+      <button class="btn-primary" onclick="startNewProjectHeader()">+ New Project Header</button>
+    </div>
+  </div>
+</div>
+
 <!-- REPORT MODAL -->
 <div class="modal-overlay" id="report-modal">
   <div class="modal-box">
@@ -404,17 +421,19 @@ const LOGO_B64 = '/9j/4RHjRXhpZgAATU0AKgAAAAgABwESAAMAAAABAAEAAAEaAAUAAAABAAAAYg
 
 // ── STATE ────────────────────────────────────────────────
 let entries = JSON.parse(localStorage.getItem('balar_v5_entries') || '[]');
-let dailyHeader = JSON.parse(localStorage.getItem('balar_v5_header') || 'null');
+let dailyHeaders = JSON.parse(localStorage.getItem('balar_v5_headers') || '{}');
+let currentProjectKey = localStorage.getItem('balar_v5_current_project') || null;
+let dailyHeader = null; // set from dailyHeaders[currentProjectKey]
 let photoDataUrls = [];
 let projectsData = [], inspectorsData = [], contractorsData = [], equipmentData = [], workforceData = [];
 let equipmentItems = [], workforceItems = [];
 let editEquipmentItems = [], editWorkforceItems = [];
 
-const CHECKLIST_ITEMS = [
-  'Work Day','Traffic Control in Place','Erosion Control in Place',
+let CHECKLIST_ITEMS = [
+  'Traffic Control in Place','Erosion Control in Place',
   'Safety Briefing Done','Utilities Marked','Permit Posted On-Site',
   'Materials Inspected','As-Builts Updated'
-];
+]; // loaded from Sheets if available
 
 // ── INIT ─────────────────────────────────────────────────
 async function init(){
@@ -429,9 +448,13 @@ async function init(){
   document.getElementById('photo-input').addEventListener('change', handlePhotos);
   if(GOOGLE_SCRIPT_URL){ await loadDropdownData(); }
   else{ document.getElementById('loading-state').innerHTML='<span style="color:#e67e22;">Google Script URL not set.</span>'; showForm(); }
-  // Restore header if today
-  if(dailyHeader && dailyHeader.date === new Date().toLocaleDateString('en-US')){
-    restoreHeader(dailyHeader);
+  // Restore last active header if today
+  if(currentProjectKey && dailyHeaders[currentProjectKey]){
+    const h = dailyHeaders[currentProjectKey];
+    if(h.date === new Date().toLocaleDateString('en-US')){
+      dailyHeader = h;
+      restoreHeader(dailyHeader);
+    }
   }
   renderEntries();
 }
@@ -445,6 +468,10 @@ async function loadDropdownData(){
     buildProjectDropdown(); buildInspectorDropdown();
     buildEquipmentDropdown('equipment-select'); buildWorkforceDropdown('workforce-select');
     buildEquipmentDropdown('edit-equipment-select'); buildWorkforceDropdown('edit-workforce-select');
+    if(data.checklist && data.checklist.length > 0){
+      CHECKLIST_ITEMS = data.checklist;
+      buildChecklist(); // rebuild with Sheet items
+    }
     renderEquipmentList('equipment-list', equipmentItems);
     renderWorkforceList('workforce-list', workforceItems);
     document.getElementById('loading-state').style.display='none';
@@ -606,6 +633,7 @@ function removeWorkforceFrom(listId,i){
 // ── CHECKLIST ────────────────────────────────────────────
 function buildChecklist(){
   const grid=document.getElementById('checklist-grid');
+  grid.innerHTML = ''; // clear existing items
   CHECKLIST_ITEMS.forEach((item,i)=>{
     const div=document.createElement('div');div.className='check-item';div.dataset.index=i;
     div.innerHTML='<div class="check-box"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" stroke-width="2" stroke-linecap="round"/></svg></div><span class="check-label">'+item+'</span>';
@@ -718,10 +746,15 @@ function postDailyHeader(){
     equipment:[...equipmentItems],
     workforce:[...workforceItems],
     checks,
+    allChecklistItems:[...CHECKLIST_ITEMS],
     timestamp:new Date().toISOString(),
   };
 
-  localStorage.setItem('balar_v5_header',JSON.stringify(dailyHeader));
+  const projectKey = dailyHeader.projectNumber + '||' + dailyHeader.project + '||' + dailyHeader.date;
+  dailyHeaders[projectKey] = dailyHeader;
+  currentProjectKey = projectKey;
+  localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
+  localStorage.setItem('balar_v5_current_project', currentProjectKey);
 
   // Post to Sheets
   if(GOOGLE_SCRIPT_URL){
@@ -778,7 +811,11 @@ function saveEditHeader(){
   dailyHeader.dayType=document.getElementById('edit-header-daytype').value;
   dailyHeader.equipment=[...editEquipmentItems];
   dailyHeader.workforce=[...editWorkforceItems];
-  localStorage.setItem('balar_v5_header',JSON.stringify(dailyHeader));
+  const projectKey = dailyHeader.projectNumber + '||' + dailyHeader.project + '||' + dailyHeader.date;
+  dailyHeaders[projectKey] = dailyHeader;
+  currentProjectKey = projectKey;
+  localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
+  localStorage.setItem('balar_v5_current_project', currentProjectKey);
   // Sync to Sheets
   if(GOOGLE_SCRIPT_URL){
     fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify({
@@ -969,6 +1006,72 @@ function saveEditEntry(){
 }
 
 // ── REPORT MODAL ─────────────────────────────────────────
+
+// ── SWITCH PROJECT ───────────────────────────────────────
+function openSwitchProject(){
+  const today = new Date().toLocaleDateString('en-US');
+  const list = document.getElementById('switch-project-list');
+  const todayHeaders = Object.values(dailyHeaders).filter(h => h.date === today);
+
+  if(todayHeaders.length === 0){
+    list.innerHTML = '<div style="color:#aaa;font-size:13px;">No other project headers for today.</div>';
+  } else {
+    let html = '<div style="font-size:12px;color:#667;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Today's Projects</div>';
+    todayHeaders.forEach(h => {
+      const key = h.projectNumber+'||'+h.project+'||'+h.date;
+      const isCurrent = key === currentProjectKey;
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:'+(isCurrent?'#f0f8f0':'#f8fafc')+';border:1px solid '+(isCurrent?'#a5d6a7':'#e0e5ea')+';border-radius:7px;margin-bottom:8px;">';
+      html += '<div><div style="font-size:14px;font-weight:600;color:#222;">'+h.projectNumber+' — '+h.project+'</div>';
+      html += '<div style="font-size:12px;color:#888;">'+h.inspector+' &nbsp;·&nbsp; '+h.dayType+'</div></div>';
+      if(isCurrent){
+        html += '<span style="font-size:11px;font-weight:700;color:#1e7e34;">ACTIVE</span>';
+      } else {
+        html += '<button onclick="switchToProject(''+key+'')" style="background:var(--navy);color:white;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;">Switch</button>';
+      }
+      html += '</div>';
+    });
+    list.innerHTML = html;
+  }
+  document.getElementById('switch-project-modal').classList.add('open');
+}
+
+function closeSwitchProject(){
+  document.getElementById('switch-project-modal').classList.remove('open');
+}
+
+function switchToProject(key){
+  if(!dailyHeaders[key]) return;
+  dailyHeader = dailyHeaders[key];
+  currentProjectKey = key;
+  localStorage.setItem('balar_v5_current_project', currentProjectKey);
+  closeSwitchProject();
+  restoreHeader(dailyHeader);
+  showToast('Switched to '+dailyHeader.project, false);
+}
+
+function startNewProjectHeader(){
+  closeSwitchProject();
+  // Reset header form for new project
+  dailyHeader = null;
+  document.getElementById('header-form-view').style.display = 'block';
+  document.getElementById('header-posted-view').style.display = 'none';
+  document.getElementById('entries-form-section').style.display = 'none';
+  // Reset form fields
+  document.getElementById('project-number').value = '';
+  document.getElementById('project-name').innerHTML = '<option value="">Select number first...</option>';
+  document.getElementById('project-name').disabled = true;
+  ['client-name','project-engineer','contractor-primary'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('inspector-name').value = '';
+  document.getElementById('weather').value = '';
+  document.getElementById('temperature').value = '';
+  equipmentItems = []; workforceItems = [];
+  renderEquipmentList('equipment-list', equipmentItems);
+  renderWorkforceList('workforce-list', workforceItems);
+  document.querySelectorAll('.check-item').forEach(el => el.classList.remove('checked'));
+  document.getElementById('header-error').style.display = 'none';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
 function openReportModal(){
   const now=new Date();
   const yyyy=now.getFullYear(),mo=String(now.getMonth()+1).padStart(2,'0'),dd=String(now.getDate()).padStart(2,'0');
@@ -1056,7 +1159,7 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale){
   const headerInfoHtml=
     '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px;">'+
     '<tr><td style="padding:4px 8px 4px 0;color:#555;width:150px;font-weight:bold;">Project:</td><td>'+(proj.number?proj.number+' — ':'')+proj.name+'</td>'+
-    '<td style="padding:4px 8px 4px 16px;color:#555;width:120px;font-weight:bold;">Date:</td><td>'+dateStr+(dayType?' &nbsp;('+dayType+')':'')+'</td></tr>'+
+    '<td style="padding:4px 8px 4px 16px;color:#555;width:120px;font-weight:bold;">Date:</td><td>'+dateStr+'</td></tr>'+(dayType?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Day Type:</td><td>'+dayType+'</td><td></td><td></td></tr>':'')+
     '<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Client:</td><td>'+client+'</td>'+
     '<td style="padding:4px 8px 4px 16px;color:#555;font-weight:bold;">Inspector(s):</td><td>'+inspectors.join(', ')+'</td></tr>'+
     (engineer?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Project Engineer:</td><td>'+engineer+'</td><td></td><td></td></tr>':'')+
@@ -1072,10 +1175,21 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale){
     '<div style="display:inline-block;vertical-align:top;width:48%;margin-bottom:14px;">'+
     '<div style="font-weight:bold;font-size:13px;color:#0d1b2a;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:8px;">Workforce on Site</div>'+
     workforce.map(w=>'<div style="font-size:13px;padding:2px 0;">'+w.classification+' &nbsp;—&nbsp; <strong>'+w.count+'</strong></div>').join('')+'</div>':'';
-  const checkHtml=checks.length>0?
-    '<div style="margin-bottom:14px;">'+
-    '<div style="font-weight:bold;font-size:13px;color:#0d1b2a;margin-bottom:6px;">Daily Checklist</div>'+
-    '<div style="display:flex;flex-wrap:wrap;gap:5px;">'+checks.map(c=>'<span style="background:#e8f5e9;border:1px solid #a5d6a7;color:#1e7e34;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:4px;">✓ '+c+'</span>').join('')+'</div></div>':'';
+  // Show all checklist items - checked and unchecked
+  const allItems = headerRow.allChecklistItems || CHECKLIST_ITEMS;
+  const checkHtml = allItems.length > 0 ?
+    '<div style="margin-bottom:14px;">' +
+    '<div style="font-weight:bold;font-size:13px;color:#0d1b2a;margin-bottom:6px;">Daily Checklist</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:5px;">' +
+    allItems.map(function(c){
+      const isChecked = checks.indexOf(c) >= 0;
+      if(isChecked){
+        return '<span style="background:#e8f5e9;border:1px solid #a5d6a7;color:#1e7e34;font-size:11px;font-weight:bold;padding:2px 8px;border-radius:4px;">✓ '+c+'</span>';
+      } else {
+        return '<span style="background:#f5f5f5;border:1px solid #ddd;color:#999;font-size:11px;padding:2px 8px;border-radius:4px;">○ '+c+'</span>';
+      }
+    }).join('') +
+    '</div></div>' : '';
 
   let entriesHtml='';
   if(workEntries.length===0){
