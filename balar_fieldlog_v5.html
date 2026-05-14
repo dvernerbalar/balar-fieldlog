@@ -1009,27 +1009,30 @@ function saveEditEntry(){
 
 // ── SWITCH PROJECT ───────────────────────────────────────
 function openSwitchProject(){
-  const today = new Date().toLocaleDateString('en-US');
-  const list = document.getElementById('switch-project-list');
-  const todayHeaders = Object.values(dailyHeaders).filter(h => h.date === today);
+  var today = new Date().toLocaleDateString('en-US');
+  var list = document.getElementById('switch-project-list');
+  var todayHeaders = Object.values(dailyHeaders).filter(function(h){ return h.date === today; });
 
   if(todayHeaders.length === 0){
-    list.innerHTML = '<div style="color:#aaa;font-size:13px;">No other project headers for today.</div>';
+    list.innerHTML = "<div style='color:#aaa;font-size:13px;'>No other project headers for today.</div>";
   } else {
-    let html = '<div style="font-size:12px;color:#667;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Today's Projects</div>';
-    todayHeaders.forEach(h => {
-      const key = h.projectNumber+'||'+h.project+'||'+h.date;
-      const isCurrent = key === currentProjectKey;
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:'+(isCurrent?'#f0f8f0':'#f8fafc')+';border:1px solid '+(isCurrent?'#a5d6a7':'#e0e5ea')+';border-radius:7px;margin-bottom:8px;">';
-      html += '<div><div style="font-size:14px;font-weight:600;color:#222;">'+h.projectNumber+' — '+h.project+'</div>';
-      html += '<div style="font-size:12px;color:#888;">'+h.inspector+' &nbsp;·&nbsp; '+h.dayType+'</div></div>';
+    var html = "<div style='font-size:12px;color:#667;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;'>Today's Projects</div>";
+    for(var t=0; t<todayHeaders.length; t++){
+      var h = todayHeaders[t];
+      var key = h.projectNumber+'||'+h.project+'||'+h.date;
+      var isCurrent = key === currentProjectKey;
+      var bg = isCurrent ? '#f0f8f0' : '#f8fafc';
+      var border = isCurrent ? '#a5d6a7' : '#e0e5ea';
+      html += "<div style='display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:"+bg+";border:1px solid "+border+";border-radius:7px;margin-bottom:8px;'>";
+      html += "<div><div style='font-size:14px;font-weight:600;color:#222;'>"+h.projectNumber+" — "+h.project+"</div>";
+      html += "<div style='font-size:12px;color:#888;'>"+h.inspector+" &nbsp;·&nbsp; "+h.dayType+"</div></div>";
       if(isCurrent){
-        html += '<span style="font-size:11px;font-weight:700;color:#1e7e34;">ACTIVE</span>';
+        html += "<span style='font-size:11px;font-weight:700;color:#1e7e34;'>ACTIVE</span>";
       } else {
-        html += '<button onclick="switchToProject(''+key+'')" style="background:var(--navy);color:white;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;">Switch</button>';
+        html += "<button data-key='"+key+"' onclick='switchToProject(this.dataset.key)' style='background:#0d1b2a;color:white;border:none;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;'>Switch</button>";
       }
-      html += '</div>';
-    });
+      html += "</div>";
+    }
     list.innerHTML = html;
   }
   document.getElementById('switch-project-modal').classList.add('open');
