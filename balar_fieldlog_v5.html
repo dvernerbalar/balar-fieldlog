@@ -568,7 +568,7 @@ function renderEquipmentList(listId,items){
   let html='';
   items.forEach((eq,i)=>{
     html+='<div class="item-row"><span class="item-row-name">'+eq.name+'</span><div class="item-row-right"><span class="item-row-count">'+eq.count+'</span>';
-    html+='<button class="item-row-remove" onclick="removeEquipmentFrom(''+listId+'','+i+')">x</button></div></div>';
+    html+='<button class="item-row-remove" data-list="'+listId+'" data-idx="'+i+'" onclick="removeEquipmentFrom(this.dataset.list,this.dataset.idx)">x</button></div></div>';
   });
   list.innerHTML=html;
 }
@@ -583,12 +583,14 @@ function renderWorkforceList(listId,items){
   list.innerHTML=html;
 }
 function removeEquipmentFrom(listId,i){
-  if(listId==='equipment-list'){equipmentItems.splice(i,1);renderEquipmentList('equipment-list',equipmentItems);}
-  else{editEquipmentItems.splice(i,1);renderEquipmentList('edit-equipment-list',editEquipmentItems);}
+  const idx=parseInt(i);
+  if(listId==='equipment-list'){equipmentItems.splice(idx,1);renderEquipmentList('equipment-list',equipmentItems);}
+  else{editEquipmentItems.splice(idx,1);renderEquipmentList('edit-equipment-list',editEquipmentItems);}
 }
 function removeWorkforceFrom(listId,i){
-  if(listId==='workforce-list'){workforceItems.splice(i,1);renderWorkforceList('workforce-list',workforceItems);}
-  else{editWorkforceItems.splice(i,1);renderWorkforceList('edit-workforce-list',editWorkforceItems);}
+  const idx=parseInt(i);
+  if(listId==='workforce-list'){workforceItems.splice(idx,1);renderWorkforceList('workforce-list',workforceItems);}
+  else{editWorkforceItems.splice(idx,1);renderWorkforceList('edit-workforce-list',editWorkforceItems);}
 }
 
 // ── CHECKLIST ────────────────────────────────────────────
