@@ -731,6 +731,9 @@ async function checkForExistingHeader(projectName, dateVal){
     localStorage.setItem('balar_v5_current_project', currentProjectKey);
     restoreHeader(dailyHeader);
     showToast('Header restored from today', false);
+    // Sync any new entries from Sheets not in local cache
+    var dp = dateLocale;
+    syncEntriesFromSheets(dailyHeader.project, dailyHeader.projectNumber, dp);
     return;
   }
 
@@ -749,9 +752,61 @@ async function checkForExistingHeader(projectName, dateVal){
       localStorage.setItem('balar_v5_current_project', currentProjectKey);
       restoreHeader(dailyHeader);
       showToast('Header loaded from Sheets', false);
+      // Also pull entries for this project/date from Sheets
+      await syncEntriesFromSheets(h.project, h.projectNumber, dateLocale);
     }
   } catch(err){
     console.warn('Header check failed:', err);
+  }
+}
+
+async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
+  if(!GOOGLE_SCRIPT_URL) return;
+  try{
+    var url = GOOGLE_SCRIPT_URL+'?action=getEntries&date='+encodeURIComponent(dateLocale)+'&projectNumber='+encodeURIComponent(projectNumber||'')+'&projectName='+encodeURIComponent(projectName);
+    var resp = await fetch(url);
+    var data = await resp.json();
+    var sheetEntries = (data.entries||[]).filter(function(e){ return e.entryType !== 'header'; });
+    if(sheetEntries.length === 0) return;
+
+    // Convert sheet entries to local format
+    var today = new Date().toLocaleDateString('en-US');
+    sheetEntries.forEach(function(se){
+      // Check if we already have this entry locally (match on time + desc)
+      var exists = entries.some(function(le){
+        return le.project === projectName && le.time === se.time && le.desc === se.desc && le.date === dateLocale;
+      });
+      if(!exists){
+        entries.push({
+          id: Date.now() + Math.random(),
+          type: 'entry',
+          project: projectName,
+          projectNumber: projectNumber||'',
+          client: se.client||'',
+          projectEngineer: se.projectEngineer||'',
+          contractorPrimary: se.contractorPrimary||'',
+          inspector: se.inspector||'',
+          date: dateLocale,
+          time: se.time||'',
+          dailyWeather: se.dailyWeather||'',
+          dailyTemperature: se.dailyTemperature||'',
+          entryWeather: se.entryWeather||'',
+          entryTemperature: se.entryTemperature||'',
+          station: se.station||'',
+          desc: se.desc||'',
+          notes: se.notes||'',
+          photos: se.photos||[],
+          gpsLocation: se.gpsLocation||'',
+          fromSheets: true,
+        });
+      }
+    });
+
+    try{ localStorage.setItem('balar_v5_entries', JSON.stringify(entries)); }catch(e){}
+    renderEntries();
+    if(sheetEntries.length > 0) showToast(sheetEntries.length+' entries loaded from Sheets', false);
+  } catch(err){
+    console.warn('Entry sync failed:', err);
   }
 }
 
@@ -967,7 +1022,14 @@ function renderEntries(){
   let filterDate;
   if(filterInput&&filterInput.value){const[y,mo,d]=filterInput.value.split('-');filterDate=new Date(y,mo-1,d).toLocaleDateString('en-US');}
   else{filterDate=new Date().toLocaleDateString('en-US');}
-  const te=entries.filter(e=>e.date===filterDate&&e.type==='entry').sort((a,b)=>toMins(a.time)-toMins(b.time));
+  // Filter by date AND active project
+  const activeProject = dailyHeader ? dailyHeader.project : null;
+  const te=entries.filter(e=>{
+    if(e.date!==filterDate) return false;
+    if(e.type&&e.type!=='entry') return false;
+    if(activeProject && e.project !== activeProject) return false;
+    return true;
+  }).sort((a,b)=>toMins(a.time)-toMins(b.time));
   document.getElementById('entry-count').textContent=te.length;
   const list=document.getElementById('entries-list');
   if(te.length===0){list.innerHTML='<div class="empty-state"><div class="empty-icon">📋</div>No entries for this date.</div>';return;}
