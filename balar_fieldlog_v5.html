@@ -517,13 +517,20 @@ function onProjectNameChange(){
   document.getElementById('client-name').value=sel?(sel.dataset.client||''):'';
   document.getElementById('project-engineer').value=sel?(sel.dataset.engineer||''):'';
   document.getElementById('contractor-primary').value=sel?(sel.dataset.contractor||''):'';
+  // Check for existing header once both project and date are set
+  const dateVal = document.getElementById('entry-date').value;
+  if(dateVal) checkForExistingHeader(ns.value.trim(), dateVal);
 }
 function buildInspectorDropdown(){
   const sel=document.getElementById('inspector-name');
   sel.innerHTML='<option value="">Select...</option>';
   inspectorsData.forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);});
 }
-function onDateChange(){ /* future: check if header exists for new date */ }
+function onDateChange(){
+  const proj = document.getElementById('project-name').value.trim();
+  const dateVal = document.getElementById('entry-date').value;
+  if(proj && dateVal) checkForExistingHeader(proj, dateVal);
+}
 
 // ── EQUIPMENT & WORKFORCE ────────────────────────────────
 function buildEquipmentDropdown(selId){
@@ -705,6 +712,48 @@ function renderPreviews(){
   ).join('');
 }
 function removePhoto(i){photoDataUrls.splice(i,1);renderPreviews();}
+
+
+// ── CHECK FOR EXISTING HEADER ────────────────────────────────
+async function checkForExistingHeader(projectName, dateVal){
+  if(!GOOGLE_SCRIPT_URL || !projectName || !dateVal) return;
+  var parts = dateVal.split('-');
+  var dateLocale = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2])).toLocaleDateString('en-US');
+
+  // First check local dailyHeaders cache
+  var localKey = Object.keys(dailyHeaders).find(function(k){
+    var p = k.split('||');
+    return p[1] === projectName && p[2] === dateLocale;
+  });
+  if(localKey && dailyHeaders[localKey]){
+    dailyHeader = dailyHeaders[localKey];
+    currentProjectKey = localKey;
+    localStorage.setItem('balar_v5_current_project', currentProjectKey);
+    restoreHeader(dailyHeader);
+    showToast('Header restored from today', false);
+    return;
+  }
+
+  // Not in local cache — check Sheets
+  try{
+    var url = GOOGLE_SCRIPT_URL+'?action=getHeader&date='+encodeURIComponent(dateLocale)+'&projectName='+encodeURIComponent(projectName);
+    var resp = await fetch(url);
+    var data = await resp.json();
+    if(data.header){
+      var h = data.header;
+      var key = (h.projectNumber||'')+'||'+h.project+'||'+h.date;
+      dailyHeaders[key] = h;
+      currentProjectKey = key;
+      dailyHeader = h;
+      localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
+      localStorage.setItem('balar_v5_current_project', currentProjectKey);
+      restoreHeader(dailyHeader);
+      showToast('Header loaded from Sheets', false);
+    }
+  } catch(err){
+    console.warn('Header check failed:', err);
+  }
+}
 
 // ── POST DAILY HEADER ────────────────────────────────────
 function postDailyHeader(){
