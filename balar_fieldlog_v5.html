@@ -977,22 +977,8 @@ function submitEntry(){
 
   // Post to Sheets - entry data first, photo separately
   if(GOOGLE_SCRIPT_URL){
-    const forSheet={...entry,photos:[],photoBase64:'',entryId:entry.id};
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(forSheet)})
-    .then(r=>r.json())
-    .then(()=>{
-      if(entry.photos.length>0){
-        fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify({
-          action:'savePhoto',entryId:entry.id,photoBase64:entry.photos[0],
-          project:entry.project,projectNumber:entry.projectNumber,
-          date:entry.date,station:entry.station,time:entry.time,inspector:entry.inspector
-        })}).catch(()=>{});
-      }
-    })
-    .catch(()=>{
-      const forSheetFull={...entry,photos:[],photoBase64:entry.photos.length>0?entry.photos[0]:'',entryId:entry.id};
-      fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(forSheetFull)}).catch(()=>{});
-    });
+    const forSheet={...entry,photos:[],photoBase64:entry.photos.length>0?entry.photos[0]:'',entryId:entry.id};
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(forSheet)}).catch(()=>{});
   }
 
   clearEntryForm();
