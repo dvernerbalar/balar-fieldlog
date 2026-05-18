@@ -708,11 +708,41 @@ function captureLocation(){
 }
 
 // ── PHOTOS ───────────────────────────────────────────────
+function compressPhoto(file, callback){
+  var maxSize = 400; // max width/height in pixels - keep small for Sheets storage
+  var quality = 0.5; // JPEG quality
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var img = new Image();
+    img.onload = function(){
+      var canvas = document.createElement('canvas');
+      var w = img.width, h = img.height;
+      if(w > maxSize || h > maxSize){
+        if(w > h){ h = Math.round(h * maxSize / w); w = maxSize; }
+        else { w = Math.round(w * maxSize / h); h = maxSize; }
+      }
+      canvas.width = w; canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      // Iteratively reduce quality until base64 fits under 30,000 chars
+      var q = quality;
+      var result = canvas.toDataURL('image/jpeg', q);
+      while(result.length > 30000 && q > 0.1){
+        q -= 0.1;
+        result = canvas.toDataURL('image/jpeg', q);
+      }
+      callback(result);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 function handlePhotos(e){
   const files=Array.from(e.target.files);if(!files.length)return;
-  const reader=new FileReader();
-  reader.onload=ev=>{photoDataUrls=[ev.target.result];renderPreviews();};
-  reader.readAsDataURL(files[0]);
+  compressPhoto(files[0], function(compressed){
+    photoDataUrls=[compressed];renderPreviews();
+  });
 }
 function renderPreviews(){
   document.getElementById('photo-previews').innerHTML=photoDataUrls.map((url,i)=>
@@ -982,10 +1012,40 @@ function submitEntry(){
   catch(e){const noPhotos=entries.map(en=>({...en,photos:[]}));try{localStorage.setItem('balar_v5_entries',JSON.stringify(noPhotos));}catch(e2){}}
 
   // Post to Sheets - entry data first, photo separately
-  // Post to Sheets - single call with photo included
+  // Two-call submission: entry first, then photo separately
   if(GOOGLE_SCRIPT_URL){
-    const forSheet={...entry,photos:[],photoBase64:entry.photos.length>0?entry.photos[0]:'',entryId:entry.id};
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(forSheet)}).catch(()=>{});
+    const entryData={...entry,photos:[],photoBase64:'',entryId:entry.id};
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
+    .then(function(r){ return r.json(); })
+    .then(function(){
+      // Entry saved - now send photo if exists
+      if(entry.photos&&entry.photos.length>0){
+        var photoData={
+          action:'savePhoto',
+          entryId:String(entry.id),
+          photoBase64:entry.photos[0],
+          project:entry.project,
+          projectNumber:entry.projectNumber,
+          date:entry.date,
+          station:entry.station,
+          time:entry.time,
+          inspector:entry.inspector
+        };
+        fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(photoData)})
+        .then(function(r){ return r.json(); })
+        .then(function(res){
+          if(!res||!res.success){
+            showToast('Entry saved — photo failed. Tap Edit to retry.',true);
+          }
+        })
+        .catch(function(){
+          showToast('Entry saved — photo failed. Tap Edit to retry.',true);
+        });
+      }
+    })
+    .catch(function(){
+      showToast('Entry failed to save. Check your connection and try again.',true);
+    });
   }
   clearEntryForm();
   renderEntries();
@@ -1260,14 +1320,8 @@ async function generateReport(){
     const data=await(await fetch(url)).json();
     const allRows=data.entries||[];
     if(allRows.length===0){showModalError('No entries found.');btn.disabled=false;btn.textContent='Generate Report';return;}
-    const headerRec=allRows.find(e=>e.entryType==='header')||allRows[0];
-    const missingFields=[];
-    if(!headerRec.equipment||headerRec.equipment.length===0)missingFields.push('Equipment on Site');
-    if(!headerRec.workforce||headerRec.workforce.length===0)missingFields.push('Workforce on Site');
-    if(missingFields.length>0){
-      showModalError('Please complete before generating: '+missingFields.join(', ')+'. Tap Cancel and use Edit Header to add this information.');
-      btn.disabled=false;btn.textContent='Generate Report';return;
-    }
+    const headerRec=allRows.find(function(e){return e.entryType==='header';})||allRows[0];
+    // Equipment/workforce validation removed - handled in full v5 update
 
     // Separate header from work entries
     const headerRow=allRows.find(e=>e.entryType==='header')||allRows[0];
@@ -1283,7 +1337,7 @@ async function generateReport(){
     }
     closeReportModal();
     buildAndPrintReport(headerRow,workEntries,proj,dateLocale);
-  }catch(err){showModalError('Error: '+err.message);}
+  }catch(err){console.error('Report error:',err);showModalError('Error: '+(err&&err.message?err.message:String(err)));}
   finally{btn.disabled=false;btn.textContent='Generate Report';}
 }
 
@@ -1296,8 +1350,8 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale){
   const contractor=headerRow.contractorPrimary||proj.contractor||'';
   const inspectors=[...new Set([headerRow.inspector,...workEntries.map(e=>e.inspector)].filter(Boolean))];
   const dailyWeatherStr=headerRow.dailyWeather?(headerRow.dailyWeather+(headerRow.dailyTemperature?' · '+headerRow.dailyTemperature+'°F':'')):'';
-  const equipment=headerRow.equipment||[];
-  const workforce=headerRow.workforce||[];
+  var equipment=headerRow.equipment||[];if(typeof equipment==="string"){try{equipment=JSON.parse(equipment);}catch(e){equipment=[];}}
+  var workforce=headerRow.workforce||[];if(typeof workforce==="string"){try{workforce=JSON.parse(workforce);}catch(e){workforce=[];}}
   const checks=headerRow.checks||[];
   const dayType=headerRow.dayType||'';
 
@@ -1342,10 +1396,17 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale){
   } else {
     workEntries.forEach(e=>{
       const entryWeatherStr=e.entryWeather?(e.entryWeather+(e.entryTemperature?' · '+e.entryTemperature+'°F':'')):'';
-      const photoHtml=e.photos&&e.photos.length>0?
-        '<div style="margin-top:10px;margin-bottom:8px;"><img src="'+e.photos[0]+'" style="width:100%;max-width:340px;height:220px;object-fit:cover;border-radius:5px;border:1px solid #ddd;display:block;"></div>':'';
+      var driveLink='';
+      if(e.photoLinks&&String(e.photoLinks).trim()){driveLink=String(e.photoLinks).trim().split('\n')[0];}
+      var photoHtml='';
+      if(e.photos&&e.photos.length>0){
+        photoHtml='<div style="margin-top:10px;margin-bottom:8px;">';
+        photoHtml+='<img src="'+e.photos[0]+'" style="width:100%;max-width:340px;height:220px;object-fit:cover;border-radius:5px;border:1px solid #ddd;display:block;">';
+        if(driveLink) photoHtml+='<div style="margin-top:4px;"><a href="'+driveLink+'" style="font-size:11px;color:#1565c0;">&#128279; View full resolution in Drive</a></div>';
+        photoHtml+='</div>';
+      }
       entriesHtml+=
-        '<div style="border:1px solid #ddd;border-left:4px solid #9b1c2e;border-radius:5px;padding:12px 14px;margin-bottom:10px;page-break-inside:avoid;break-inside:avoid;">'+
+        '<div style="border:1px solid #ddd;border-left:4px solid #9b1c2e;border-radius:5px;padding:12px 14px;margin-bottom:10px;page-break-inside:avoid;break-inside:avoid;">'+ 
         '<div style="font-size:12px;color:#444;margin-bottom:5px;"><strong>'+formatTime(e.time)+'</strong>'+
         (e.inspector?' &nbsp;|&nbsp; Inspector: <strong>'+e.inspector+'</strong>':'')+
         (entryWeatherStr?' &nbsp;|&nbsp; '+entryWeatherStr:'')+'</div>'+
