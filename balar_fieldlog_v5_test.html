@@ -269,7 +269,7 @@ textarea{resize:vertical;min-height:90px;}
         </div>
         <div class="form-row">
           <label>Photo</label>
-          <div class="photo-upload-zone"><input type="file" id="photo-input" accept="image/*"><div style="font-size:28px;margin-bottom:6px;">🖼️</div><div class="upload-text"><strong>Select a photo from your library</strong><br><span style="font-size:12px;color:#aaa;">Take photos with your camera app first, then select here</span></div></div>
+          <div class="photo-upload-zone"><input type="file" id="photo-input" accept=".jpg,.jpeg,.png,.gif,.heic,.webp,.JPG,.JPEG,.PNG"><div style="font-size:28px;margin-bottom:6px;">🖼️</div><div class="upload-text"><strong>Select a photo from your library</strong><br><span style="font-size:12px;color:#aaa;">Take photos with your camera app first, then select here</span></div></div>
           <div class="photo-previews" id="photo-previews"></div>
         </div>
         <div class="form-row">
@@ -369,7 +369,7 @@ textarea{resize:vertical;min-height:90px;}
       <label>Photo</label>
       <div id="edit-photo-preview" style="margin-bottom:8px;"></div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <input type="file" id="edit-photo-input" accept="image/*" style="font-size:13px;flex:1;" onchange="handleEditPhoto(this)">
+        <input type="file" id="edit-photo-input" accept=".jpg,.jpeg,.png,.gif,.heic,.webp,.JPG,.JPEG,.PNG" style="font-size:13px;flex:1;" onchange="handleEditPhoto(this)">
         <button onclick="removeEditPhoto()" style="background:none;border:1px solid #ddd;border-radius:6px;padding:6px 12px;font-size:12px;color:#999;cursor:pointer;white-space:nowrap;">Remove Photo</button>
       </div>
     </div>
