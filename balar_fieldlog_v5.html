@@ -433,6 +433,7 @@ let dailyHeaders = JSON.parse(localStorage.getItem('balar_v5_headers') || '{}');
 let currentProjectKey = localStorage.getItem('balar_v5_current_project') || null;
 let dailyHeader = null; // set from dailyHeaders[currentProjectKey]
 let photoDataUrls = [];
+let photoOriginals = [];
 let projectsData = [], inspectorsData = [], contractorsData = [], equipmentData = [], workforceData = [];
 let equipmentItems = [], workforceItems = [];
 let editEquipmentItems = [], editWorkforceItems = [];
@@ -740,16 +741,24 @@ function compressPhoto(file, callback){
 
 function handlePhotos(e){
   const files=Array.from(e.target.files);if(!files.length)return;
-  compressPhoto(files[0], function(compressed){
-    photoDataUrls=[compressed];renderPreviews();
-  });
+  // Store original for Drive upload
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var original=ev.target.result;
+    compressPhoto(files[0], function(compressed){
+      photoDataUrls=[compressed]; // compressed for display and Sheets col 17
+      photoOriginals=[original];  // original for Drive storage
+      renderPreviews();
+    });
+  };
+  reader.readAsDataURL(files[0]);
 }
 function renderPreviews(){
   document.getElementById('photo-previews').innerHTML=photoDataUrls.map((url,i)=>
     '<div class="photo-thumb"><img src="'+url+'"><button class="remove-photo" onclick="removePhoto('+i+')">x</button></div>'
   ).join('');
 }
-function removePhoto(i){photoDataUrls.splice(i,1);renderPreviews();}
+function removePhoto(i){photoDataUrls.splice(i,1);photoOriginals.splice(i,1);renderPreviews();}
 
 
 // ── CHECK FOR EXISTING HEADER ────────────────────────────────
@@ -1004,6 +1013,7 @@ function submitEntry(){
     desc,
     notes:document.getElementById('notes').value.trim(),
     photos:[...photoDataUrls],
+    photoOriginals:[...photoOriginals],
     gpsLocation:document.getElementById('gps-location').value.trim(),
   };
 
@@ -1024,6 +1034,7 @@ function submitEntry(){
           action:'savePhoto',
           entryId:String(entry.id),
           photoBase64:entry.photos[0],
+          photoOriginal:photoOriginals.length>0?photoOriginals[0]:'',
           project:entry.project,
           projectNumber:entry.projectNumber,
           date:entry.date,
@@ -1061,7 +1072,7 @@ function showEntryError(msg){
 function clearEntryForm(){
   ['work-desc','notes','station','gps-location','entry-temperature'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('entry-weather').selectedIndex=0;
-  photoDataUrls=[];renderPreviews();
+  photoDataUrls=[];photoOriginals=[];renderPreviews();
   document.getElementById('photo-input').value='';
   const now=new Date();
   document.getElementById('entry-time').value=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
