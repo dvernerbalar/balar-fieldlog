@@ -926,7 +926,7 @@ function postDailyHeader(){
 
   // Post to Sheets
   if(GOOGLE_SCRIPT_URL){
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify({...dailyHeader,entryId:dailyHeader.id})}).catch(()=>{});
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(Object.assign({},dailyHeader,{entryId:dailyHeader.id}))}).catch(()=>{});
   }
 
   restoreHeader(dailyHeader);
@@ -1058,7 +1058,7 @@ function submitEntry(){
   // Post to Sheets - entry data first, photo separately
   // Two-call submission: entry first, then photo separately
   if(GOOGLE_SCRIPT_URL){
-    const entryData={...entry,photos:[],photoBase64:'',entryId:entry.id};
+    const entryData=Object.assign({},entry,{photos:[],photoBase64:'',entryId:entry.id});
     fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
     .then(function(r){ return r.json(); })
     .then(function(){
@@ -1094,7 +1094,8 @@ function submitEntry(){
           time:entry.time,
           inspector:entry.inspector
         };
-        fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(drivePhotoData)}).catch(function(){});
+        // Fire and forget - don't wait for response to avoid timeout errors
+        fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(drivePhotoData),keepalive:true}).catch(function(){});
       }
     })
     .catch(function(){
@@ -1156,14 +1157,14 @@ function saveEntriesWithPhotos(){
     // Storage full - try saving without high-res photos
     try{
       var slim=entries.map(function(en){
-        if(en.synced===true){return {...en,photoOriginals:[]};}
+        if(en.synced===true){return Object.assign({},en,{photoOriginals:[]});}
         return en;
       });
       localStorage.setItem('balar_v5_entries',JSON.stringify(slim));
     }catch(e2){
       // Still full - save without any photoOriginals
       try{
-        var minimal=entries.map(function(en){return {...en,photoOriginals:[]};});
+        var minimal=entries.map(function(en){return Object.assign({},en,{photoOriginals:[]});});
         localStorage.setItem('balar_v5_entries',JSON.stringify(minimal));
       }catch(e3){}
     }
@@ -1179,7 +1180,7 @@ function retryEntry(id, btn){
   if(idx>=0){entries[idx].synced='syncing';try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}}
   if(btn){btn.disabled=true;btn.textContent='Syncing...';}
   renderEntries();
-  var entryData={...entry,photos:[],photoBase64:'',entryId:entry.id};
+  var entryData=Object.assign({},entry,{photos:[],photoBase64:'',entryId:entry.id});
   fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
   .then(function(r){return r.json();})
   .then(function(){
@@ -1325,7 +1326,7 @@ function saveEditEntry(){
   var newPhoto = preview.dataset.photo || '';
   var updatedPhotos = newPhoto ? [newPhoto] : [];
 
-  entries[idx]={...entries[idx],
+  entries[idx]=Object.assign({},entries[idx],{
     desc:document.getElementById('edit-desc').value.trim(),
     station:document.getElementById('edit-station').value.trim(),
     notes:document.getElementById('edit-notes').value.trim(),
