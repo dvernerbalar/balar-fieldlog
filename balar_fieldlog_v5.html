@@ -295,7 +295,7 @@ textarea{resize:vertical;min-height:90px;}
       </div>
 
       <div id="entry-error" class="error-box"></div>
-      <button class="btn-submit" onclick="submitEntry()">+ Add Entry to Log</button>
+      <button class="btn-submit" id="submit-entry-btn" onclick="submitEntry()">+ Add Entry to Log</button>
 
       <!-- Entries Log -->
       <div style="margin-top:32px;">
@@ -308,7 +308,7 @@ textarea{resize:vertical;min-height:90px;}
           <input type="date" id="entries-date-filter" onchange="renderEntries()">
         </div>
         <div id="entries-list"><div class="empty-state"><div class="empty-icon">📋</div>No entries yet.</div></div>
-        <div style="margin-top:16px;"><button class="btn-report" onclick="openReportModal()">📄 Generate End-of-Day Report</button></div>
+        <div style="margin-top:16px;"><button class="btn-report" id="btn-generate-report" onclick="openReportModal()">📄 Generate End-of-Day Report</button></div>
       </div>
     </div>
 
@@ -457,6 +457,14 @@ async function init(){
   document.getElementById('photo-input').addEventListener('change', handlePhotos);
   if(GOOGLE_SCRIPT_URL){ await loadDropdownData(); }
   else{ document.getElementById('loading-state').innerHTML='<span style="color:#e67e22;">Google Script URL not set.</span>'; showForm(); }
+  // Clean up high-res photos from synced entries to free localStorage
+  var today=new Date().toLocaleDateString('en-US');
+  entries.forEach(function(e,i){
+    // Only clear high-res from synced entries - keep for unsynced so retry has full quality
+    if(e.synced===true){entries[i].photoOriginals=[];}
+  });
+  saveEntriesWithPhotos();
+
   // Restore last active header if today
   if(currentProjectKey && dailyHeaders[currentProjectKey]){
     const h = dailyHeaders[currentProjectKey];
@@ -465,8 +473,12 @@ async function init(){
       restoreHeader(dailyHeader);
     }
   }
+  }
   renderEntries();
-}
+
+
+
+
 
 async function loadDropdownData(){
   try{
@@ -765,11 +777,14 @@ function handlePhotos(e){
   });
 }
 function renderPreviews(){
-  document.getElementById('photo-previews').innerHTML=photoDataUrls.map((url,i)=>
-    '<div class="photo-thumb"><img src="'+url+'"><button class="remove-photo" onclick="removePhoto('+i+')">x</button></div>'
-  ).join('');
+  var html='';
+  for(var i=0;i<photoDataUrls.length;i++){
+    html+='<div class="photo-thumb"><img src="'+photoDataUrls[i]+'">';
+    html+='<button class="remove-photo" data-idx="'+i+'" onclick="removePhoto(this.dataset.idx)">x</button></div>';
+  }
+  document.getElementById('photo-previews').innerHTML=html;
 }
-function removePhoto(i){photoDataUrls.splice(i,1);photoOriginals.splice(i,1);renderPreviews();}
+function removePhoto(i){photoDataUrls.splice(parseInt(i),1);photoOriginals.splice(i,1);renderPreviews();}
 
 
 // ── CHECK FOR EXISTING HEADER ────────────────────────────────
@@ -918,7 +933,7 @@ function postDailyHeader(){
 
   // Post to Sheets
   if(GOOGLE_SCRIPT_URL){
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify({...dailyHeader,entryId:dailyHeader.id})}).catch(()=>{});
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(Object.assign({},dailyHeader,{entryId:dailyHeader.id}))}).catch(function(){});
   }
 
   restoreHeader(dailyHeader);
@@ -949,6 +964,20 @@ function restoreHeader(h){
   const now=new Date();
   document.getElementById('entry-time').value=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
   renderEntries();
+  // Auto-retry any unsynced entries from previous sessions
+  if(GOOGLE_SCRIPT_URL){
+    setTimeout(function(){
+      // Reset any stuck 'syncing' state from previous session
+      entries.forEach(function(e,i){
+        if(e.synced==='syncing'){entries[i].synced=false;}
+      });
+      var unsynced=entries.filter(function(e){return e.synced===false;});
+      if(unsynced.length>0){
+        try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}
+        unsynced.forEach(function(e){ retryEntry(e.id); });
+      }
+    }, 3000);
+  }
 }
 
 // ── EDIT DAILY HEADER ────────────────────────────────────
@@ -969,8 +998,8 @@ function saveEditHeader(){
   dailyHeader.dailyWeather=document.getElementById('edit-header-weather').value;
   dailyHeader.dailyTemperature=document.getElementById('edit-header-temp').value.trim();
   dailyHeader.dayType=document.getElementById('edit-header-daytype').value;
-  dailyHeader.equipment=[...editEquipmentItems];
-  dailyHeader.workforce=[...editWorkforceItems];
+  dailyHeader.equipment=editEquipmentItems.slice();
+  dailyHeader.workforce=editWorkforceItems.slice();
   const projectKey = dailyHeader.projectNumber + '||' + dailyHeader.project + '||' + dailyHeader.date;
   dailyHeaders[projectKey] = dailyHeader;
   currentProjectKey = projectKey;
@@ -978,15 +1007,7 @@ function saveEditHeader(){
   localStorage.setItem('balar_v5_current_project', currentProjectKey);
   // Sync to Sheets
   if(GOOGLE_SCRIPT_URL){
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify({
-      action:'updateEntry',
-      entryId:dailyHeader.id,
-      originalProject:dailyHeader.project,
-      originalDesc:'HEADER',
-      originalTime:'',
-      ...dailyHeader,
-      photoBase64:'',
-    })}).catch(()=>{});
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(Object.assign({},dailyHeader,{action:'updateEntry',entryId:dailyHeader.id,originalProject:dailyHeader.project,originalDesc:'HEADER',originalTime:'',photoBase64:''}))}).catch(function(){});
   }
   closeEditHeaderModal();
   restoreHeader(dailyHeader);
@@ -995,16 +1016,17 @@ function saveEditHeader(){
 
 // ── SUBMIT WORK ENTRY ────────────────────────────────────
 function submitEntry(){
-  const errDiv=document.getElementById('entry-error');
+  var errDiv=document.getElementById('entry-error');
   errDiv.style.display='none';
   if(!dailyHeader){showEntryError('Please post the Daily Header first.');return;}
-  const desc=document.getElementById('work-desc').value.trim();
+  var desc=document.getElementById('work-desc').value.trim();
   if(!desc){showEntryError('Please enter a Description of Work.');return;}
+  disableEntryForm();
 
-  const dateVal=document.getElementById('entry-date').value;
-  let entryDate=dailyHeader.date;
+  var dateVal=document.getElementById('entry-date').value;
+  var entryDate=dailyHeader.date;
 
-  const entry={
+  var entry={
     id:Date.now(),
     type:'entry',
     projectNumber:dailyHeader.projectNumber,
@@ -1021,59 +1043,55 @@ function submitEntry(){
     entryWeather:document.getElementById('entry-weather').value,
     entryTemperature:document.getElementById('entry-temperature').value.trim(),
     station:document.getElementById('station').value.trim(),
-    desc,
+    desc:desc,
     notes:document.getElementById('notes').value.trim(),
-    photos:[...photoDataUrls],
-    photoOriginals:[...photoOriginals],
+    photos:photoDataUrls.slice(),
+    photoOriginals:photoOriginals.slice(),
     gpsLocation:document.getElementById('gps-location').value.trim(),
+    synced:false,
   };
 
   entries.unshift(entry);
-  try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}
-  catch(e){const noPhotos=entries.map(en=>({...en,photos:[]}));try{localStorage.setItem('balar_v5_entries',JSON.stringify(noPhotos));}catch(e2){}}
+  saveEntriesWithPhotos();
 
-  // Post to Sheets - entry data first, photo separately
-  // Two-call submission: entry first, then photo separately
   if(GOOGLE_SCRIPT_URL){
-    const entryData={...entry,photos:[],photoBase64:'',entryId:entry.id};
+    // Capture high-res photo before any cleanup
+    var hiRes = entry.photoOriginals&&entry.photoOriginals.length>0?entry.photoOriginals[0]:'';
+    var smallPhoto = entry.photos&&entry.photos.length>0?entry.photos[0]:'';
+    // Single POST with both compressed (col 17) and high-res (Drive) photos
+    var entryData = Object.assign({},entry,{
+      photos:[],
+      photoBase64:smallPhoto,
+      photoOriginal:hiRes||smallPhoto,
+      entryId:entry.id
+    });
     fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
     .then(function(r){ return r.json(); })
     .then(function(){
-      // Entry saved - now send photo if exists
-      if(entry.photos&&entry.photos.length>0){
-        var photoData={
-          action:'savePhoto',
-          entryId:String(entry.id),
-          photoBase64:entry.photos[0],
-          photoOriginal:entry.photoOriginals&&entry.photoOriginals.length>0?entry.photoOriginals[0]:'',
-          project:entry.project,
-          projectNumber:entry.projectNumber,
-          date:entry.date,
-          station:entry.station,
-          time:entry.time,
-          inspector:entry.inspector
-        };
-        fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(photoData)})
-        .then(function(r){ return r.json(); })
-        .then(function(res){
-          if(!res||!res.success){
-            showToast('Entry saved — photo failed. Tap Edit to retry.',true);
-          }
-        })
-        .catch(function(){
-          showToast('Entry saved — photo failed. Tap Edit to retry.',true);
-        });
-      }
+      var idx=entries.findIndex(function(e){return String(e.id)===String(entry.id);});
+      if(idx>=0){entries[idx].synced=true;entries[idx].photoOriginals=[];}
+      saveEntriesWithPhotos();
+      enableEntryForm();
+      clearEntryForm();
+      renderEntries();
+      showToast('Entry saved ✓',false);
     })
     .catch(function(){
-      showToast('Entry failed to save. Check your connection and try again.',true);
+      var idx=entries.findIndex(function(e){return String(e.id)===String(entry.id);});
+      if(idx>=0){entries[idx].synced=false;}
+      saveEntriesWithPhotos();
+      enableEntryForm();
+      clearEntryForm();
+      renderEntries();
+      showToast('Failed to save. Check connection — see entry below to retry.',true);
     });
+  } else {
+    enableEntryForm();
+    clearEntryForm();
+    renderEntries();
+    showToast('Entry saved locally',false);
   }
-  clearEntryForm();
-  renderEntries();
-  showToast('Entry added to log',false);
 }
-
 function showEntryError(msg){
   const e=document.getElementById('entry-error');
   e.textContent=msg;e.style.display='block';
@@ -1091,6 +1109,85 @@ function clearEntryForm(){
 }
 
 // ── RENDER ENTRIES ───────────────────────────────────────
+function disableEntryForm(){
+  var btn=document.getElementById('submit-entry-btn');
+  if(btn){btn.disabled=true;btn.textContent='Saving...';}
+  ['work-desc','station','notes','gps-location','entry-temperature','entry-time','entry-weather'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.disabled=true;
+  });
+  var photoInput=document.getElementById('photo-input');
+  if(photoInput)photoInput.disabled=true;
+}
+
+function enableEntryForm(){
+  var btn=document.getElementById('submit-entry-btn');
+  if(btn){btn.disabled=false;btn.textContent='+ Add Entry to Log';}
+  ['work-desc','station','notes','gps-location','entry-temperature','entry-time','entry-weather'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.disabled=false;
+  });
+  var photoInput=document.getElementById('photo-input');
+  if(photoInput)photoInput.disabled=false;
+}
+
+function saveEntriesWithPhotos(){
+  // Save entries to localStorage - gracefully handle storage full
+  try{
+    localStorage.setItem('balar_v5_entries',JSON.stringify(entries));
+  }catch(e){
+    // Storage full - try saving without high-res photos
+    try{
+      var slim=entries.map(function(en){
+        if(en.synced===true){return Object.assign({},en,{photoOriginals:[]});}
+        return en;
+      });
+      localStorage.setItem('balar_v5_entries',JSON.stringify(slim));
+    }catch(e2){
+      // Still full - save without any photoOriginals
+      try{
+        var minimal=entries.map(function(en){return Object.assign({},en,{photoOriginals:[]});});
+        localStorage.setItem('balar_v5_entries',JSON.stringify(minimal));
+      }catch(e3){}
+    }
+  }
+}
+
+function retryEntry(id, btn){
+  var entry=entries.find(function(e){return String(e.id)===String(id);});
+  if(!entry||!GOOGLE_SCRIPT_URL)return;
+  if(entry.synced==='syncing')return; // already in progress
+  // Set syncing state immediately to prevent double-tap
+  var idx=entries.findIndex(function(e){return String(e.id)===String(id);});
+  if(idx>=0){entries[idx].synced='syncing';try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}}
+  if(btn){btn.disabled=true;btn.textContent='Syncing...';}
+  renderEntries();
+  var entryData=Object.assign({},entry,{photos:[],photoBase64:entry.photos.length>0?entry.photos[0]:'',photoOriginal:entry.photoOriginals&&entry.photoOriginals.length>0?entry.photoOriginals[0]:'',entryId:entry.id});
+  fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
+  .then(function(r){return r.json();})
+  .then(function(){
+    var idx=entries.findIndex(function(e){return String(e.id)===String(id);});
+    if(idx>=0){entries[idx].synced=true;entries[idx].photoOriginals=[];}
+    saveEntriesWithPhotos();
+    renderEntries();
+    showToast('Entry synced ✓',false);
+    if(entry.photos&&entry.photos.length>0){
+      // Use stored high-res if available, otherwise use compressed
+      var retryPhoto = entry.photoOriginals&&entry.photoOriginals.length>0?entry.photoOriginals[0]:entry.photos[0];
+      var photoData={action:'savePhoto',entryId:String(entry.id),
+        photoBase64:entry.photos[0],
+        photoOriginal:retryPhoto,
+        project:entry.project,projectNumber:entry.projectNumber,date:entry.date,
+        station:entry.station,time:entry.time,inspector:entry.inspector};
+      fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(photoData)}).catch(function(){});
+    }
+  })
+  .catch(function(){
+    var idx2=entries.findIndex(function(e){return String(e.id)===String(id);});
+    if(idx2>=0){entries[idx2].synced=false;try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}}
+    renderEntries();
+    showToast('Retry failed. Check connection.',true);
+  });
+}
+
 function renderEntries(){
   const filterInput=document.getElementById('entries-date-filter');
   let filterDate;
@@ -1111,7 +1208,18 @@ function renderEntries(){
   te.forEach(e=>{
     const displayWeather=e.entryWeather||'';
     const displayTemp=e.entryTemperature||'';
-    html+='<div class="entry-log-card">';
+    html+='<div class="entry-log-card" style="'+(e.synced===false?'border-left-color:#e74c3c;':'')+'">';
+  if(e.synced===false){
+    html+='<div style="background:#fde8ea;border:1px solid #f5b7bc;border-radius:5px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">';
+    html+='<span style="font-size:12px;font-weight:700;color:#c0392b;">⚠ Not synced</span>';
+    html+='<button id="retry-btn-'+e.id+'" data-retry="'+e.id+'" onclick="retryEntry(this.dataset.retry,this)" style="background:#e74c3c;color:white;border:none;border-radius:5px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;">Tap to Retry</button>';
+    html+='</div>';
+  } else if(e.synced==='syncing'){
+    html+='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;">';
+    html+='<span class="spinner" style="border-top-color:#f39c12;width:14px;height:14px;"></span>';
+    html+='<span style="font-size:12px;font-weight:700;color:#d68910;">Syncing... please wait</span>';
+    html+='</div>';
+  }
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
     html+='<div style="font-size:15px;font-weight:700;color:#0d1b2a;">'+formatTime(e.time)+(e.station?' &nbsp;&middot;&nbsp; '+e.station:'')+'</div>';
     html+='<button onclick="editEntry(this)" data-id="'+e.id+'" style="background:none;border:1px solid #d0d7de;border-radius:4px;padding:2px 8px;font-size:11px;color:#667;cursor:pointer;">Edit</button></div>';
@@ -1198,7 +1306,7 @@ function saveEditEntry(){
   var newPhoto = preview.dataset.photo || '';
   var updatedPhotos = newPhoto ? [newPhoto] : [];
 
-  entries[idx]={...entries[idx],
+  entries[idx]=Object.assign({},entries[idx],{
     desc:document.getElementById('edit-desc').value.trim(),
     station:document.getElementById('edit-station').value.trim(),
     notes:document.getElementById('edit-notes').value.trim(),
@@ -1206,17 +1314,17 @@ function saveEditEntry(){
     entryTemperature:document.getElementById('edit-temperature').value.trim(),
     time:document.getElementById('edit-time').value,date:newDate,
     photos:updatedPhotos,
-  };
+  });
   try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(e){}
   if(GOOGLE_SCRIPT_URL){
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify({
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(Object.assign({},entries[idx],{
       action:'updateEntry',
       entryId:document.getElementById('edit-entry-id').value,
       originalProject:document.getElementById('edit-original-project').value,
       originalDesc:document.getElementById('edit-original-desc').value,
       originalTime:document.getElementById('edit-original-time').value,
-      ...entries[idx],photoBase64:entries[idx].photos&&entries[idx].photos.length>0?entries[idx].photos[0]:'',
-    })}).then(r=>r.json()).then(res=>{if(!res.success)console.warn('Edit sync failed:',res);}).catch(err=>console.warn(err));
+      photoBase64:entries[idx].photos&&entries[idx].photos.length>0?entries[idx].photos[0]:'',
+    }))}).then(r=>r.json()).then(res=>{if(!res.success)console.warn('Edit sync failed:',res);}).catch(err=>console.warn(err));
   }
   closeEditEntryModal();renderEntries();showToast('Entry updated',false);
 }
@@ -1280,7 +1388,7 @@ function startNewProjectHeader(){
   document.getElementById('project-name').innerHTML = '<option value="">Select number first...</option>';
   document.getElementById('project-name').disabled = true;
   ['client-name','project-engineer','contractor-primary'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('inspector-name').value = '';
+
   document.getElementById('weather').value = '';
   document.getElementById('temperature').value = '';
   equipmentItems = []; workforceItems = [];
@@ -1292,6 +1400,18 @@ function startNewProjectHeader(){
 }
 
 function openReportModal(){
+  // Check for unsynced entries
+  var filterInput=document.getElementById('entries-date-filter');
+  var filterDate=filterInput?filterInput.value:'';
+  var checkDate=filterDate?(function(){var p=filterDate.split('-');return new Date(p[0],p[1]-1,p[2]).toLocaleDateString('en-US');})():new Date().toLocaleDateString('en-US');
+  var activeProject=dailyHeader?dailyHeader.project:null;
+  var unsynced=entries.filter(function(e){
+    return (e.synced===false||e.synced==='syncing')&&e.date===checkDate&&(!activeProject||e.project===activeProject);
+  });
+  if(unsynced.length>0){
+    alert(unsynced.length+' entr'+(unsynced.length===1?'y':'ies')+' have not synced to the server. Please retry all unsynced entries before generating the report.');
+    return;
+  }
   const now=new Date();
   const yyyy=now.getFullYear(),mo=String(now.getMonth()+1).padStart(2,'0'),dd=String(now.getDate()).padStart(2,'0');
   document.getElementById('report-date').value=yyyy+'-'+mo+'-'+dd;
