@@ -475,7 +475,11 @@ async function init(){
     }
   }
   renderEntries();
-}
+  } catch(initErr) {
+    console.error('Init error:', initErr);
+    document.getElementById('loading-state').innerHTML='<span style="color:red;">Load error: '+initErr.message+'</span>';
+    document.getElementById('form-body').style.display='block';
+  }
 
 async function loadDropdownData(){
   try{
@@ -958,11 +962,6 @@ function restoreHeader(h){
   const now=new Date();
   document.getElementById('entry-time').value=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
   renderEntries();
-  } catch(initErr) {
-    console.error('Init error:', initErr);
-    document.getElementById('loading-state').innerHTML='<span style="color:red;">Load error: '+initErr.message+'</span>';
-    document.getElementById('form-body').style.display='block';
-  }
   // Auto-retry any unsynced entries from previous sessions
   if(GOOGLE_SCRIPT_URL){
     setTimeout(function(){
