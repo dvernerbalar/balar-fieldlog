@@ -826,7 +826,7 @@ async function checkForExistingHeader(projectName, dateVal){
   }
 }
 
-async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
+async async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
   if(!GOOGLE_SCRIPT_URL) return;
   try{
     var url = GOOGLE_SCRIPT_URL+'?action=getEntries&date='+encodeURIComponent(dateLocale)+'&projectNumber='+encodeURIComponent(projectNumber||'')+'&projectName='+encodeURIComponent(projectName);
@@ -1000,15 +1000,14 @@ function saveEditHeader(){
   localStorage.setItem('balar_v5_current_project', currentProjectKey);
   // Sync to Sheets
   if(GOOGLE_SCRIPT_URL){
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify({
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(Object.assign({},dailyHeader,{
       action:'updateEntry',
       entryId:dailyHeader.id,
       originalProject:dailyHeader.project,
       originalDesc:'HEADER',
       originalTime:'',
-      ...dailyHeader,
       photoBase64:'',
-    })}).catch(()=>{});
+    }))}).catch(()=>{});
   }
   closeEditHeaderModal();
   restoreHeader(dailyHeader);
@@ -1337,14 +1336,14 @@ function saveEditEntry(){
   });
   try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(e){}
   if(GOOGLE_SCRIPT_URL){
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify({
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(Object.assign({},entries[idx],{
       action:'updateEntry',
       entryId:document.getElementById('edit-entry-id').value,
       originalProject:document.getElementById('edit-original-project').value,
       originalDesc:document.getElementById('edit-original-desc').value,
       originalTime:document.getElementById('edit-original-time').value,
-      ...entries[idx],photoBase64:entries[idx].photos&&entries[idx].photos.length>0?entries[idx].photos[0]:'',
-    })}).then(r=>r.json()).then(res=>{if(!res.success)console.warn('Edit sync failed:',res);}).catch(err=>console.warn(err));
+      photoBase64:entries[idx].photos&&entries[idx].photos.length>0?entries[idx].photos[0]:'',
+    }))}).then(r=>r.json()).then(res=>{if(!res.success)console.warn('Edit sync failed:',res);}).catch(err=>console.warn(err));
   }
   closeEditEntryModal();renderEntries();showToast('Entry updated',false);
 }
@@ -1408,7 +1407,7 @@ function startNewProjectHeader(){
   document.getElementById('project-name').innerHTML = '<option value="">Select number first...</option>';
   document.getElementById('project-name').disabled = true;
   ['client-name','project-engineer','contractor-primary'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('inspector-name').value = '';
+
   document.getElementById('weather').value = '';
   document.getElementById('temperature').value = '';
   equipmentItems = []; workforceItems = [];
