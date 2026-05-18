@@ -827,7 +827,7 @@ async function checkForExistingHeader(projectName, dateVal){
   }
 }
 
-async async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
+async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
   if(!GOOGLE_SCRIPT_URL) return;
   try{
     var url = GOOGLE_SCRIPT_URL+'?action=getEntries&date='+encodeURIComponent(dateLocale)+'&projectNumber='+encodeURIComponent(projectNumber||'')+'&projectName='+encodeURIComponent(projectName);
