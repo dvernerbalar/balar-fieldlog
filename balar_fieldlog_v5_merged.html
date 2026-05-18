@@ -451,6 +451,10 @@ textarea{resize:vertical;min-height:90px;}
         <button class="add-item-btn" onclick="addEditEquipmentItem()">+</button>
       </div>
       <input type="text" id="edit-equipment-custom" placeholder="Or type custom..." style="width:100%;font-size:14px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;">
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="edit-equipment-none-check" onchange="toggleNoneOnSiteEdit('equipment')" style="width:16px;height:16px;cursor:pointer;">
+        <label for="edit-equipment-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
+      </div>
     </div>
     <div style="margin-bottom:12px;">
       <div class="section-label" style="margin-bottom:10px;">Workforce on Site</div>
@@ -461,6 +465,10 @@ textarea{resize:vertical;min-height:90px;}
         <button class="add-item-btn" onclick="addEditWorkforceItem()">+</button>
       </div>
       <input type="text" id="edit-workforce-custom" placeholder="Or type custom..." style="width:100%;font-size:14px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;">
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="edit-workforce-none-check" onchange="toggleNoneOnSiteEdit('workforce')" style="width:16px;height:16px;cursor:pointer;">
+        <label for="edit-workforce-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeEditHeaderModal()">Cancel</button>
@@ -502,6 +510,20 @@ async function init(){
   const yyyy=now.getFullYear(), mo=String(now.getMonth()+1).padStart(2,'0'), dd=String(now.getDate()).padStart(2,'0');
   document.getElementById('entry-date').value = yyyy+'-'+mo+'-'+dd;
   document.getElementById('entries-date-filter').value = yyyy+'-'+mo+'-'+dd;
+  // Pre-set and lock inspector field from login
+  var savedInspector = localStorage.getItem('balar_inspector_name');
+  if(savedInspector){
+    var inspSel = document.getElementById('inspector-name');
+    if(inspSel){
+      // Add saved name as option if not loaded yet
+      var opt = document.createElement('option');
+      opt.value = savedInspector;
+      opt.textContent = savedInspector;
+      inspSel.appendChild(opt);
+      inspSel.value = savedInspector;
+      inspSel.disabled = true;
+    }
+  }
   buildChecklist();
   document.getElementById('photo-input').addEventListener('change', handlePhotos);
   if(GOOGLE_SCRIPT_URL){ await loadDropdownData(); }
@@ -1084,6 +1106,37 @@ function restoreHeader(h){
 }
 
 // ── EDIT DAILY HEADER ────────────────────────────────────
+function toggleNoneOnSiteEdit(type){
+  if(type === 'equipment'){
+    var cb = document.getElementById('edit-equipment-none-check');
+    if(cb.checked){
+      editEquipmentItems = [{name:'None', count:0}];
+      document.getElementById('edit-equipment-select').disabled = true;
+      document.getElementById('edit-equipment-count').disabled = true;
+      document.getElementById('edit-equipment-custom').disabled = true;
+    } else {
+      editEquipmentItems = [];
+      document.getElementById('edit-equipment-select').disabled = false;
+      document.getElementById('edit-equipment-count').disabled = false;
+      document.getElementById('edit-equipment-custom').disabled = false;
+    }
+    renderEquipmentList('edit-equipment-list', editEquipmentItems);
+  } else {
+    var cb = document.getElementById('edit-workforce-none-check');
+    if(cb.checked){
+      editWorkforceItems = [{classification:'None', count:0}];
+      document.getElementById('edit-workforce-select').disabled = true;
+      document.getElementById('edit-workforce-count').disabled = true;
+      document.getElementById('edit-workforce-custom').disabled = true;
+    } else {
+      editWorkforceItems = [];
+      document.getElementById('edit-workforce-select').disabled = false;
+      document.getElementById('edit-workforce-count').disabled = false;
+      document.getElementById('edit-workforce-custom').disabled = false;
+    }
+    renderWorkforceList('edit-workforce-list', editWorkforceItems);
+  }
+}
 function editDailyHeader(){
   if(!dailyHeader)return;
   document.getElementById('edit-header-weather').value=dailyHeader.dailyWeather||'';
@@ -1093,6 +1146,23 @@ function editDailyHeader(){
   editWorkforceItems=[...dailyHeader.workforce];
   renderEquipmentList('edit-equipment-list',editEquipmentItems);
   renderWorkforceList('edit-workforce-list',editWorkforceItems);
+  // Restore None checkbox states
+  var eqNoneCb = document.getElementById('edit-equipment-none-check');
+  if(eqNoneCb){
+    var isNoneEq = editEquipmentItems.length===1 && editEquipmentItems[0].name==='None';
+    eqNoneCb.checked = isNoneEq;
+    document.getElementById('edit-equipment-select').disabled = isNoneEq;
+    document.getElementById('edit-equipment-count').disabled = isNoneEq;
+    document.getElementById('edit-equipment-custom').disabled = isNoneEq;
+  }
+  var wfNoneCb = document.getElementById('edit-workforce-none-check');
+  if(wfNoneCb){
+    var isNoneWf = editWorkforceItems.length===1 && editWorkforceItems[0].classification==='None';
+    wfNoneCb.checked = isNoneWf;
+    document.getElementById('edit-workforce-select').disabled = isNoneWf;
+    document.getElementById('edit-workforce-count').disabled = isNoneWf;
+    document.getElementById('edit-workforce-custom').disabled = isNoneWf;
+  }
   document.getElementById('edit-header-modal').classList.add('open');
 }
 function closeEditHeaderModal(){document.getElementById('edit-header-modal').classList.remove('open');}
