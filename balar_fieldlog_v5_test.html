@@ -460,7 +460,8 @@ async function init(){
   // Clean up high-res photos from synced entries to free localStorage
   var today=new Date().toLocaleDateString('en-US');
   entries.forEach(function(e,i){
-    if(e.synced===true||(e.date&&e.date!==today)){entries[i].photoOriginals=[];}
+    // Only clear high-res from synced entries - keep for unsynced so retry has full quality
+    if(e.synced===true){entries[i].photoOriginals=[];}
   });
   saveEntriesWithPhotos();
 
@@ -1061,6 +1062,8 @@ function submitEntry(){
     fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
     .then(function(r){ return r.json(); })
     .then(function(){
+      // Capture high-res BEFORE clearing from storage
+      var hiRes = entry.photoOriginals&&entry.photoOriginals.length>0?entry.photoOriginals[0]:'';
       // Mark entry as synced and free up high-res photo from storage
       var idx=entries.findIndex(function(e){return String(e.id)===String(entry.id);});
       if(idx>=0){entries[idx].synced=true;entries[idx].photoOriginals=[];}
@@ -1075,7 +1078,7 @@ function submitEntry(){
           action:'savePhoto',
           entryId:String(entry.id),
           photoBase64:entry.photos[0],
-          photoOriginal:entry.photoOriginals&&entry.photoOriginals.length>0?entry.photoOriginals[0]:'',
+          photoOriginal:hiRes||entry.photos[0],
           project:entry.project,
           projectNumber:entry.projectNumber,
           date:entry.date,
