@@ -1064,9 +1064,6 @@ function submitEntry(){
     .then(function(){
       // Capture high-res BEFORE clearing from storage
       var hiRes = entry.photoOriginals&&entry.photoOriginals.length>0?entry.photoOriginals[0]:'';
-      console.log('DEBUG hiRes length:', hiRes?hiRes.length:0);
-      console.log('DEBUG entry.photos length:', entry.photos&&entry.photos.length>0?entry.photos[0].length:0);
-      console.log('DEBUG photoOriginals array:', entry.photoOriginals?entry.photoOriginals.length:'undefined');
       // Mark entry as synced and free up high-res photo from storage
       var idx=entries.findIndex(function(e){return String(e.id)===String(entry.id);});
       if(idx>=0){entries[idx].synced=true;entries[idx].photoOriginals=[];}
@@ -1075,13 +1072,21 @@ function submitEntry(){
       clearEntryForm();
       renderEntries();
       showToast('Entry saved ✓',false);
-      // Send photo if exists
+      // Send compressed photo to Sheets col 17 (small payload - fast)
       if(entry.photos&&entry.photos.length>0){
-        var photoData={
+        var sheetsPhotoData={
           action:'savePhoto',
           entryId:String(entry.id),
           photoBase64:entry.photos[0],
+          project:entry.project
+        };
+        fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(sheetsPhotoData)}).catch(function(){});
+        // Send high-res to Drive separately (larger payload - independent)
+        var drivePhotoData={
+          action:'saveToDrive',
+          entryId:String(entry.id),
           photoOriginal:hiRes||entry.photos[0],
+          photoBase64:entry.photos[0],
           project:entry.project,
           projectNumber:entry.projectNumber,
           date:entry.date,
@@ -1089,16 +1094,7 @@ function submitEntry(){
           time:entry.time,
           inspector:entry.inspector
         };
-        fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(photoData)})
-        .then(function(r){ return r.json(); })
-        .then(function(res){
-          if(!res||!res.success){
-            showToast('Entry saved — photo failed. Tap Edit to retry.',true);
-          }
-        })
-        .catch(function(){
-          showToast('Entry saved — photo failed. Tap Edit to retry.',true);
-        });
+        fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(drivePhotoData)}).catch(function(){});
       }
     })
     .catch(function(){
