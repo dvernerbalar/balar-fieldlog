@@ -952,11 +952,16 @@ function restoreHeader(h){
   // Auto-retry any unsynced entries from previous sessions
   if(GOOGLE_SCRIPT_URL){
     setTimeout(function(){
+      // Reset any stuck 'syncing' state from previous session
+      entries.forEach(function(e,i){
+        if(e.synced==='syncing'){entries[i].synced=false;}
+      });
       var unsynced=entries.filter(function(e){return e.synced===false;});
       if(unsynced.length>0){
+        try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}
         unsynced.forEach(function(e){ retryEntry(e.id); });
       }
-    }, 3000); // wait 3 seconds after load
+    }, 3000);
   }
 }
 
@@ -1109,10 +1114,15 @@ function clearEntryForm(){
 }
 
 // ── RENDER ENTRIES ───────────────────────────────────────
-function retryEntry(id){
+function retryEntry(id, btn){
   var entry=entries.find(function(e){return String(e.id)===String(id);});
   if(!entry||!GOOGLE_SCRIPT_URL)return;
-  showToast('Retrying...',false);
+  if(entry.synced==='syncing')return; // already in progress
+  // Set syncing state immediately to prevent double-tap
+  var idx=entries.findIndex(function(e){return String(e.id)===String(id);});
+  if(idx>=0){entries[idx].synced='syncing';try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}}
+  if(btn){btn.disabled=true;btn.textContent='Syncing...';}
+  renderEntries();
   var entryData={...entry,photos:[],photoBase64:'',entryId:entry.id};
   fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
   .then(function(r){return r.json();})
@@ -1158,7 +1168,12 @@ function renderEntries(){
   if(e.synced===false){
     html+='<div style="background:#fde8ea;border:1px solid #f5b7bc;border-radius:5px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">';
     html+='<span style="font-size:12px;font-weight:700;color:#c0392b;">⚠ Not synced</span>';
-    html+='<button data-retry="'+e.id+'" onclick="retryEntry(this.dataset.retry)" style="background:#e74c3c;color:white;border:none;border-radius:5px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;">Tap to Retry</button>';
+    html+='<button id="retry-btn-'+e.id+'" data-retry="'+e.id+'" onclick="retryEntry(this.dataset.retry,this)" style="background:#e74c3c;color:white;border:none;border-radius:5px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;">Tap to Retry</button>';
+    html+='</div>';
+  } else if(e.synced==="syncing"){
+    html+='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;">';
+    html+='<div style="width:14px;height:14px;border:2px solid #f39c12;border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>';
+    html+='<span style="font-size:12px;font-weight:700;color:#d68910;">Syncing...</span>';
     html+='</div>';
   }
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
@@ -1347,7 +1362,7 @@ function openReportModal(){
   var checkDate=filterDate?(function(){var p=filterDate.split('-');return new Date(p[0],p[1]-1,p[2]).toLocaleDateString('en-US');})():new Date().toLocaleDateString('en-US');
   var activeProject=dailyHeader?dailyHeader.project:null;
   var unsynced=entries.filter(function(e){
-    return e.synced===false&&e.date===checkDate&&(!activeProject||e.project===activeProject);
+    return (e.synced===false||e.synced==='syncing')&&e.date===checkDate&&(!activeProject||e.project===activeProject);
   });
   if(unsynced.length>0){
     alert(unsynced.length+' entr'+(unsynced.length===1?'y':'ies')+' have not synced to the server. Please retry all unsynced entries before generating the report.');
