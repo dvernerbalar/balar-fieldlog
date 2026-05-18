@@ -295,7 +295,7 @@ textarea{resize:vertical;min-height:90px;}
       </div>
 
       <div id="entry-error" class="error-box"></div>
-      <button class="btn-submit" onclick="submitEntry()">+ Add Entry to Log</button>
+      <button class="btn-submit" id="submit-entry-btn" onclick="submitEntry()">+ Add Entry to Log</button>
 
       <!-- Entries Log -->
       <div style="margin-top:32px;">
@@ -457,6 +457,13 @@ async function init(){
   document.getElementById('photo-input').addEventListener('change', handlePhotos);
   if(GOOGLE_SCRIPT_URL){ await loadDropdownData(); }
   else{ document.getElementById('loading-state').innerHTML='<span style="color:#e67e22;">Google Script URL not set.</span>'; showForm(); }
+  // Clean up high-res photos from synced entries to free localStorage
+  var today=new Date().toLocaleDateString('en-US');
+  entries.forEach(function(e,i){
+    if(e.synced===true||(e.date&&e.date!==today)){entries[i].photoOriginals=[];}
+  });
+  saveEntriesWithPhotos();
+
   // Restore last active header if today
   if(currentProjectKey && dailyHeaders[currentProjectKey]){
     const h = dailyHeaders[currentProjectKey];
@@ -1014,6 +1021,7 @@ function submitEntry(){
   if(!dailyHeader){showEntryError('Please post the Daily Header first.');return;}
   const desc=document.getElementById('work-desc').value.trim();
   if(!desc){showEntryError('Please enter a Description of Work.');return;}
+  disableEntryForm();
 
   const dateVal=document.getElementById('entry-date').value;
   let entryDate=dailyHeader.date;
@@ -1044,8 +1052,7 @@ function submitEntry(){
   };
 
   entries.unshift(entry);
-  try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}
-  catch(e){const noPhotos=entries.map(en=>({...en,photos:[]}));try{localStorage.setItem('balar_v5_entries',JSON.stringify(noPhotos));}catch(e2){}}
+  saveEntriesWithPhotos();
 
   // Post to Sheets - entry data first, photo separately
   // Two-call submission: entry first, then photo separately
@@ -1054,10 +1061,14 @@ function submitEntry(){
     fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
     .then(function(r){ return r.json(); })
     .then(function(){
-      // Mark entry as synced
+      // Mark entry as synced and free up high-res photo from storage
       var idx=entries.findIndex(function(e){return String(e.id)===String(entry.id);});
-      if(idx>=0){entries[idx].synced=true;try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}}
+      if(idx>=0){entries[idx].synced=true;entries[idx].photoOriginals=[];}
+      saveEntriesWithPhotos();
+      enableEntryForm();
+      clearEntryForm();
       renderEntries();
+      showToast('Entry saved ✓',false);
       // Send photo if exists
       if(entry.photos&&entry.photos.length>0){
         var photoData={
@@ -1087,15 +1098,16 @@ function submitEntry(){
     .catch(function(){
       // Mark entry as unsynced
       var idx=entries.findIndex(function(e){return String(e.id)===String(entry.id);});
-      if(idx>=0){entries[idx].synced=false;try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}}
+      if(idx>=0){entries[idx].synced=false;}
+      saveEntriesWithPhotos();
+      enableEntryForm();
+      clearEntryForm();
       renderEntries();
-      showToast('Entry failed to save. Tap the entry to retry.',true);
+      showToast('Failed to save. Check connection — see entry below to retry.',true);
     });
   }
-  clearEntryForm();
-  renderEntries();
-  showToast('Entry added to log',false);
 }
+
 
 function showEntryError(msg){
   const e=document.getElementById('entry-error');
@@ -1114,6 +1126,48 @@ function clearEntryForm(){
 }
 
 // ── RENDER ENTRIES ───────────────────────────────────────
+function disableEntryForm(){
+  var btn=document.getElementById('submit-entry-btn');
+  if(btn){btn.disabled=true;btn.textContent='Saving...';}
+  ['work-desc','station','notes','gps-location','entry-temperature','entry-time','entry-weather'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.disabled=true;
+  });
+  var photoInput=document.getElementById('photo-input');
+  if(photoInput)photoInput.disabled=true;
+}
+
+function enableEntryForm(){
+  var btn=document.getElementById('submit-entry-btn');
+  if(btn){btn.disabled=false;btn.textContent='+ Add Entry to Log';}
+  ['work-desc','station','notes','gps-location','entry-temperature','entry-time','entry-weather'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.disabled=false;
+  });
+  var photoInput=document.getElementById('photo-input');
+  if(photoInput)photoInput.disabled=false;
+}
+
+function saveEntriesWithPhotos(){
+  // Save entries to localStorage - gracefully handle storage full
+  try{
+    localStorage.setItem('balar_v5_entries',JSON.stringify(entries));
+  }catch(e){
+    // Storage full - try saving without high-res photos
+    try{
+      var slim=entries.map(function(en){
+        if(en.synced===true){return {...en,photoOriginals:[]};}
+        return en;
+      });
+      localStorage.setItem('balar_v5_entries',JSON.stringify(slim));
+    }catch(e2){
+      // Still full - save without any photoOriginals
+      try{
+        var minimal=entries.map(function(en){return {...en,photoOriginals:[]};});
+        localStorage.setItem('balar_v5_entries',JSON.stringify(minimal));
+      }catch(e3){}
+    }
+  }
+}
+
 function retryEntry(id, btn){
   var entry=entries.find(function(e){return String(e.id)===String(id);});
   if(!entry||!GOOGLE_SCRIPT_URL)return;
@@ -1128,18 +1182,25 @@ function retryEntry(id, btn){
   .then(function(r){return r.json();})
   .then(function(){
     var idx=entries.findIndex(function(e){return String(e.id)===String(id);});
-    if(idx>=0){entries[idx].synced=true;try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}}
+    if(idx>=0){entries[idx].synced=true;entries[idx].photoOriginals=[];}
+    saveEntriesWithPhotos();
     renderEntries();
-    showToast('Entry synced',false);
+    showToast('Entry synced ✓',false);
     if(entry.photos&&entry.photos.length>0){
-      var photoData={action:'savePhoto',entryId:String(entry.id),photoBase64:entry.photos[0],
-        photoOriginal:entry.photoOriginals&&entry.photoOriginals.length>0?entry.photoOriginals[0]:'',
+      // Use stored high-res if available, otherwise use compressed
+      var retryPhoto = entry.photoOriginals&&entry.photoOriginals.length>0?entry.photoOriginals[0]:entry.photos[0];
+      var photoData={action:'savePhoto',entryId:String(entry.id),
+        photoBase64:entry.photos[0],
+        photoOriginal:retryPhoto,
         project:entry.project,projectNumber:entry.projectNumber,date:entry.date,
         station:entry.station,time:entry.time,inspector:entry.inspector};
       fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(photoData)}).catch(function(){});
     }
   })
   .catch(function(){
+    var idx2=entries.findIndex(function(e){return String(e.id)===String(id);});
+    if(idx2>=0){entries[idx2].synced=false;try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}}
+    renderEntries();
     showToast('Retry failed. Check connection.',true);
   });
 }
@@ -1170,10 +1231,10 @@ function renderEntries(){
     html+='<span style="font-size:12px;font-weight:700;color:#c0392b;">⚠ Not synced</span>';
     html+='<button id="retry-btn-'+e.id+'" data-retry="'+e.id+'" onclick="retryEntry(this.dataset.retry,this)" style="background:#e74c3c;color:white;border:none;border-radius:5px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;">Tap to Retry</button>';
     html+='</div>';
-  } else if(e.synced==="syncing"){
+  } else if(e.synced==='syncing'){
     html+='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:5px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;">';
-    html+='<div style="width:14px;height:14px;border:2px solid #f39c12;border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>';
-    html+='<span style="font-size:12px;font-weight:700;color:#d68910;">Syncing...</span>';
+    html+='<span class="spinner" style="border-top-color:#f39c12;width:14px;height:14px;"></span>';
+    html+='<span style="font-size:12px;font-weight:700;color:#d68910;">Syncing... please wait</span>';
     html+='</div>';
   }
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
