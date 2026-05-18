@@ -308,7 +308,7 @@ textarea{resize:vertical;min-height:90px;}
           <input type="date" id="entries-date-filter" onchange="renderEntries()">
         </div>
         <div id="entries-list"><div class="empty-state"><div class="empty-icon">📋</div>No entries yet.</div></div>
-        <div style="margin-top:16px;"><button class="btn-report" onclick="openReportModal()">📄 Generate End-of-Day Report</button></div>
+        <div style="margin-top:16px;"><button class="btn-report" id="btn-generate-report" onclick="openReportModal()">📄 Generate End-of-Day Report</button></div>
       </div>
     </div>
 
@@ -949,6 +949,15 @@ function restoreHeader(h){
   const now=new Date();
   document.getElementById('entry-time').value=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
   renderEntries();
+  // Auto-retry any unsynced entries from previous sessions
+  if(GOOGLE_SCRIPT_URL){
+    setTimeout(function(){
+      var unsynced=entries.filter(function(e){return e.synced===false;});
+      if(unsynced.length>0){
+        unsynced.forEach(function(e){ retryEntry(e.id); });
+      }
+    }, 3000); // wait 3 seconds after load
+  }
 }
 
 // ── EDIT DAILY HEADER ────────────────────────────────────
@@ -1026,6 +1035,7 @@ function submitEntry(){
     photos:[...photoDataUrls],
     photoOriginals:[...photoOriginals],
     gpsLocation:document.getElementById('gps-location').value.trim(),
+    synced:false,
   };
 
   entries.unshift(entry);
@@ -1039,7 +1049,11 @@ function submitEntry(){
     fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
     .then(function(r){ return r.json(); })
     .then(function(){
-      // Entry saved - now send photo if exists
+      // Mark entry as synced
+      var idx=entries.findIndex(function(e){return String(e.id)===String(entry.id);});
+      if(idx>=0){entries[idx].synced=true;try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}}
+      renderEntries();
+      // Send photo if exists
       if(entry.photos&&entry.photos.length>0){
         var photoData={
           action:'savePhoto',
@@ -1066,7 +1080,11 @@ function submitEntry(){
       }
     })
     .catch(function(){
-      showToast('Entry failed to save. Check your connection and try again.',true);
+      // Mark entry as unsynced
+      var idx=entries.findIndex(function(e){return String(e.id)===String(entry.id);});
+      if(idx>=0){entries[idx].synced=false;try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}}
+      renderEntries();
+      showToast('Entry failed to save. Tap the entry to retry.',true);
     });
   }
   clearEntryForm();
@@ -1091,6 +1109,31 @@ function clearEntryForm(){
 }
 
 // ── RENDER ENTRIES ───────────────────────────────────────
+function retryEntry(id){
+  var entry=entries.find(function(e){return String(e.id)===String(id);});
+  if(!entry||!GOOGLE_SCRIPT_URL)return;
+  showToast('Retrying...',false);
+  var entryData={...entry,photos:[],photoBase64:'',entryId:entry.id};
+  fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
+  .then(function(r){return r.json();})
+  .then(function(){
+    var idx=entries.findIndex(function(e){return String(e.id)===String(id);});
+    if(idx>=0){entries[idx].synced=true;try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(ex){}}
+    renderEntries();
+    showToast('Entry synced',false);
+    if(entry.photos&&entry.photos.length>0){
+      var photoData={action:'savePhoto',entryId:String(entry.id),photoBase64:entry.photos[0],
+        photoOriginal:entry.photoOriginals&&entry.photoOriginals.length>0?entry.photoOriginals[0]:'',
+        project:entry.project,projectNumber:entry.projectNumber,date:entry.date,
+        station:entry.station,time:entry.time,inspector:entry.inspector};
+      fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(photoData)}).catch(function(){});
+    }
+  })
+  .catch(function(){
+    showToast('Retry failed. Check connection.',true);
+  });
+}
+
 function renderEntries(){
   const filterInput=document.getElementById('entries-date-filter');
   let filterDate;
@@ -1111,7 +1154,13 @@ function renderEntries(){
   te.forEach(e=>{
     const displayWeather=e.entryWeather||'';
     const displayTemp=e.entryTemperature||'';
-    html+='<div class="entry-log-card">';
+    html+='<div class="entry-log-card" style="'+(e.synced===false?'border-left-color:#e74c3c;':'')+'">';
+  if(e.synced===false){
+    html+='<div style="background:#fde8ea;border:1px solid #f5b7bc;border-radius:5px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">';
+    html+='<span style="font-size:12px;font-weight:700;color:#c0392b;">⚠ Not synced</span>';
+    html+='<button data-retry="'+e.id+'" onclick="retryEntry(this.dataset.retry)" style="background:#e74c3c;color:white;border:none;border-radius:5px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;">Tap to Retry</button>';
+    html+='</div>';
+  }
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
     html+='<div style="font-size:15px;font-weight:700;color:#0d1b2a;">'+formatTime(e.time)+(e.station?' &nbsp;&middot;&nbsp; '+e.station:'')+'</div>';
     html+='<button onclick="editEntry(this)" data-id="'+e.id+'" style="background:none;border:1px solid #d0d7de;border-radius:4px;padding:2px 8px;font-size:11px;color:#667;cursor:pointer;">Edit</button></div>';
@@ -1292,6 +1341,18 @@ function startNewProjectHeader(){
 }
 
 function openReportModal(){
+  // Check for unsynced entries
+  var filterInput=document.getElementById('entries-date-filter');
+  var filterDate=filterInput?filterInput.value:'';
+  var checkDate=filterDate?(function(){var p=filterDate.split('-');return new Date(p[0],p[1]-1,p[2]).toLocaleDateString('en-US');})():new Date().toLocaleDateString('en-US');
+  var activeProject=dailyHeader?dailyHeader.project:null;
+  var unsynced=entries.filter(function(e){
+    return e.synced===false&&e.date===checkDate&&(!activeProject||e.project===activeProject);
+  });
+  if(unsynced.length>0){
+    alert(unsynced.length+' entr'+(unsynced.length===1?'y':'ies')+' have not synced to the server. Please retry all unsynced entries before generating the report.');
+    return;
+  }
   const now=new Date();
   const yyyy=now.getFullYear(),mo=String(now.getMonth()+1).padStart(2,'0'),dd=String(now.getDate()).padStart(2,'0');
   document.getElementById('report-date').value=yyyy+'-'+mo+'-'+dd;
