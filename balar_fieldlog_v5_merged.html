@@ -846,23 +846,25 @@ async function toggleSameAsLast(type){
   var projectKey = dailyHeader ? dailyHeader.project : null;
   if(!projectKey) return;
   var today = dailyHeader ? dailyHeader.date : new Date().toLocaleDateString('en-US');
-  // First check local cache
-  var allHeaders = Object.values(dailyHeaders).filter(function(h){
-    return h.project === projectKey && h.date !== today;
-  });
-  allHeaders.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
-  var lastHeader = allHeaders.length > 0 ? allHeaders[0] : null;
-  // If not in local cache, try fetching from Sheets
-  if(!lastHeader && GOOGLE_SCRIPT_URL){
+  var lastHeader = null;
+  // Always fetch from Sheets - local cache may be stale
+  if(GOOGLE_SCRIPT_URL){
     try{
       var url = GOOGLE_SCRIPT_URL+'?action=getLastHeader&projectName='+encodeURIComponent(projectKey)+'&excludeDate='+encodeURIComponent(today);
       var resp = await fetch(url);
       var data = await resp.json();
-      console.log('getLastHeader response:', JSON.stringify(data));
       if(data.header) lastHeader = data.header;
-    }catch(e){ console.log('getLastHeader error:', e); }
+    }catch(e){}
   }
-  console.log('lastHeader found:', JSON.stringify(lastHeader));
+  // Fallback to local cache if Sheets fetch failed
+  if(!lastHeader){
+    var allHeaders = Object.values(dailyHeaders).filter(function(h){
+      return h.project === projectKey && h.date !== today &&
+             h.equipment && h.equipment.filter(function(e){return e.name&&e.name!=='None';}).length > 0;
+    });
+    allHeaders.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+    if(allHeaders.length > 0) lastHeader = allHeaders[0];
+  }
 
   if(type === 'equipment'){
     var cb = document.getElementById('equipment-same-check');
