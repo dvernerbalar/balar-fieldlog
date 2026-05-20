@@ -230,8 +230,12 @@ textarea{resize:vertical;min-height:90px;}
     <div id="header-form-view">
       <div class="card header-card">
         <div class="form-row two-col">
-          <div><label>Project Number</label><select id="project-number" onchange="onProjectNumberChange()"><option value="">Select...</option></select></div>
-          <div><label>Project Name</label><select id="project-name" disabled onchange="onProjectNameChange()"><option value="">Select number first...</option></select></div>
+          <div><label>Date of Work</label><input type="date" id="entry-date" onchange="onDateChange()"></div>
+          <div><label>Day Type</label><select id="day-type"><option value="Work Day">Work Day</option><option value="Non-Work Day">Non-Work Day</option><option value="Rain Day">Rain Day</option><option value="Holiday">Holiday</option></select></div>
+        </div>
+        <div class="form-row two-col">
+          <div><label>Client</label><select id="client-select" onchange="onClientChange()"><option value="">Select client...</option></select></div>
+          <div><label>Project</label><select id="project-select" disabled onchange="onProjectSelectChange()"><option value="">Select client first...</option></select></div>
         </div>
         <div class="form-row two-col">
           <div><label>Client / Owner</label><input type="text" id="client-name" disabled placeholder="Auto-filled"></div>
@@ -239,68 +243,136 @@ textarea{resize:vertical;min-height:90px;}
         </div>
         <div class="form-row two-col">
           <div><label>Prime Contractor</label><input type="text" id="contractor-primary" disabled placeholder="Auto-filled"></div>
-          <div><label>Inspector</label><select id="inspector-name"><option value="">Select...</option></select></div>
+          <div><label>Inspector</label><input type="text" id="inspector-display" disabled placeholder="Set at login"></div>
         </div>
         <div class="form-row two-col">
-          <div><label>Date</label><input type="date" id="entry-date" onchange="onDateChange()"></div>
-          <div><label>Day Type</label><select id="day-type"><option value="Work Day">Work Day</option><option value="Non-Work Day">Non-Work Day</option><option value="Rain Day">Rain Day</option><option value="Holiday">Holiday</option></select></div>
+          <div><label>Project Number</label><input type="text" id="project-number" disabled placeholder="Auto-filled"></div>
+          <div><label>Project Name</label><input type="text" id="project-name" disabled placeholder="Auto-filled"></div>
         </div>
       </div>
 
-      <!-- Daily Conditions -->
-      <div class="card header-card">
-        <div class="section-label" style="margin-bottom:12px;">Daily Conditions <span id="conditions-lock-badge"></span></div>
-        <div class="form-row">
+
+
+
+
+      <div id="header-error" class="error-box"></div>
+      <button class="btn-post-header" onclick="postDailyHeader()">📋 Post Daily Header</button>
+    </div>
+
+    <!-- ════════════════════════════════════════════
+         SECTION 1B: DAILY CONDITIONS
+         ════════════════════════════════════════════ -->
+    <div id="conditions-section" style="margin-top:16px;display:none;">
+      <div class="section-label">Daily Conditions</div>
+      <!-- Posted view -->
+      <div id="conditions-posted-view" style="display:none;">
+        <div class="card posted" id="conditions-posted-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div class="posted-badge">✓ Conditions Saved</div>
+            <button class="btn-edit-header" onclick="editConditions()">Edit</button>
+          </div>
+          <div id="conditions-summary" style="font-size:13px;color:#333;margin-top:8px;"></div>
+        </div>
+      </div>
+      <!-- Form view -->
+      <div id="conditions-form-view">
+        <div class="card header-card" id="conditions-card">
           <div class="weather-row">
             <div><label>Weather</label><select id="weather"><option value="">Select or auto-detect...</option><option>Clear / Sunny</option><option>Partly Cloudy</option><option>Overcast</option><option>Rain / Drizzle</option><option>Heavy Rain</option><option>Windy</option><option>Extreme Heat</option><option>Thunderstorms</option><option>Fog</option></select></div>
             <div><label>Temp (°F)</label><input type="text" id="temperature" placeholder="e.g. 85"></div>
             <div><label>&nbsp;</label><button class="btn-auto" onclick="autoDetectWeather()">📍 Auto</button></div>
           </div>
           <div class="status-text" id="weather-status"></div>
+          <div id="conditions-error" class="error-box" style="margin-top:8px;"></div>
+          <button class="btn-post-header" style="margin-top:12px;background:#1b2d42;" onclick="saveConditions()">💧 Save Daily Conditions</button>
         </div>
       </div>
-
-      <!-- Equipment -->
-      <div class="card header-card">
-        <div class="section-label" style="margin-bottom:12px;">Equipment on Site</div>
-        <div class="item-list" id="equipment-list"><div style="color:#aaa;font-size:13px;padding:4px 0;">No equipment added yet.</div></div>
-        <div class="add-item-row">
-          <select id="equipment-select" style="flex:2;"><option value="">Select equipment...</option></select>
-          <input type="number" id="equipment-count" placeholder="Qty" min="1" style="max-width:75px;flex:0 0 75px;">
-          <button class="add-item-btn" onclick="addEquipmentItem()">+</button>
-        </div>
-        <input type="text" id="equipment-custom" placeholder="Or type custom equipment..." style="width:100%;font-size:14px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;">
-        <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
-          <input type="checkbox" id="equipment-none-check" onchange="toggleNoneOnSite('equipment')" style="width:16px;height:16px;cursor:pointer;">
-          <label for="equipment-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
-        </div>
-      </div>
-
-      <!-- Workforce -->
-      <div class="card header-card">
-        <div class="section-label" style="margin-bottom:12px;">Workforce on Site</div>
-        <div class="item-list" id="workforce-list"><div style="color:#aaa;font-size:13px;padding:4px 0;">No workforce added yet.</div></div>
-        <div class="add-item-row">
-          <select id="workforce-select" style="flex:2;"><option value="">Select classification...</option></select>
-          <input type="number" id="workforce-count" placeholder="No." min="1" style="max-width:75px;flex:0 0 75px;">
-          <button class="add-item-btn" onclick="addWorkforceItem()">+</button>
-        </div>
-        <input type="text" id="workforce-custom" placeholder="Or type custom classification..." style="width:100%;font-size:14px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;">
-        <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
-          <input type="checkbox" id="workforce-none-check" onchange="toggleNoneOnSite('workforce')" style="width:16px;height:16px;cursor:pointer;">
-          <label for="workforce-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
-        </div>
-      </div>
-
-      <!-- Checklist -->
-      <div class="card header-card">
-        <div class="section-label" style="margin-bottom:12px;">Daily Checklist</div>
-        <div class="checklist-grid" id="checklist-grid"></div>
-      </div>
-
-      <div id="header-error" class="error-box"></div>
-      <button class="btn-post-header" onclick="postDailyHeader()">📋 Post Daily Header</button>
     </div>
+
+    <!-- ════════════════════════════════════════════
+         SECTION 1C: DAILY CHECKLIST
+         ════════════════════════════════════════════ -->
+    <div id="checklist-section" style="margin-top:16px;display:none;">
+      <div class="section-label">Daily Checklist</div>
+      <!-- Posted/condensed view -->
+      <div id="checklist-posted-view" style="display:none;">
+        <div class="card posted">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div class="posted-badge">✓ Checklist Saved</div>
+            <button class="btn-edit-header" onclick="editChecklist()">Edit</button>
+          </div>
+          <div id="checklist-summary" style="font-size:13px;color:#333;"></div>
+        </div>
+      </div>
+      <!-- Form view -->
+      <div id="checklist-form-view">
+        <div class="card header-card" id="checklist-card">
+          <div class="checklist-grid" id="checklist-grid"></div>
+          <div id="checklist-error" class="error-box" style="margin-top:8px;display:none;"></div>
+          <button class="btn-post-header" style="margin-top:12px;background:#1b2d42;" onclick="saveChecklist()">✓ Save Checklist</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════
+         SECTION 1C: EQUIPMENT & WORKFORCE
+         ════════════════════════════════════════════ -->
+    <div id="resources-section" style="margin-top:16px;display:none;">
+      <div class="section-label">Equipment &amp; Workforce</div>
+
+      <!-- Equipment & Workforce combined card -->
+      <!-- Posted/condensed view -->
+      <div id="resources-posted-view" style="display:none;">
+        <div class="card posted">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div class="posted-badge">✓ Equipment &amp; Workforce Saved</div>
+            <button class="btn-edit-header" onclick="editResources()">Edit</button>
+          </div>
+          <div id="resources-summary" style="font-size:13px;color:#333;line-height:1.8;"></div>
+        </div>
+      </div>
+      <!-- Form view -->
+      <div id="resources-form-view">
+        <div class="card header-card" id="resources-card">
+          <div class="section-label" style="margin-bottom:12px;">Equipment on Site</div>
+          <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="equipment-same-check" onchange="toggleSameAsLast('equipment')" style="width:16px;height:16px;cursor:pointer;">
+            <label for="equipment-same-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">Same as last time for this project</label>
+          </div>
+          <div class="item-list" id="equipment-list"><div style="color:#aaa;font-size:13px;padding:4px 0;">No equipment added yet.</div></div>
+          <div class="add-item-row">
+            <select id="equipment-select" style="flex:2;"><option value="">Select equipment...</option></select>
+            <input type="number" id="equipment-count" placeholder="Qty" min="1" style="max-width:75px;flex:0 0 75px;">
+            <button class="add-item-btn" onclick="addEquipmentItem()">+</button>
+          </div>
+          <input type="text" id="equipment-custom" placeholder="Or type custom equipment..." style="width:100%;font-size:14px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;display:none;">
+          <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="equipment-none-check" onchange="toggleNoneOnSite('equipment')" style="width:16px;height:16px;cursor:pointer;">
+            <label for="equipment-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
+          </div>
+          <div style="border-top:1px solid #eee;margin:16px 0;"></div>
+          <div class="section-label" style="margin-bottom:12px;">Workforce on Site</div>
+          <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="workforce-same-check" onchange="toggleSameAsLast('workforce')" style="width:16px;height:16px;cursor:pointer;">
+            <label for="workforce-same-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">Same as last time for this project</label>
+          </div>
+          <div class="item-list" id="workforce-list"><div style="color:#aaa;font-size:13px;padding:4px 0;">No workforce added yet.</div></div>
+          <div class="add-item-row">
+            <select id="workforce-select" style="flex:2;"><option value="">Select classification...</option></select>
+            <input type="number" id="workforce-count" placeholder="No." min="1" style="max-width:75px;flex:0 0 75px;">
+            <button class="add-item-btn" onclick="addWorkforceItem()">+</button>
+          </div>
+          <input type="text" id="workforce-custom" placeholder="Or type custom classification..." style="width:100%;font-size:14px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;display:none;">
+          <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="workforce-none-check" onchange="toggleNoneOnSite('workforce')" style="width:16px;height:16px;cursor:pointer;">
+            <label for="workforce-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
+          </div>
+          <div id="resources-error" class="error-box" style="margin-top:8px;display:none;"></div>
+          <button class="btn-post-header" style="margin-top:12px;background:#1b2d42;" onclick="saveResources()">💾 Update Equipment &amp; Workforce</button>
+        </div>
+      </div>
+    </div>
+
 
     <!-- ════════════════════════════════════════════
          SECTION 2: WORK ENTRIES
@@ -313,7 +385,7 @@ textarea{resize:vertical;min-height:90px;}
           <div><label>Station / Location</label><input type="text" id="station" placeholder="e.g. Sta. 12+50, MH #4"></div>
         </div>
         <div class="form-row">
-          <label>Description of Work Performed</label>
+          <label>Work Performed / Observations / Photo Caption</label>
           <textarea id="work-desc" placeholder="Describe work observed, contractor activity, materials, quantities..."></textarea>
         </div>
         <div class="form-row">
@@ -337,10 +409,6 @@ textarea{resize:vertical;min-height:90px;}
             <button class="btn-auto" onclick="autoDetectWeatherEntry()">📍 Auto</button>
           </div>
         </div>
-        <div class="form-row">
-          <label>Notes / Issues / RFIs</label>
-          <textarea id="notes" placeholder="Issues, RFIs, non-conformances, directives..." style="min-height:70px;"></textarea>
-        </div>
       </div>
 
       <div id="entry-error" class="error-box"></div>
@@ -352,11 +420,18 @@ textarea{resize:vertical;min-height:90px;}
           <div class="section-label" style="margin-bottom:0;flex:1;">Today's Entries</div>
           <span class="entry-count" id="entry-count">0</span>
         </div>
-        <div style="margin-bottom:12px;">
-          <label>View Entries for Date</label>
-          <input type="date" id="entries-date-filter" onchange="renderEntries()">
-        </div>
+
         <div id="entries-list"><div class="empty-state"><div class="empty-icon">📋</div>No entries yet.</div></div>
+
+        <!-- DAILY NARRATIVE -->
+        <div id="narrative-section" style="margin-top:16px;display:none;">
+          <div class="section-label">Daily Summary / Narrative</div>
+          <div class="card header-card">
+            <div style="font-size:13px;color:#555;margin-bottom:10px;">Provide an overall summary of work performed today. This will appear at the top of the generated report.</div>
+            <textarea id="daily-narrative" rows="5" placeholder="Enter daily summary narrative..." style="width:100%;font-size:14px;padding:10px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;resize:vertical;font-family:'Barlow',sans-serif;line-height:1.5;box-sizing:border-box;"></textarea>
+          </div>
+        </div>
+
         <div style="margin-top:16px;"><button class="btn-report" id="btn-generate-report" onclick="openReportModal()">📄 Generate End-of-Day Report</button></div>
       </div>
     </div>
@@ -373,7 +448,7 @@ textarea{resize:vertical;min-height:90px;}
     <div id="switch-project-list" style="margin-bottom:16px;"></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeSwitchProject()">Cancel</button>
-      <button class="btn-primary" onclick="startNewProjectHeader()">+ New Project Header</button>
+      <button class="btn-primary" onclick="startNewProjectHeader()">Select or Create Different Project</button>
     </div>
   </div>
 </div>
@@ -442,34 +517,6 @@ textarea{resize:vertical;min-height:90px;}
       <div><label>Day Type</label><select id="edit-header-daytype"><option value="Work Day">Work Day</option><option value="Non-Work Day">Non-Work Day</option><option value="Rain Day">Rain Day</option><option value="Holiday">Holiday</option></select></div>
       <div></div>
     </div>
-    <div style="margin-bottom:12px;">
-      <div class="section-label" style="margin-bottom:10px;">Equipment on Site</div>
-      <div class="item-list" id="edit-equipment-list"></div>
-      <div class="add-item-row">
-        <select id="edit-equipment-select" style="flex:2;"><option value="">Select...</option></select>
-        <input type="number" id="edit-equipment-count" placeholder="Qty" min="1" style="max-width:75px;flex:0 0 75px;">
-        <button class="add-item-btn" onclick="addEditEquipmentItem()">+</button>
-      </div>
-      <input type="text" id="edit-equipment-custom" placeholder="Or type custom..." style="width:100%;font-size:14px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;">
-      <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" id="edit-equipment-none-check" onchange="toggleNoneOnSiteEdit('equipment')" style="width:16px;height:16px;cursor:pointer;">
-        <label for="edit-equipment-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
-      </div>
-    </div>
-    <div style="margin-bottom:12px;">
-      <div class="section-label" style="margin-bottom:10px;">Workforce on Site</div>
-      <div class="item-list" id="edit-workforce-list"></div>
-      <div class="add-item-row">
-        <select id="edit-workforce-select" style="flex:2;"><option value="">Select...</option></select>
-        <input type="number" id="edit-workforce-count" placeholder="No." min="1" style="max-width:75px;flex:0 0 75px;">
-        <button class="add-item-btn" onclick="addEditWorkforceItem()">+</button>
-      </div>
-      <input type="text" id="edit-workforce-custom" placeholder="Or type custom..." style="width:100%;font-size:14px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;">
-      <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" id="edit-workforce-none-check" onchange="toggleNoneOnSiteEdit('workforce')" style="width:16px;height:16px;cursor:pointer;">
-        <label for="edit-workforce-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
-      </div>
-    </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeEditHeaderModal()">Cancel</button>
       <button class="btn-primary" onclick="saveEditHeader()">Save Header Changes</button>
@@ -509,7 +556,6 @@ async function init(){
   document.getElementById('entry-time').value = hh+':'+mm;
   const yyyy=now.getFullYear(), mo=String(now.getMonth()+1).padStart(2,'0'), dd=String(now.getDate()).padStart(2,'0');
   document.getElementById('entry-date').value = yyyy+'-'+mo+'-'+dd;
-  document.getElementById('entries-date-filter').value = yyyy+'-'+mo+'-'+dd;
   // Pre-set and lock inspector field from login
   var savedInspector = localStorage.getItem('balar_inspector_name');
   if(savedInspector){
@@ -576,43 +622,61 @@ async function loadDropdownData(){
 function showForm(){ document.getElementById('form-body').style.display='block'; }
 
 // ── PROJECT DROPDOWNS ────────────────────────────────────
-function buildProjectDropdown(){
-  const sel=document.getElementById('project-number');
-  sel.innerHTML='<option value="">Select...</option>';
-  [...new Set(projectsData.map(p=>p.number))].sort().forEach(n=>{
-    const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);
-  });
-}
-function onProjectNumberChange(){
-  const num=document.getElementById('project-number').value;
-  const ns=document.getElementById('project-name');
-  ['client-name','project-engineer','contractor-primary'].forEach(id=>document.getElementById(id).value='');
-  ns.innerHTML='<option value="">Select project name...</option>';
-  if(!num){ns.disabled=true;return;}
-  const matches=projectsData.filter(p=>p.number===num);
-  matches.forEach(p=>{
-    const o=document.createElement('option');
-    o.value=p.name;o.dataset.client=p.client;o.dataset.engineer=p.engineer||'';o.dataset.contractor=p.contractor||'';
-    o.textContent=p.name;ns.appendChild(o);
-  });
-  ns.disabled=false;
-  if(matches.length===1){
-    ns.value=matches[0].name;
-    document.getElementById('client-name').value=matches[0].client||'';
-    document.getElementById('project-engineer').value=matches[0].engineer||'';
-    document.getElementById('contractor-primary').value=matches[0].contractor||'';
+function getClientDisplayName(fullName){
+  var prefixes=['City of ','Town of ','Village of ','Parish of '];
+  for(var i=0;i<prefixes.length;i++){
+    if(fullName.indexOf(prefixes[i])===0){return fullName.substring(prefixes[i].length);}
   }
+  return fullName;
 }
-function onProjectNameChange(){
-  const ns=document.getElementById('project-name');
-  const sel=ns.options[ns.selectedIndex];
-  document.getElementById('client-name').value=sel?(sel.dataset.client||''):'';
-  document.getElementById('project-engineer').value=sel?(sel.dataset.engineer||''):'';
-  document.getElementById('contractor-primary').value=sel?(sel.dataset.contractor||''):'';
-  // Check for existing header once both project and date are set
-  const dateVal = document.getElementById('entry-date').value;
-  if(dateVal) checkForExistingHeader(ns.value.trim(), dateVal);
+function buildProjectDropdown(){
+  var clientSel=document.getElementById('client-select');
+  if(!clientSel)return;
+  var clientMap={};
+  projectsData.forEach(function(p){
+    if(p.client&&!clientMap[p.client])clientMap[p.client]=getClientDisplayName(p.client);
+  });
+  var clients=Object.keys(clientMap).sort(function(a,b){return clientMap[a].localeCompare(clientMap[b]);});
+  clientSel.innerHTML='<option value="">Select client...</option>';
+  clients.forEach(function(fullName){
+    var o=document.createElement('option');o.value=fullName;o.textContent=clientMap[fullName];clientSel.appendChild(o);
+  });
 }
+function onClientChange(){
+  var clientSel=document.getElementById('client-select');
+  var projSel=document.getElementById('project-select');
+  var client=clientSel.value;
+  ['client-name','project-engineer','contractor-primary','project-number','project-name'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  projSel.innerHTML='<option value="">Select project...</option>';
+  if(!client){projSel.disabled=true;return;}
+  var matches=projectsData.filter(function(p){return p.client===client;});
+  matches.sort(function(a,b){return (a.number||'').localeCompare(b.number||'')}); 
+  matches.forEach(function(p){
+    var o=document.createElement('option');
+    o.value=p.number+'|||'+p.name;
+    o.dataset.number=p.number;o.dataset.name=p.name;o.dataset.client=p.client;
+    o.dataset.engineer=p.engineer||'';
+    o.dataset.contractor=p.contractor||'';
+    o.textContent=(p.number?p.number+' — ':'')+p.name;
+    projSel.appendChild(o);
+  });
+  projSel.disabled=false;
+  if(matches.length===1){projSel.value=matches[0].number+'|||'+matches[0].name;onProjectSelectChange();}
+}
+function onProjectSelectChange(){
+  var projSel=document.getElementById('project-select');
+  var sel=projSel.options[projSel.selectedIndex];
+  if(!sel||!sel.value)return;
+  document.getElementById('project-number').value=sel.dataset.number||'';
+  document.getElementById('project-name').value=sel.dataset.name||'';
+  document.getElementById('client-name').value=sel.dataset.client||'';
+  document.getElementById('project-engineer').value=sel.dataset.engineer||'';
+  document.getElementById('contractor-primary').value=sel.dataset.contractor||'';
+  var dateVal=document.getElementById('entry-date').value;
+  if(dateVal) checkForExistingHeader(sel.dataset.name,dateVal);
+}
+function onProjectNumberChange(){}
+function onProjectNameChange(){}
 function buildInspectorDropdown(){
   // Populate setup screen name dropdown
   var setupSel = document.getElementById('setup-name');
@@ -642,8 +706,8 @@ function buildInspectorDropdown(){
   }
 }
 function onDateChange(){
-  const proj = document.getElementById('project-name').value.trim();
-  const dateVal = document.getElementById('entry-date').value;
+  var proj = document.getElementById('project-name').value.trim();
+  var dateVal = document.getElementById('entry-date').value;
   if(proj && dateVal) checkForExistingHeader(proj, dateVal);
 }
 
@@ -662,6 +726,192 @@ function buildWorkforceDropdown(selId){
   workforceData.forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);});
   const other=document.createElement('option');other.value='__other__';other.textContent='Other / Not Listed...';sel.appendChild(other);
 }
+function saveConditions(){
+  var weather = document.getElementById('weather').value;
+  var temp = document.getElementById('temperature').value.trim();
+  var errDiv = document.getElementById('conditions-error');
+  errDiv.style.display='none';
+  if(!weather){errDiv.textContent='Please select a weather condition.';errDiv.style.display='block';highlightCard('conditions-card');return;}
+  if(!temp){errDiv.textContent='Please enter the temperature.';errDiv.style.display='block';highlightCard('conditions-card');return;}
+  if(!dailyHeader){errDiv.textContent='Please post the Daily Header first.';errDiv.style.display='block';return;}
+  dailyHeader.dailyWeather = weather;
+  dailyHeader.dailyTemperature = temp;
+  // Save to localStorage
+  if(currentProjectKey){
+    dailyHeaders[currentProjectKey] = dailyHeader;
+    localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
+  }
+  // Sync to Sheets
+  if(GOOGLE_SCRIPT_URL){
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(Object.assign({},dailyHeader,{action:'updateEntry',entryId:dailyHeader.id,originalProject:dailyHeader.project,originalDesc:'HEADER',originalTime:'',photoBase64:''}))}).catch(function(){});
+  }
+  // Show posted view
+  document.getElementById('conditions-form-view').style.display='none';
+  document.getElementById('conditions-posted-view').style.display='block';
+  document.getElementById('conditions-summary').textContent = weather + ' · ' + temp + '°F';
+  // Update header summary
+  restoreHeader(dailyHeader);
+  showToast('Conditions saved ✓', false);
+}
+
+function editConditions(){
+  document.getElementById('conditions-form-view').style.display='block';
+  document.getElementById('conditions-posted-view').style.display='none';
+}
+
+function saveChecklist(){
+  if(!dailyHeader) return;
+  var checks = Array.from(document.querySelectorAll('.check-item.checked')).map(function(el){return CHECKLIST_ITEMS[el.dataset.index];});
+  dailyHeader.checks = checks;
+  dailyHeader.checklistSaved = true;
+  dailyHeader.allChecklistItems = CHECKLIST_ITEMS.slice();
+  if(currentProjectKey){
+    dailyHeaders[currentProjectKey] = dailyHeader;
+    localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
+  }
+  if(GOOGLE_SCRIPT_URL){
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(Object.assign({},dailyHeader,{action:'updateEntry',entryId:dailyHeader.id,originalProject:dailyHeader.project,originalDesc:'HEADER',originalTime:'',photoBase64:''}))}).catch(function(){});
+  }
+  // Show condensed view
+  var checked = checks.length > 0 ? checks.join(', ') : 'No items checked';
+  var summaryEl = document.getElementById('checklist-summary');
+  if(summaryEl) summaryEl.textContent = checked;
+  document.getElementById('checklist-form-view').style.display = 'none';
+  document.getElementById('checklist-posted-view').style.display = 'block';
+  restoreHeader(dailyHeader);
+  showToast('Checklist saved ✓', false);
+}
+
+function editChecklist(){
+  document.getElementById('checklist-form-view').style.display = 'block';
+  document.getElementById('checklist-posted-view').style.display = 'none';
+}
+
+function saveResources(){
+  if(!dailyHeader) return;
+  if(equipmentItems.length===0){
+    var errDiv=document.getElementById('resources-error');
+    errDiv.textContent='Please add equipment or check "None on site today".';
+    errDiv.style.display='block';
+    highlightCard('resources-section');
+    return;
+  }
+  if(workforceItems.length===0){
+    var errDiv=document.getElementById('resources-error');
+    errDiv.textContent='Please add workforce or check "None on site today".';
+    errDiv.style.display='block';
+    highlightCard('resources-section');
+    return;
+  }
+  document.getElementById('resources-error').style.display='none';
+  dailyHeader.equipment = equipmentItems.slice();
+  dailyHeader.workforce = workforceItems.slice();
+  if(currentProjectKey){
+    dailyHeaders[currentProjectKey] = dailyHeader;
+    localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
+  }
+  if(GOOGLE_SCRIPT_URL){
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(Object.assign({},dailyHeader,{action:'updateEntry',entryId:dailyHeader.id,originalProject:dailyHeader.project,originalDesc:'HEADER',originalTime:'',photoBase64:''}))}).catch(function(){});
+  }
+  // Show condensed view
+  var eqSum = dailyHeader.equipment.map(function(e){return e.name+(e.count>0?' ('+e.count+')':'');}).join(', ')||'None';
+  var wfSum = dailyHeader.workforce.map(function(w){return w.classification+(w.count>0?' ('+w.count+')':'');}).join(', ')||'None';
+  var resSummaryEl = document.getElementById('resources-summary');
+  if(resSummaryEl) resSummaryEl.innerHTML = '<strong>Equipment:</strong> '+eqSum+'<br><strong>Workforce:</strong> '+wfSum;
+  document.getElementById('resources-form-view').style.display = 'none';
+  document.getElementById('resources-posted-view').style.display = 'block';
+  restoreHeader(dailyHeader);
+  showToast('Equipment & Workforce saved ✓', false);
+}
+
+function editResources(){
+  document.getElementById('resources-form-view').style.display = 'block';
+  document.getElementById('resources-posted-view').style.display = 'none';
+}
+
+function highlightCard(id){
+  var card = document.getElementById(id);
+  if(!card) return;
+  card.style.transition='border-color 0.3s';
+  card.style.borderColor='var(--red)';
+  card.style.boxShadow='0 0 0 3px rgba(155,28,46,0.2)';
+  card.scrollIntoView({behavior:'smooth',block:'center'});
+  setTimeout(function(){
+    card.style.borderColor='';
+    card.style.boxShadow='';
+  }, 3000);
+}
+
+async function toggleSameAsLast(type){
+  var projectKey = dailyHeader ? dailyHeader.project : null;
+  if(!projectKey) return;
+  var today = dailyHeader ? dailyHeader.date : new Date().toLocaleDateString('en-US');
+  // First check local cache
+  var allHeaders = Object.values(dailyHeaders).filter(function(h){
+    return h.project === projectKey && h.date !== today;
+  });
+  allHeaders.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+  var lastHeader = allHeaders.length > 0 ? allHeaders[0] : null;
+  // If not in local cache, try fetching from Sheets
+  if(!lastHeader && GOOGLE_SCRIPT_URL){
+    try{
+      var url = GOOGLE_SCRIPT_URL+'?action=getLastHeader&projectName='+encodeURIComponent(projectKey)+'&excludeDate='+encodeURIComponent(today);
+      var resp = await fetch(url);
+      var data = await resp.json();
+      console.log('getLastHeader response:', JSON.stringify(data));
+      if(data.header) lastHeader = data.header;
+    }catch(e){ console.log('getLastHeader error:', e); }
+  }
+  console.log('lastHeader found:', JSON.stringify(lastHeader));
+
+  if(type === 'equipment'){
+    var cb = document.getElementById('equipment-same-check');
+    if(cb.checked){
+      var validEq = lastHeader ? (lastHeader.equipment||[]).filter(function(e){return e.name && e.name !== 'None';}) : [];
+      if(validEq.length > 0){
+        equipmentItems = validEq.slice();
+        renderEquipmentList('equipment-list', equipmentItems);
+        // Disable manual entry
+        document.getElementById('equipment-select').disabled = true;
+        document.getElementById('equipment-count').disabled = true;
+        document.getElementById('equipment-custom').disabled = true;
+        document.getElementById('equipment-none-check').disabled = true;
+      } else {
+        cb.checked = false;
+        showToast('No previous equipment found for this project', true);
+      }
+    } else {
+      equipmentItems = [];
+      renderEquipmentList('equipment-list', equipmentItems);
+      document.getElementById('equipment-select').disabled = false;
+      document.getElementById('equipment-count').disabled = false;
+      document.getElementById('equipment-none-check').disabled = false;
+    }
+  } else {
+    var cb = document.getElementById('workforce-same-check');
+    if(cb.checked){
+      var validWf = lastHeader ? (lastHeader.workforce||[]).filter(function(w){return w.classification && w.classification !== 'None';}) : [];
+      if(validWf.length > 0){
+        workforceItems = validWf.slice();
+        renderWorkforceList('workforce-list', workforceItems);
+        document.getElementById('workforce-select').disabled = true;
+        document.getElementById('workforce-count').disabled = true;
+        document.getElementById('workforce-custom').disabled = true;
+        document.getElementById('workforce-none-check').disabled = true;
+      } else {
+        cb.checked = false;
+        showToast('No previous workforce found for this project', true);
+      }
+    } else {
+      workforceItems = [];
+      renderWorkforceList('workforce-list', workforceItems);
+      document.getElementById('workforce-select').disabled = false;
+      document.getElementById('workforce-count').disabled = false;
+      document.getElementById('workforce-none-check').disabled = false;
+    }
+  }
+}
+
 function toggleNoneOnSite(type){
   if(type === 'equipment'){
     var cb = document.getElementById('equipment-none-check');
@@ -765,13 +1015,19 @@ function renderWorkforceList(listId,items){
     html+="<div class='item-row'>";
     html+="<span class='item-row-name'>"+items[i].classification+"</span>";
     html+="<div class='item-row-right'>";
-    html+="<span class='item-row-count'>"+items[i].count+"</span>";
+    html+="<input type='number' class='item-row-count-input' min='1' value='"+items[i].count+"' data-idx='"+i+"' onchange='updateWorkforceCount("+i+",this.value)' style='width:48px;padding:3px 6px;border:1px solid #d0d7de;border-radius:5px;font-size:13px;text-align:center;'>";
     html+="<button class='item-row-remove' data-list='"+listId+"' data-idx='"+i+"' onclick='removeWorkforceFrom(this.dataset.list,this.dataset.idx)'>x</button>";
     html+="</div></div>";
   }
   list.innerHTML=html;
 }
 
+function updateEquipmentCount(idx, val){
+  if(equipmentItems[idx]) equipmentItems[idx].count = parseInt(val)||1;
+}
+function updateWorkforceCount(idx, val){
+  if(workforceItems[idx]) workforceItems[idx].count = parseInt(val)||1;
+}
 function removeEquipmentFrom(listId,i){
   const idx=parseInt(i);
   if(listId==='equipment-list'){equipmentItems.splice(idx,1);renderEquipmentList('equipment-list',equipmentItems);}
@@ -1019,8 +1275,7 @@ function postDailyHeader(){
   const missing=[];
   if(!pn)missing.push('Project Number');
   if(!pname)missing.push('Project Name');
-  if(!inspector)missing.push('Inspector');
-  if(!weather)missing.push('Weather');
+
   if(missing.length>0){
     errDiv.textContent='Please fill in: '+missing.join(', ');
     errDiv.style.display='block';
@@ -1069,25 +1324,94 @@ function restoreHeader(h){
   // Show posted view
   document.getElementById('header-form-view').style.display='none';
   document.getElementById('header-posted-view').style.display='block';
-  document.getElementById('entries-form-section').style.display='block';
+  var cs=document.getElementById('conditions-section');if(cs)cs.style.display='block';
+  var cls=document.getElementById('checklist-section');if(cls)cls.style.display='block';
+  var rs=document.getElementById('resources-section');if(rs)rs.style.display='block';
+  var efs=document.getElementById('entries-form-section');if(efs)efs.style.display='block';
+  var nsEl=document.getElementById('narrative-section');if(nsEl)nsEl.style.display='block';
 
   // Build summary
-  const equipStr=h.equipment.map(e=>e.name+' ('+e.count+')').join(', ')||'None';
-  const workStr=h.workforce.map(w=>w.classification+': '+w.count).join(', ')||'None';
+  const equipStr=(h.equipment&&h.equipment.length?h.equipment.map(e=>e.name+(e.count?' ('+e.count+')':'')).join(', '):'');
+  const workStr=(h.workforce&&h.workforce.length?h.workforce.map(w=>w.classification+(w.count?': '+w.count:'')).join(', '):'');
   const checkStr=h.checks&&h.checks.length?h.checks.join(', '):'None';
+  var needsStyle='color:#c0392b;font-weight:700;';
+  var weatherStr = h.dailyWeather?(h.dailyWeather+(h.dailyTemperature?' · '+h.dailyTemperature+'°F':'')):'<span style="'+needsStyle+'">⚠ Needs Input</span>';
+  var equipDisplay = (h.equipment&&h.equipment.length>0)?equipStr:'<span style="'+needsStyle+'">⚠ Needs Input</span>';
+  var workDisplay = (h.workforce&&h.workforce.length>0)?workStr:'<span style="'+needsStyle+'">⚠ Needs Input</span>';
+  var checkDisplay = (h.checks&&h.checks.length>0)?checkStr:'<span style="color:#888;">None checked</span>';
   document.getElementById('header-summary').innerHTML=
     '<strong>'+h.projectNumber+' — '+h.project+'</strong><br>'+
     'Client: '+h.client+' &nbsp;|&nbsp; Engineer: '+h.projectEngineer+'<br>'+
     'Contractor: '+h.contractorPrimary+' &nbsp;|&nbsp; Inspector: '+h.inspector+'<br>'+
     'Date: '+h.date+' &nbsp;|&nbsp; '+h.dayType+'<br>'+
-    'Weather: '+h.dailyWeather+(h.dailyTemperature?' · '+h.dailyTemperature+'°F':'')+'<br>'+
-    'Equipment: '+equipStr+'<br>'+
-    'Workforce: '+workStr+'<br>'+
-    'Checklist: '+checkStr;
+    'Weather: '+weatherStr+'<br>'+
+    'Equipment: '+equipDisplay+'<br>'+
+    'Workforce: '+workDisplay+'<br>'+
+    'Checklist: '+checkDisplay;
 
   // Set entry time default
   const now=new Date();
   document.getElementById('entry-time').value=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  // Restore conditions section state
+  if(h.dailyWeather && h.dailyTemperature){
+    var condFormView = document.getElementById('conditions-form-view');
+    var condPostedView = document.getElementById('conditions-posted-view');
+    var condSummary = document.getElementById('conditions-summary');
+    if(condFormView) condFormView.style.display='none';
+    if(condPostedView) condPostedView.style.display='block';
+    if(condSummary) condSummary.textContent = h.dailyWeather+' · '+h.dailyTemperature+'°F';
+    // Pre-fill form fields too
+    var wEl=document.getElementById('weather');var tEl=document.getElementById('temperature');
+    if(wEl)wEl.value=h.dailyWeather||'';
+    if(tEl)tEl.value=h.dailyTemperature||'';
+  } else {
+    var condFormView = document.getElementById('conditions-form-view');
+    var condPostedView = document.getElementById('conditions-posted-view');
+    if(condFormView) condFormView.style.display='block';
+    if(condPostedView) condPostedView.style.display='none';
+  }
+  // Restore checklist checked state and condensed view
+  document.querySelectorAll('.check-item').forEach(function(el){
+    var itemName = CHECKLIST_ITEMS[el.dataset.index];
+    if(h.checks && h.checks.indexOf(itemName) >= 0){el.classList.add('checked');}
+    else{el.classList.remove('checked');}
+  });
+  var clPosted = document.getElementById('checklist-posted-view');
+  var clForm = document.getElementById('checklist-form-view');
+  if(h.checklistSaved){
+    var clSummary = document.getElementById('checklist-summary');
+    if(clSummary) clSummary.textContent = (h.checks && h.checks.length > 0) ? h.checks.join(', ') : 'No items checked';
+    if(clPosted) clPosted.style.display='block';
+    if(clForm) clForm.style.display='none';
+  } else {
+    if(clPosted) clPosted.style.display='none';
+    if(clForm) clForm.style.display='block';
+  }
+  // Restore resources condensed view
+  if(h.equipment && h.equipment.length > 0 && h.workforce && h.workforce.length > 0){
+    var eqSum = h.equipment.map(function(e){return e.name+(e.count>0?' ('+e.count+')':'');}).join(', ');
+    var wfSum = h.workforce.map(function(w){return w.classification+(w.count>0?' ('+w.count+')':'');}).join(', ');
+    var resSummary = document.getElementById('resources-summary');
+    if(resSummary) resSummary.innerHTML = '<strong>Equipment:</strong> '+eqSum+'<br><strong>Workforce:</strong> '+wfSum;
+    var resPosted = document.getElementById('resources-posted-view');
+    var resForm = document.getElementById('resources-form-view');
+    if(resPosted) resPosted.style.display='block';
+    if(resForm) resForm.style.display='none';
+  } else {
+    var resPosted = document.getElementById('resources-posted-view');
+    var resForm = document.getElementById('resources-form-view');
+    if(resPosted) resPosted.style.display='none';
+    if(resForm) resForm.style.display='block';
+  }
+  // Restore equipment/workforce None checkbox states
+  // Update project number/name display fields from header
+  var pnField=document.getElementById('project-number');
+  var pnameField=document.getElementById('project-name');
+  if(pnField)pnField.value=h.projectNumber||'';
+  if(pnameField)pnameField.value=h.project||'';
+  // Restore narrative
+  var narrativeEl=document.getElementById('daily-narrative');
+  if(narrativeEl&&h.narrative)narrativeEl.value=h.narrative;
   renderEntries();
   // Auto-retry any unsynced entries from previous sessions
   if(GOOGLE_SCRIPT_URL){
@@ -1217,7 +1541,7 @@ function submitEntry(){
     entryTemperature:document.getElementById('entry-temperature').value.trim(),
     station:document.getElementById('station').value.trim(),
     desc:desc,
-    notes:document.getElementById('notes').value.trim(),
+    notes:'',
     photos:photoDataUrls.slice(),
     photoOriginals:photoOriginals.slice(),
     gpsLocation:document.getElementById('gps-location').value.trim(),
@@ -1362,10 +1686,8 @@ function retryEntry(id, btn){
 }
 
 function renderEntries(){
-  const filterInput=document.getElementById('entries-date-filter');
-  let filterDate;
-  if(filterInput&&filterInput.value){const[y,mo,d]=filterInput.value.split('-');filterDate=new Date(y,mo-1,d).toLocaleDateString('en-US');}
-  else{filterDate=new Date().toLocaleDateString('en-US');}
+  // Use active header date, fall back to today
+  var filterDate = dailyHeader ? dailyHeader.date : new Date().toLocaleDateString('en-US');
   // Filter by date AND active project
   const activeProject = dailyHeader ? dailyHeader.project : null;
   const te=entries.filter(e=>{
@@ -1555,11 +1877,18 @@ function startNewProjectHeader(){
   dailyHeader = null;
   document.getElementById('header-form-view').style.display = 'block';
   document.getElementById('header-posted-view').style.display = 'none';
+  document.getElementById('conditions-section').style.display = 'none';
+  document.getElementById('checklist-section').style.display = 'none';
+  document.getElementById('resources-section').style.display = 'none';
   document.getElementById('entries-form-section').style.display = 'none';
+  var nsEl=document.getElementById('narrative-section');if(nsEl)nsEl.style.display='none';
   // Reset form fields
-  document.getElementById('project-number').value = '';
-  document.getElementById('project-name').innerHTML = '<option value="">Select number first...</option>';
-  document.getElementById('project-name').disabled = true;
+  var clientSel=document.getElementById('client-select');
+  var projSel=document.getElementById('project-select');
+  if(clientSel)clientSel.value='';
+  if(projSel){projSel.innerHTML='<option value="">Select client first...</option>';projSel.disabled=true;}
+  document.getElementById('project-number').value='';
+  document.getElementById('project-name').value='';
   ['client-name','project-engineer','contractor-primary'].forEach(id => document.getElementById(id).value = '');
 
   document.getElementById('weather').value = '';
@@ -1568,15 +1897,17 @@ function startNewProjectHeader(){
   renderEquipmentList('equipment-list', equipmentItems);
   renderWorkforceList('workforce-list', workforceItems);
   document.querySelectorAll('.check-item').forEach(el => el.classList.remove('checked'));
+  var eqSame=document.getElementById('equipment-same-check');if(eqSame)eqSame.checked=false;
+  var wfSame=document.getElementById('workforce-same-check');if(wfSame)wfSame.checked=false;
+  var eqNone=document.getElementById('equipment-none-check');if(eqNone)eqNone.checked=false;
+  var wfNone=document.getElementById('workforce-none-check');if(wfNone)wfNone.checked=false;
   document.getElementById('header-error').style.display = 'none';
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
 function openReportModal(){
   // Check for unsynced entries
-  var filterInput=document.getElementById('entries-date-filter');
-  var filterDate=filterInput?filterInput.value:'';
-  var checkDate=filterDate?(function(){var p=filterDate.split('-');return new Date(p[0],p[1]-1,p[2]).toLocaleDateString('en-US');})():new Date().toLocaleDateString('en-US');
+  var checkDate = dailyHeader ? dailyHeader.date : new Date().toLocaleDateString('en-US');
   var activeProject=dailyHeader?dailyHeader.project:null;
   var unsynced=entries.filter(function(e){
     return (e.synced===false||e.synced==='syncing')&&e.date===checkDate&&(!activeProject||e.project===activeProject);
@@ -1585,9 +1916,22 @@ function openReportModal(){
     alert(unsynced.length+' entr'+(unsynced.length===1?'y':'ies')+' have not synced to the server. Please retry all unsynced entries before generating the report.');
     return;
   }
-  const now=new Date();
-  const yyyy=now.getFullYear(),mo=String(now.getMonth()+1).padStart(2,'0'),dd=String(now.getDate()).padStart(2,'0');
-  document.getElementById('report-date').value=yyyy+'-'+mo+'-'+dd;
+  // Save narrative to header
+  if(dailyHeader){
+    var narrativeEl=document.getElementById('daily-narrative');
+    if(narrativeEl) dailyHeader.narrative=narrativeEl.value.trim();
+  }
+  // Default to active header date if available, else today
+  var reportDate;
+  if(dailyHeader && dailyHeader.date){
+    var dp=dailyHeader.date.split('/');
+    if(dp.length===3){reportDate=dp[2]+'-'+dp[0].padStart(2,'0')+'-'+dp[1].padStart(2,'0');}
+  }
+  if(!reportDate){
+    var now=new Date();
+    reportDate=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  }
+  document.getElementById('report-date').value=reportDate;
   document.getElementById('report-project').innerHTML='<option value="">Loading...</option>';
   document.getElementById('modal-error').style.display='none';
   document.getElementById('report-modal').classList.add('open');
@@ -1642,6 +1986,7 @@ async function generateReport(){
     if(typeof eqList==='string'){try{eqList=JSON.parse(eqList);}catch(e){eqList=[];}}
     if(typeof wfList==='string'){try{wfList=JSON.parse(wfList);}catch(e){wfList=[];}}
     var missingFields=[];
+    if(!headerRec.dailyWeather||!headerRec.dailyTemperature)missingFields.push('Daily Conditions (Weather & Temp)');
     if(!eqList||eqList.length===0)missingFields.push('Equipment on Site');
     if(!wfList||wfList.length===0)missingFields.push('Workforce on Site');
     if(missingFields.length>0){
@@ -1683,13 +2028,23 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale){
 
   const headerInfoHtml=
     '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px;">'+
-    '<tr><td style="padding:4px 8px 4px 0;color:#555;width:150px;font-weight:bold;">Project:</td><td>'+(proj.number?proj.number+' — ':'')+proj.name+'</td>'+
-    '<td style="padding:4px 8px 4px 16px;color:#555;width:120px;font-weight:bold;">Date:</td><td>'+dateStr+'</td></tr>'+(dayType?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Day Type:</td><td>'+dayType+'</td><td></td><td></td></tr>':'')+
-    '<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Client:</td><td>'+client+'</td>'+
-    '<td style="padding:4px 8px 4px 16px;color:#555;font-weight:bold;">Inspector(s):</td><td>'+inspectors.join(', ')+'</td></tr>'+
-    (engineer?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Project Engineer:</td><td>'+engineer+'</td><td></td><td></td></tr>':'')+
-    (contractor?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Prime Contractor:</td><td>'+contractor+'</td><td></td><td></td></tr>':'')+
-    (dailyWeatherStr?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Weather:</td><td colspan="3">'+dailyWeatherStr+'</td></tr>':'')+(inspectors.length>0?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Report Contributors:</td><td colspan="3">'+inspectors.join(', ')+'</td></tr>':'')+
+    '<tr>'+
+    '<td style="padding:4px 8px 4px 0;color:#555;width:140px;font-weight:bold;vertical-align:top;">Project:</td>'+
+    '<td style="padding:4px 16px 4px 0;vertical-align:top;">'+(proj.number?proj.number+' — ':'')+proj.name+'</td>'+
+    '<td style="padding:4px 8px 4px 0;color:#555;width:140px;font-weight:bold;vertical-align:top;">Date:</td>'+
+    '<td style="padding:4px 0;vertical-align:top;">'+dateStr+'</td></tr>'+
+    (dayType?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Day Type:</td><td style="padding:4px 16px 4px 0;">'+dayType+'</td><td></td><td></td></tr>':'')+
+    '<tr>'+
+    '<td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;vertical-align:top;">Client:</td>'+
+    '<td style="padding:4px 16px 4px 0;vertical-align:top;">'+client+'</td>'+
+    '<td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;vertical-align:top;">Project Engineer:</td>'+
+    '<td style="padding:4px 0;vertical-align:top;">'+(engineer||'')+'</td></tr>'+
+    '<tr>'+
+    '<td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;vertical-align:top;">Prime Contractor:</td>'+
+    '<td style="padding:4px 16px 4px 0;vertical-align:top;">'+(contractor||'')+'</td>'+
+    '<td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;vertical-align:top;">Weather:</td>'+
+    '<td style="padding:4px 0;vertical-align:top;">'+(dailyWeatherStr||'')+'</td></tr>'+
+    (inspectors.length>0?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Report Contributors:</td><td colspan="3">'+inspectors.join(', ')+'</td></tr>':'')+
     '</table>';
 
   const equipHtml=equipment.length>0?
@@ -1716,6 +2071,7 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale){
     }).join('') +
     '</div></div>' : '';
 
+  var narrativeHtml=dailyNarrative?'<div style="margin-bottom:18px;padding:12px 16px;background:#f8fafc;border-left:3px solid #1b2d42;border-radius:0 6px 6px 0;"><div style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Daily Summary</div><div style="font-size:13px;line-height:1.7;color:#222;">'+dailyNarrative.replace(/\n/g,'<br>')+'</div></div>':'';
   let entriesHtml='';
   if(workEntries.length===0){
     entriesHtml='<div style="color:#888;font-size:13px;font-style:italic;padding:10px 0;">No work entries logged for this date.</div>';
@@ -1760,7 +2116,8 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale){
     '</div>'+
     '<div style="font-size:20px;font-weight:bold;color:#0d1b2a;margin-bottom:10px;">Daily Inspection Report</div>'+
     headerInfoHtml+
-    (equipHtml||workHtml?'<div style="margin-bottom:14px;">'+equipHtml+workHtml+'</div>':'')+
+    headerInfoHtml+
+    narrativeHtml+
     checkHtml+
     '<div style="font-size:14px;font-weight:bold;color:#0d1b2a;border-bottom:2px solid #9b1c2e;padding-bottom:4px;margin-bottom:12px;">Inspection Log &nbsp;<span style="font-weight:normal;font-size:12px;color:#888;">('+workEntries.length+' entr'+(workEntries.length===1?'y':'ies')+')</span></div>'+
     entriesHtml+
