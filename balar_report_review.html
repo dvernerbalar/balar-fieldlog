@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Balar FieldLog — Report Review</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: Arial, sans-serif;
+    background: #f0f2f5;
+    color: #222;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  .page-header {
+    background: #1a3a5c;
+    color: white;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .page-header h1 { font-size: 18px; font-weight: bold; letter-spacing: 0.5px; }
+  .page-header .subtitle { font-size: 13px; color: #a8c4e0; margin-top: 2px; }
+
+  /* ── Status badge ── */
+  .status-badge {
+    display: inline-block;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .status-pending  { background: #fef3cd; color: #856404; border: 1px solid #ffc107; }
+  .status-approved { background: #d1f2eb; color: #1e6b44; border: 1px solid #28a745; }
+  .status-rejected { background: #fde8e8; color: #8b0000; border: 1px solid #dc3545; }
+
+  /* ── Main layout ── */
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 16px 80px;
+  }
+
+  /* ── Loading / error / already-resolved screens ── */
+  .center-message {
+    text-align: center;
+    padding: 80px 20px;
+    color: #666;
+  }
+  .center-message .icon { font-size: 48px; margin-bottom: 16px; }
+  .center-message h2    { font-size: 20px; color: #333; margin-bottom: 8px; }
+  .center-message p     { font-size: 14px; color: #888; max-width: 380px; margin: 0 auto; }
+
+  /* ── Info card ── */
+  .info-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    border-left: 4px solid #1a3a5c;
+  }
+  .info-card h2 { font-size: 15px; color: #1a3a5c; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .info-row { display: flex; gap: 8px; margin-bottom: 8px; font-size: 14px; }
+  .info-label { color: #888; min-width: 140px; flex-shrink: 0; }
+  .info-value { color: #222; font-weight: 500; }
+
+  /* ── PDF viewer ── */
+  .pdf-section {
+    background: white;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .pdf-section h2 { font-size: 15px; color: #1a3a5c; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .pdf-link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #1a3a5c;
+    color: white;
+    text-decoration: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+  }
+  .pdf-link-btn:hover { background: #25537a; }
+
+  /* ── Action bar ── */
+  .action-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    border-top: 1px solid #ddd;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+    z-index: 100;
+  }
+  .action-bar.hidden { display: none; }
+
+  .btn {
+    padding: 12px 28px;
+    border: none;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn:hover   { opacity: 0.88; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-approve { background: #27ae60; color: white; }
+  .btn-reject  { background: #e74c3c; color: white; }
+
+  /* ── Reject modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: white;
+    border-radius: 8px;
+    padding: 32px;
+    max-width: 480px;
+    width: 92%;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  }
+  .modal-box h3    { font-size: 18px; color: #c0392b; margin-bottom: 8px; }
+  .modal-box p     { font-size: 14px; color: #555; margin-bottom: 16px; }
+  .modal-box label { font-size: 13px; font-weight: bold; color: #333; display: block; margin-bottom: 6px; }
+
+  .modal-box input[type="text"],
+  .modal-box textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+    margin-bottom: 16px;
+    resize: vertical;
+  }
+  .modal-box textarea { min-height: 100px; }
+
+  .modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  .btn-secondary {
+    background: white;
+    border: 1px solid #ccc;
+    color: #333;
+    padding: 10px 22px;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .btn-secondary:hover { background: #f5f5f5; }
+
+  .modal-error {
+    color: #c0392b;
+    font-size: 13px;
+    margin-top: -8px;
+    margin-bottom: 12px;
+    display: none;
+  }
+
+  /* ── Approve confirm modal ── */
+  .modal-box h3.approve { color: #27ae60; }
+
+  /* ── Spinner ── */
+  .spinner-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255,255,255,0.75);
+    z-index: 9998;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .spinner-overlay.open { display: flex; }
+  .spinner {
+    width: 44px; height: 44px;
+    border: 5px solid #e0e0e0;
+    border-top-color: #1a3a5c;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner-label { font-size: 15px; color: #1a3a5c; font-weight: bold; }
+
+  @media (max-width: 560px) {
+    .action-bar { flex-direction: column; gap: 10px; }
+    .btn { width: 100%; text-align: center; }
+    .info-row { flex-direction: column; gap: 2px; }
+    .info-label { min-width: unset; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="page-header">
+  <div>
+    <div class="h1">Balar FieldLog</div>
+    <div class="subtitle">Engineer Report Review</div>
+  </div>
+  <div id="headerStatusBadge"></div>
+</div>
+
+<!-- ── Main content ── -->
+<div class="container" id="mainContent">
+  <!-- Loading state shown by default until data arrives -->
+  <div class="center-message" id="loadingScreen">
+    <div class="icon">⏳</div>
+    <h2>Loading report…</h2>
+    <p>Fetching report data. This should only take a moment.</p>
+  </div>
+
+  <!-- Error state -->
+  <div class="center-message" id="errorScreen" style="display:none;">
+    <div class="icon">⚠️</div>
+    <h2 id="errorTitle">Unable to load report</h2>
+    <p id="errorMessage">The link may be invalid or expired. Please contact the inspector for a new submission link.</p>
+  </div>
+
+  <!-- Already resolved (approved/rejected) -->
+  <div class="center-message" id="resolvedScreen" style="display:none;">
+    <div class="icon" id="resolvedIcon"></div>
+    <h2 id="resolvedTitle"></h2>
+    <p id="resolvedMessage"></p>
+  </div>
+
+  <!-- Report content (shown after successful data load) -->
+  <div id="reportContent" style="display:none;">
+
+    <!-- Report info card -->
+    <div class="info-card">
+      <h2>Report Details</h2>
+      <div class="info-row">
+        <span class="info-label">Project ID</span>
+        <span class="info-value" id="infoProjectId">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Report Date</span>
+        <span class="info-value" id="infoReportDate">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Status</span>
+        <span class="info-value" id="infoStatus">—</span>
+      </div>
+    </div>
+
+    <!-- PDF viewer / link -->
+    <div class="pdf-section">
+      <h2>Report PDF</h2>
+      <div id="pdfLinkContainer">
+        <p style="font-size:14px; color:#555; margin-bottom:14px;">
+          Review the full report PDF in Google Drive before approving or rejecting.
+        </p>
+        <a id="pdfDriveLink" href="#" target="_blank" class="pdf-link-btn">
+          📄 Open Report PDF in Drive
+        </a>
+      </div>
+      <p id="pdfUnavailable" style="display:none; font-size:14px; color:#888;">
+        PDF link not available. Contact the inspector.
+      </p>
+    </div>
+
+  </div><!-- /reportContent -->
+</div><!-- /container -->
+
+<!-- ── Action bar (approve / reject buttons) ── -->
+<div class="action-bar hidden" id="actionBar">
+  <button class="btn btn-reject"  onclick="openRejectModal()">✗ Reject</button>
+  <button class="btn btn-approve" onclick="openApproveModal()">✓ Approve</button>
+</div>
+
+<!-- ── Approve confirm modal ── -->
+<div class="modal-overlay" id="approveModal">
+  <div class="modal-box">
+    <h3 class="approve">Approve Report</h3>
+    <p>Confirm your name as it will appear on the approved report. This action cannot be undone.</p>
+    <label for="approveNameInput">Your Name (Engineer)</label>
+    <input type="text" id="approveNameInput" placeholder="Full name" autocomplete="name" />
+    <div class="modal-error" id="approveNameError">Please enter your name.</div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeApproveModal()">Cancel</button>
+      <button class="btn btn-approve" onclick="submitApproval()" style="padding:10px 22px; font-size:14px;">
+        Confirm Approval
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Reject modal ── -->
+<div class="modal-overlay" id="rejectModal">
+  <div class="modal-box">
+    <h3>Reject Report</h3>
+    <p>Provide a comment for the inspector. Your comment will be emailed to them with instructions to correct and resubmit.</p>
+    <label for="rejectNameInput">Your Name (Engineer)</label>
+    <input type="text" id="rejectNameInput" placeholder="Full name" autocomplete="name" />
+    <div class="modal-error" id="rejectNameError">Please enter your name.</div>
+    <label for="rejectCommentInput">Comment for Inspector <span style="color:#c0392b;">*</span></label>
+    <textarea id="rejectCommentInput" placeholder="Describe what needs to be corrected before resubmission…"></textarea>
+    <div class="modal-error" id="rejectCommentError">A comment is required when rejecting.</div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeRejectModal()">Cancel</button>
+      <button class="btn btn-reject" onclick="submitRejection()" style="padding:10px 22px; font-size:14px;">
+        Confirm Rejection
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Spinner ── -->
+<div class="spinner-overlay" id="spinnerOverlay">
+  <div class="spinner"></div>
+  <div class="spinner-label" id="spinnerLabel">Processing…</div>
+</div>
+
+<script>
+// =============================================================================
+// CONFIGURATION — replace with your deployed Apps Script URL
+// =============================================================================
+var APPS_SCRIPT_URL = 'YOUR_APPS_SCRIPT_DEPLOYED_URL';
+// Same URL as the main FieldLog app — this page just sends different actions.
+
+// =============================================================================
+// STATE
+// =============================================================================
+var _token       = '';
+var _reportData  = null;
+
+// =============================================================================
+// INIT — parse token from URL and load report
+// =============================================================================
+document.addEventListener('DOMContentLoaded', function() {
+  var params = new URLSearchParams(window.location.search);
+  _token = params.get('token') || '';
+
+  if (!_token) {
+    showError('No review token found', 'This URL is missing the required access token. Please use the link from the email sent to you.');
+    return;
+  }
+
+  loadReport();
+});
+
+function loadReport() {
+  postAction({ action: 'getReportByToken', token: _token })
+    .then(function(response) {
+      if (response.status !== 'success') {
+        showError('Report not found', response.message || 'Invalid or expired token. Please contact the inspector.');
+        return;
+      }
+
+      _reportData = response.data;
+      renderReport(_reportData);
+    })
+    .catch(function(err) {
+      showError('Connection error', 'Could not reach the server. Check your internet connection and try again.');
+    });
+}
+
+// =============================================================================
+// RENDER
+// =============================================================================
+function renderReport(data) {
+  document.getElementById('loadingScreen').style.display = 'none';
+
+  var status = data.reportStatus || '';
+
+  // Header badge
+  var badge = document.getElementById('headerStatusBadge');
+  badge.innerHTML = '<span class="status-badge status-' + (status || 'pending') + '">' +
+                    (status || 'pending') + '</span>';
+
+  // If already approved or rejected, show resolved screen instead of action buttons
+  if (status === 'approved') {
+    showResolvedScreen(
+      '✅',
+      'Report Already Approved',
+      'This report was approved by ' + data.approvedBy + ' on ' + formatDate(data.approvedTimestamp) + '.'
+    );
+    return;
+  }
+
+  if (status === 'rejected') {
+    // Rejected but still review-able — engineer may want to see it again
+    // Show content but no action buttons (inspector needs to resubmit)
+    document.getElementById('actionBar').classList.remove('hidden');
+    // Actually allow re-review in case engineer wants to re-approve after resubmit
+    // The action bar stays active; report_status will be reset to "pending" when inspector resubmits
+  }
+
+  // Show report content
+  document.getElementById('reportContent').style.display = 'block';
+
+  // Populate info card
+  document.getElementById('infoProjectId').textContent = data.projectId || '—';
+  document.getElementById('infoReportDate').textContent = formatDate(data.reportDate) || '—';
+  document.getElementById('infoStatus').innerHTML =
+    '<span class="status-badge status-' + (status || 'pending') + '">' + (status || 'pending') + '</span>';
+
+  // PDF link
+  if (data.pdfDriveLink) {
+    document.getElementById('pdfDriveLink').href = data.pdfDriveLink;
+  } else {
+    document.getElementById('pdfLinkContainer').style.display = 'none';
+    document.getElementById('pdfUnavailable').style.display = 'block';
+  }
+
+  // Show action bar if report is pending (or rejected — engineer can still act)
+  if (status === 'pending' || status === 'rejected' || !status) {
+    document.getElementById('actionBar').classList.remove('hidden');
+  }
+}
+
+// =============================================================================
+// APPROVE FLOW
+// =============================================================================
+function openApproveModal() {
+  document.getElementById('approveNameInput').value = '';
+  document.getElementById('approveNameError').style.display = 'none';
+  document.getElementById('approveModal').classList.add('open');
+  document.getElementById('approveNameInput').focus();
+}
+
+function closeApproveModal() {
+  document.getElementById('approveModal').classList.remove('open');
+}
+
+function submitApproval() {
+  var name = document.getElementById('approveNameInput').value.trim();
+  if (!name) {
+    document.getElementById('approveNameError').style.display = 'block';
+    return;
+  }
+  document.getElementById('approveNameError').style.display = 'none';
+  closeApproveModal();
+
+  showSpinner('Submitting approval…');
+
+  postAction({
+    action: 'approveReport',
+    token:  _token,
+    engineerName: name
+  }).then(function(response) {
+    hideSpinner();
+    if (response.status === 'success') {
+      showResolvedScreen(
+        '✅',
+        'Report Approved',
+        'Approved by ' + name + ' on ' + formatDate(new Date().toISOString()) + '.\n' +
+        'The PDF has been moved to the Approved folder and the inspector\u2019s entries are now locked.'
+      );
+      document.getElementById('actionBar').classList.add('hidden');
+      // Update header badge
+      var badge = document.getElementById('headerStatusBadge');
+      badge.innerHTML = '<span class="status-badge status-approved">approved</span>';
+    } else {
+      alert('❌ Approval failed: ' + response.message);
+    }
+  }).catch(function(err) {
+    hideSpinner();
+    alert('❌ Network error: ' + err.toString());
+  });
+}
+
+// =============================================================================
+// REJECT FLOW
+// =============================================================================
+function openRejectModal() {
+  document.getElementById('rejectNameInput').value = '';
+  document.getElementById('rejectCommentInput').value = '';
+  document.getElementById('rejectNameError').style.display = 'none';
+  document.getElementById('rejectCommentError').style.display = 'none';
+  document.getElementById('rejectModal').classList.add('open');
+  document.getElementById('rejectNameInput').focus();
+}
+
+function closeRejectModal() {
+  document.getElementById('rejectModal').classList.remove('open');
+}
+
+function submitRejection() {
+  var name    = document.getElementById('rejectNameInput').value.trim();
+  var comment = document.getElementById('rejectCommentInput').value.trim();
+  var valid   = true;
+
+  if (!name) {
+    document.getElementById('rejectNameError').style.display = 'block';
+    valid = false;
+  } else {
+    document.getElementById('rejectNameError').style.display = 'none';
+  }
+
+  if (!comment) {
+    document.getElementById('rejectCommentError').style.display = 'block';
+    valid = false;
+  } else {
+    document.getElementById('rejectCommentError').style.display = 'none';
+  }
+
+  if (!valid) return;
+  closeRejectModal();
+
+  showSpinner('Submitting rejection…');
+
+  postAction({
+    action: 'rejectReport',
+    token:  _token,
+    engineerName: name,
+    comment: comment
+  }).then(function(response) {
+    hideSpinner();
+    if (response.status === 'success') {
+      showResolvedScreen(
+        '❌',
+        'Report Rejected',
+        'The inspector has been notified by email with your comment. They will make corrections and resubmit.'
+      );
+      document.getElementById('actionBar').classList.add('hidden');
+      var badge = document.getElementById('headerStatusBadge');
+      badge.innerHTML = '<span class="status-badge status-rejected">rejected</span>';
+    } else {
+      alert('❌ Rejection failed: ' + response.message);
+    }
+  }).catch(function(err) {
+    hideSpinner();
+    alert('❌ Network error: ' + err.toString());
+  });
+}
+
+// =============================================================================
+// UI HELPERS
+// =============================================================================
+function showError(title, message) {
+  document.getElementById('loadingScreen').style.display  = 'none';
+  document.getElementById('reportContent').style.display  = 'none';
+  document.getElementById('errorScreen').style.display    = 'block';
+  document.getElementById('errorTitle').textContent       = title;
+  document.getElementById('errorMessage').textContent     = message;
+  document.getElementById('actionBar').classList.add('hidden');
+}
+
+function showResolvedScreen(icon, title, message) {
+  document.getElementById('loadingScreen').style.display  = 'none';
+  document.getElementById('reportContent').style.display  = 'none';
+  document.getElementById('resolvedScreen').style.display = 'block';
+  document.getElementById('resolvedIcon').textContent     = icon;
+  document.getElementById('resolvedTitle').textContent    = title;
+  document.getElementById('resolvedMessage').textContent  = message;
+}
+
+function showSpinner(label) {
+  document.getElementById('spinnerLabel').textContent = label || 'Processing…';
+  document.getElementById('spinnerOverlay').classList.add('open');
+}
+
+function hideSpinner() {
+  document.getElementById('spinnerOverlay').classList.remove('open');
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  try {
+    return new Date(value).toLocaleDateString('en-US', {
+      year: 'numeric', month: 'long', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  } catch (e) { return String(value); }
+}
+
+// =============================================================================
+// APPS SCRIPT POST
+// =============================================================================
+function postAction(payload) {
+  return fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(function(res) { return res.json(); });
+}
+</script>
+</body>
+</html>
