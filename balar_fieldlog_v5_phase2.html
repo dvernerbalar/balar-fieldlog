@@ -2218,7 +2218,9 @@ var P2_APPS_SCRIPT_URL = GOOGLE_SCRIPT_URL;
 
 var p2_reportGenerated   = false;
 var p2_docHtml           = '';
-var p2_currentProjectId  = '';
+var p2_currentProjectId   = '';
+var p2_currentProjectName = '';
+var p2_currentClient      = '';
 var p2_currentReportDate = '';
 
 var p2_currentReportStatus      = '';
@@ -2227,7 +2229,9 @@ var p2_currentApprovedTimestamp = '';
 
 function p2_onReportGenerated(docHtml, proj, dateLocale) {
   p2_docHtml           = docHtml;
-  p2_currentProjectId  = proj.number || proj.name || '';
+  p2_currentProjectId   = proj.number || proj.name || '';
+  p2_currentProjectName = proj.name || '';
+  p2_currentClient      = getClientDisplayName(proj.client || '');
   p2_currentReportDate = dateLocale;
   p2_reportGenerated   = true;
   var section = document.getElementById('p2-approve-section');
@@ -2321,6 +2325,8 @@ function p2_confirmAndSubmit() {
     body: JSON.stringify({
       action:        'submitReport',
       projectId:     p2_currentProjectId,
+      projectName:   p2_currentProjectName,
+      client:        p2_currentClient,
       reportDate:    p2_currentReportDate,
       inspectorName: name,
       signedAt:      new Date().toISOString(),
