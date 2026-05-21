@@ -2316,7 +2316,8 @@ function p2_confirmAndSubmit() {
   p2_showProgress('Uploading report\u2026');
   fetch(P2_APPS_SCRIPT_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify({
       action:        'submitReport',
       projectId:     p2_currentProjectId,
