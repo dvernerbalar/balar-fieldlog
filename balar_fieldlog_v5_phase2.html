@@ -2001,11 +2001,26 @@ async function generateReport(){
   const btn=document.getElementById('btn-generate');
   btn.disabled=true;btn.textContent='Loading...';
   document.getElementById('modal-error').style.display='none';
+
+  // Open the report window NOW (synchronously, before any async work)
+  // so Chrome doesn't treat it as a popup. We write content into it later.
+  const reportWin = window.open('', '_blank');
+  if(reportWin){
+    reportWin.document.open();
+    reportWin.document.write('<html><body style="font-family:sans-serif;padding:40px;color:#555;"><p>Loading report...</p></body></html>');
+    reportWin.document.close();
+  }
+
   try{
     const url=GOOGLE_SCRIPT_URL+'?action=getEntries&date='+encodeURIComponent(dateLocale)+'&projectNumber='+encodeURIComponent(proj.number||'')+'&projectName='+encodeURIComponent(proj.name);
     const data=await(await fetch(url)).json();
     const allRows=data.entries||[];
-    if(allRows.length===0){showModalError('No entries found.');btn.disabled=false;btn.textContent='Generate / Review Report';return;}
+    if(allRows.length===0){
+      showModalError('No entries found.');
+      btn.disabled=false;btn.textContent='Generate / Review Report';
+      if(reportWin) reportWin.close();
+      return;
+    }
     const headerRec=allRows.find(function(e){return e.entryType==='header';})||allRows[0];
     p2_currentReportStatus      = headerRec.report_status      || '';
     p2_currentApprovedBy        = headerRec.approved_by        || '';
@@ -2021,7 +2036,9 @@ async function generateReport(){
     if(!wfList||wfList.length===0)missingFields.push('Workforce on Site');
     if(missingFields.length>0){
       showModalError('Please complete before generating: '+missingFields.join(', ')+'. Tap Cancel and use Edit Header.');
-      btn.disabled=false;btn.textContent='Generate / Review Report';return;
+      btn.disabled=false;btn.textContent='Generate / Review Report';
+      if(reportWin) reportWin.close();
+      return;
     }
 
     // Separate header from work entries
@@ -2037,14 +2054,18 @@ async function generateReport(){
       });
     }
     closeReportModal();
-    buildAndPrintReport(headerRow,workEntries,proj,dateLocale);
-  }catch(err){console.error('Report error:',err);showModalError('Error: '+(err&&err.message?err.message:String(err)));}
+    buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin);
+  }catch(err){
+    console.error('Report error:',err);
+    showModalError('Error: '+(err&&err.message?err.message:String(err)));
+    if(reportWin) reportWin.close();
+  }
   finally{btn.disabled=false;btn.textContent='Generate / Review Report';}
 }
 
 function showModalError(msg){const e=document.getElementById('modal-error');e.textContent=msg;e.style.display='block';}
 
-function buildAndPrintReport(headerRow,workEntries,proj,dateLocale){
+function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
   const dateStr=new Date(dateLocale).toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   const engineer=headerRow.projectEngineer||proj.engineer||'';
   const client=headerRow.client||proj.client||'';
@@ -2055,6 +2076,8 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale){
   var workforce=headerRow.workforce||[];if(typeof workforce==="string"){try{workforce=JSON.parse(workforce);}catch(e){workforce=[];}}
   const checks=headerRow.checks||[];
   const dayType=headerRow.dayType||'';
+  const narrativeEl=document.getElementById('daily-narrative');
+  const dailyNarrative=narrativeEl?narrativeEl.value.trim():'';
 
   const headerInfoHtml=
     '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px;">'+
@@ -2157,16 +2180,20 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale){
     '<div style="text-align:center;font-size:9px;color:#aaa;margin-top:18px;padding-top:10px;border-top:1px solid #eee;">Balar Associates, Inc. &nbsp;·&nbsp; Daily Field Inspection Report &nbsp;·&nbsp; Generated '+new Date().toLocaleString()+'</div>'+
     '</body></html>';
 
-  const reportWin = window.open('', '_blank');
-  if (!reportWin) {
-    const fallback = window.open('about:blank', '_blank') || window;
-    fallback.document.open();
-    fallback.document.write(doc);
-    fallback.document.close();
-  } else {
+  // Write into the pre-opened window (opened synchronously in generateReport
+  // to bypass Chrome's popup blocker)
+  if (reportWin && !reportWin.closed) {
     reportWin.document.open();
     reportWin.document.write(doc);
     reportWin.document.close();
+  } else {
+    // Fallback: try opening a new window
+    const fallback = window.open('', '_blank');
+    if (fallback) {
+      fallback.document.open();
+      fallback.document.write(doc);
+      fallback.document.close();
+    }
   }
 
   p2_onReportGenerated(doc, proj, dateLocale);
