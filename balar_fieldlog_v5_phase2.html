@@ -2186,6 +2186,7 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
     reportWin.document.open();
     reportWin.document.write(doc);
     reportWin.document.close();
+    p2_onReportGenerated(doc, proj, dateLocale);  // ← add here
   } else {
     // Fallback: try opening a new window
     const fallback = window.open('', '_blank');
@@ -2193,6 +2194,7 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
       fallback.document.open();
       fallback.document.write(doc);
       fallback.document.close();
+      p2_onReportGenerated(doc, proj, dateLocale);  // ← and here
     }
   }
 
