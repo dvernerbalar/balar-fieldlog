@@ -315,10 +315,7 @@
 <div class="modal-overlay" id="approveModal">
   <div class="modal-box">
     <h3 class="approve">Approve Report</h3>
-    <p>Confirm your name as it will appear on the approved report. This action cannot be undone.</p>
-    <label for="approveNameInput">Your Name (Engineer)</label>
-    <input type="text" id="approveNameInput" placeholder="Full name" autocomplete="name" />
-    <div class="modal-error" id="approveNameError">Please enter your name.</div>
+    <p>This report will be approved by <strong id="approveEngineerName"></strong>. This action cannot be undone.</p>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeApproveModal()">Cancel</button>
       <button class="btn btn-approve" onclick="submitApproval()" style="padding:10px 22px; font-size:14px;">
@@ -333,9 +330,6 @@
   <div class="modal-box">
     <h3>Reject Report</h3>
     <p>Provide a comment for the inspector. Your comment will be emailed to them with instructions to correct and resubmit.</p>
-    <label for="rejectNameInput">Your Name (Engineer)</label>
-    <input type="text" id="rejectNameInput" placeholder="Full name" autocomplete="name" />
-    <div class="modal-error" id="rejectNameError">Please enter your name.</div>
     <label for="rejectCommentInput">Comment for Inspector <span style="color:#c0392b;">*</span></label>
     <textarea id="rejectCommentInput" placeholder="Describe what needs to be corrected before resubmission…"></textarea>
     <div class="modal-error" id="rejectCommentError">A comment is required when rejecting.</div>
@@ -364,8 +358,9 @@ var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzboPnRIKSebUQEPo
 // =============================================================================
 // STATE
 // =============================================================================
-var _token       = '';
-var _reportData  = null;
+var _token        = '';
+var _reportData   = null;
+var _engineerName = '';
 
 // =============================================================================
 // INIT — parse token from URL and load report
@@ -391,6 +386,7 @@ function loadReport() {
       }
 
       _reportData = response.data;
+      _engineerName = _reportData.engineerName || '';
       renderReport(_reportData);
     })
     .catch(function(err) {
@@ -458,10 +454,8 @@ function renderReport(data) {
 // APPROVE FLOW
 // =============================================================================
 function openApproveModal() {
-  document.getElementById('approveNameInput').value = '';
-  document.getElementById('approveNameError').style.display = 'none';
+  document.getElementById('approveEngineerName').textContent = _engineerName || 'Unknown Engineer';
   document.getElementById('approveModal').classList.add('open');
-  document.getElementById('approveNameInput').focus();
 }
 
 function closeApproveModal() {
@@ -469,12 +463,11 @@ function closeApproveModal() {
 }
 
 function submitApproval() {
-  var name = document.getElementById('approveNameInput').value.trim();
+  var name = _engineerName;
   if (!name) {
-    document.getElementById('approveNameError').style.display = 'block';
+    alert('Engineer name could not be determined. Please contact your administrator.');
     return;
   }
-  document.getElementById('approveNameError').style.display = 'none';
   closeApproveModal();
 
   showSpinner('Submitting approval…');
@@ -509,12 +502,10 @@ function submitApproval() {
 // REJECT FLOW
 // =============================================================================
 function openRejectModal() {
-  document.getElementById('rejectNameInput').value = '';
   document.getElementById('rejectCommentInput').value = '';
-  document.getElementById('rejectNameError').style.display = 'none';
   document.getElementById('rejectCommentError').style.display = 'none';
   document.getElementById('rejectModal').classList.add('open');
-  document.getElementById('rejectNameInput').focus();
+  document.getElementById('rejectCommentInput').focus();
 }
 
 function closeRejectModal() {
@@ -522,16 +513,9 @@ function closeRejectModal() {
 }
 
 function submitRejection() {
-  var name    = document.getElementById('rejectNameInput').value.trim();
+  var name    = _engineerName;
   var comment = document.getElementById('rejectCommentInput').value.trim();
   var valid   = true;
-
-  if (!name) {
-    document.getElementById('rejectNameError').style.display = 'block';
-    valid = false;
-  } else {
-    document.getElementById('rejectNameError').style.display = 'none';
-  }
 
   if (!comment) {
     document.getElementById('rejectCommentError').style.display = 'block';
