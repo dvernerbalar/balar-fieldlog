@@ -2019,6 +2019,9 @@ async function generateReport(){
     const url=GOOGLE_SCRIPT_URL+'?action=getEntries&date='+encodeURIComponent(dateLocale)+'&projectNumber='+encodeURIComponent(proj.number||'')+'&projectName='+encodeURIComponent(proj.name);
     const data=await(await fetch(url)).json();
     const allRows=data.entries||[];
+    p2_currentReportStatus      = data.report_status      || '';
+    p2_currentApprovedBy        = data.approved_by         || '';
+    p2_currentApprovedTimestamp = data.approved_timestamp  || '';
     if(allRows.length===0){
       showModalError('No entries found.');
       btn.disabled=false;btn.textContent='Generate / Review Report';
