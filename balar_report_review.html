@@ -269,6 +269,14 @@
         <span class="info-value" id="infoProjectId">—</span>
       </div>
       <div class="info-row">
+        <span class="info-label">Project Name</span>
+        <span class="info-value" id="infoProjectName">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Client</span>
+        <span class="info-value" id="infoClient">—</span>
+      </div>
+      <div class="info-row">
         <span class="info-label">Report Date</span>
         <span class="info-value" id="infoReportDate">—</span>
       </div>
@@ -425,8 +433,10 @@ function renderReport(data) {
   document.getElementById('reportContent').style.display = 'block';
 
   // Populate info card
-  document.getElementById('infoProjectId').textContent = data.projectId || '—';
-  document.getElementById('infoReportDate').textContent = formatDate(data.reportDate) || '—';
+  document.getElementById('infoProjectId').textContent   = data.projectId   || '—';
+  document.getElementById('infoProjectName').textContent = data.projectName || '—';
+  document.getElementById('infoClient').textContent      = data.client      || '—';
+  document.getElementById('infoReportDate').textContent  = formatDate(data.reportDate) || '—';
   document.getElementById('infoStatus').innerHTML =
     '<span class="status-badge status-' + (status || 'pending') + '">' + (status || 'pending') + '</span>';
 
@@ -593,7 +603,17 @@ function hideSpinner() {
 function formatDate(value) {
   if (!value) return '—';
   try {
-    return new Date(value).toLocaleDateString('en-US', {
+    var s = String(value);
+    // If it looks like a plain date (YYYY-MM-DD), parse without time
+    // to avoid UTC-to-local conversion shifting the day
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      var parts = s.split('-');
+      return new Date(
+        parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])
+      ).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+    // Timestamps (ISO with T) — show full date + time
+    return new Date(value).toLocaleString('en-US', {
       year: 'numeric', month: 'long', day: 'numeric',
       hour: '2-digit', minute: '2-digit'
     });
