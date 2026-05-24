@@ -24,7 +24,6 @@ function attemptFirstLogin(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('welcome-screen').style.display='none';
   err.style.display='none';
-  setTimeout(updatePostHeaderBtn, 50);
 }
 function attemptWelcomeLogin(){
   var pin = document.getElementById('welcome-pin').value;
@@ -32,7 +31,7 @@ function attemptWelcomeLogin(){
   if(pin !== SHARED_PIN){err.textContent='Incorrect PIN. Please try again.';err.style.display='block';document.getElementById('welcome-pin').value='';return;}
   document.getElementById('welcome-screen').style.display='none';
   err.style.display='none';
-  setTimeout(updatePostHeaderBtn, 50);
+  setTimeout(updatePostHeaderBtn,50);
 }
 function resetIdentity(){
   localStorage.removeItem('balar_inspector_name');
@@ -258,7 +257,7 @@ textarea{resize:vertical;min-height:90px;}
 
 
       <div id="header-error" class="error-box"></div>
-      <button class="btn-post-header" id="btn-post-header-main" onclick="postDailyHeader()" disabled style="opacity:0.4;cursor:not-allowed;">📋 Post Daily Header</button>
+      <button class="btn-post-header" id="btn-post-header-main" onclick="postDailyHeader()" disabled style="opacity:0.4;cursor:not-allowed;pointer-events:none;">📋 Post Daily Header</button>
     </div>
 
     <!-- ════════════════════════════════════════════
@@ -428,26 +427,21 @@ textarea{resize:vertical;min-height:90px;}
         <!-- DAILY NARRATIVE -->
         <div id="narrative-section" style="margin-top:16px;display:none;">
           <div class="section-label">Daily Summary / Narrative</div>
-          <!-- Editable view -->
           <div id="narrative-form-view">
             <div class="card header-card">
               <div style="font-size:13px;color:#555;margin-bottom:10px;">Provide an overall summary of work performed today. This will appear at the top of the generated report.</div>
               <textarea id="daily-narrative" rows="5" placeholder="Enter daily summary narrative..." style="width:100%;font-size:14px;padding:10px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;resize:vertical;font-family:'Barlow',sans-serif;line-height:1.5;box-sizing:border-box;"></textarea>
             </div>
           </div>
-          <!-- Condensed read-only view (shown when approved) -->
           <div id="narrative-posted-view" style="display:none;">
             <div class="card posted" style="border-left:4px solid #1a5e35;">
-              <div class="posted-badge" style="background:#d1f2eb;color:#1a5e35;margin-bottom:8px;">✓ Daily Narrative</div>
+              <div class="posted-badge" style="background:#d1f2eb;color:#1a5e35;margin-bottom:8px;">&#10003; Daily Narrative</div>
               <div id="narrative-summary" style="font-size:13px;color:#333;line-height:1.6;"></div>
             </div>
           </div>
         </div>
 
-        <div style="margin-top:16px;" id="report-btn-container">
-          <button class="btn-report" id="btn-generate-report" onclick="openReportModal()">📄 Generate / Review Report</button>
-          <button class="btn-report" id="btn-view-approved" style="display:none;background:#d1f2eb;color:#000;border:2px solid #1a5e35;" onclick="window.open(p2_approvedPdfLink,'_blank')">📄 View Approved Report</button>
-        </div>
+        <div style="margin-top:16px;" id="report-btn-container"><button class="btn-report" id="btn-generate-report" onclick="openReportModal()">📄 Generate / Review Report</button><button class="btn-report" id="btn-view-approved" style="display:none;background:#d1f2eb;color:#000;border:2px solid #1a5e35;" onclick="window.open(p2_approvedPdfLink,'_blank')">📄 View Approved Report</button></div>
       </div>
     </div>
 
@@ -658,15 +652,12 @@ function buildProjectDropdown(){
   });
 }
 function onClientChange(){
-  updatePostHeaderBtn();
-  // Clear lock state — user is selecting a new project
-  p2_currentReportStatus      = '';
-  p2_currentApprovedBy        = '';
-  p2_currentApprovedTimestamp = '';
-  p2_approvedPdfLink          = '';
-  // Gray generate button until we know the status of the new project
-  var genBtn = document.getElementById('btn-generate-report');
-  if(genBtn){ genBtn.disabled=true; genBtn.style.opacity='0.4'; genBtn.style.pointerEvents='none'; }
+  p2_currentReportStatus='';
+  p2_currentApprovedBy='';
+  p2_currentApprovedTimestamp='';
+  p2_approvedPdfLink='';
+  var gb=document.getElementById('btn-generate-report');
+  if(gb){gb.disabled=true;gb.style.opacity='0.4';gb.style.pointerEvents='none';}
   p2_applyLockUI();
   var clientSel=document.getElementById('client-select');
   var projSel=document.getElementById('project-select');
@@ -690,6 +681,8 @@ function onClientChange(){
 }
 function onProjectSelectChange(){
   updatePostHeaderBtn();
+  var gb=document.getElementById('btn-generate-report');
+  if(gb){gb.disabled=true;gb.style.opacity='0.4';gb.style.pointerEvents='none';}
   var projSel=document.getElementById('project-select');
   var sel=projSel.options[projSel.selectedIndex];
   if(!sel||!sel.value)return;
@@ -699,17 +692,15 @@ function onProjectSelectChange(){
   document.getElementById('project-engineer').value=sel.dataset.engineer||'';
   document.getElementById('contractor-primary').value=sel.dataset.contractor||'';
   var dateVal=document.getElementById('entry-date').value;
-  if(dateVal) {
-    var phBtn = document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
-    if(phBtn){ phBtn.disabled=true; phBtn.textContent='⏳ Checking...'; }
-    var genBtn = document.getElementById('btn-generate-report');
-    if(genBtn){ genBtn.disabled=true; genBtn.style.opacity='0.4'; genBtn.style.pointerEvents='none'; }
+  if(dateVal){
+    var phb=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
+    if(phb){phb.disabled=true;phb.textContent='Checking...';}
     checkForExistingHeader(sel.dataset.name,dateVal).finally(function(){
-      var b = document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
-      if(b && b.textContent==='⏳ Checking...'){ b.disabled=false; b.textContent='📋 Post Daily Header'; }
-      if(p2_currentReportStatus !== 'approved'){
-        var gb = document.getElementById('btn-generate-report');
-        if(gb){ gb.disabled=false; gb.style.opacity=''; gb.style.pointerEvents=''; }
+      var b=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
+      if(b&&b.textContent==='Checking...'){b.disabled=false;b.textContent='Post Daily Header';}
+      if(p2_currentReportStatus!=='approved'){
+        var gb=document.getElementById('btn-generate-report');
+        if(gb){gb.disabled=false;gb.style.opacity='';gb.style.pointerEvents='';}
       }
     });
   }
@@ -717,17 +708,16 @@ function onProjectSelectChange(){
 function onProjectNumberChange(){}
 function onProjectNameChange(){}
 function updatePostHeaderBtn(){
-  var dateVal = document.getElementById('entry-date').value;
-  var projVal = (document.getElementById('project-select')||{}).value || '';
-  var btn = document.getElementById('btn-post-header-main');
+  var dv=document.getElementById('entry-date').value;
+  var pv=(document.getElementById('project-select')||{}).value||'';
+  var btn=document.getElementById('btn-post-header-main');
   if(!btn) return;
-  // Don't override the Checking... state
-  if(btn.textContent === '⏳ Checking...') return;
-  var ready = !!(dateVal && projVal);
-  btn.disabled = !ready;
-  btn.style.opacity = ready ? '1' : '0.4';
-  btn.style.cursor  = ready ? 'pointer' : 'not-allowed';
-  btn.style.pointerEvents = ready ? '' : 'none';
+  if(btn.textContent.indexOf('Checking')>=0) return;
+  var ready=!!(dv&&pv);
+  btn.disabled=!ready;
+  btn.style.opacity=ready?'1':'0.4';
+  btn.style.cursor=ready?'pointer':'not-allowed';
+  btn.style.pointerEvents=ready?'':'none';
 }
 function buildInspectorDropdown(){
   // Populate setup screen name dropdown
@@ -759,20 +749,17 @@ function buildInspectorDropdown(){
 }
 function onDateChange(){
   updatePostHeaderBtn();
+  var gb=document.getElementById('btn-generate-report');
+  if(gb){gb.disabled=true;gb.style.opacity='0.4';gb.style.pointerEvents='none';}
   var proj = document.getElementById('project-name').value.trim();
   var dateVal = document.getElementById('entry-date').value;
-  if(proj && dateVal) {
-    var phBtn = document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
-    if(phBtn){ phBtn.disabled=true; phBtn.textContent='⏳ Checking...'; }
-    var genBtn = document.getElementById('btn-generate-report');
-    if(genBtn){ genBtn.disabled=true; genBtn.style.opacity='0.4'; genBtn.style.pointerEvents='none'; }
-    checkForExistingHeader(proj, dateVal).finally(function(){
-      var b = document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
-      if(b && b.textContent==='⏳ Checking...'){ b.disabled=false; b.textContent='📋 Post Daily Header'; }
-      if(p2_currentReportStatus !== 'approved'){
-        var gb = document.getElementById('btn-generate-report');
-        if(gb){ gb.disabled=false; gb.style.opacity=''; gb.style.pointerEvents=''; }
-      }
+  if(proj&&dateVal){
+    var phb=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
+    if(phb){phb.disabled=true;phb.textContent='Checking...';}
+    checkForExistingHeader(proj,dateVal).finally(function(){
+      var b=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
+      if(b&&b.textContent==='Checking...'){b.disabled=false;b.textContent='Post Daily Header';}
+      if(p2_currentReportStatus!=='approved'){var gb=document.getElementById('btn-generate-report');if(gb){gb.disabled=false;gb.style.opacity='';gb.style.pointerEvents='';}}
     });
   }
 }
@@ -1282,6 +1269,10 @@ async function checkForExistingHeader(projectName, dateVal){
     currentProjectKey = localKey;
     localStorage.setItem('balar_v5_current_project', currentProjectKey);
     restoreHeader(dailyHeader);
+    p2_currentReportStatus      = dailyHeader.report_status      || '';
+    p2_currentApprovedBy        = dailyHeader.approved_by        || '';
+    p2_currentApprovedTimestamp = dailyHeader.approved_timestamp || '';
+    p2_applyLockUI();
     showToast('Header restored from today', false);
     // Sync any new entries from Sheets not in local cache
     var dp = dateLocale;
@@ -1303,10 +1294,9 @@ async function checkForExistingHeader(projectName, dateVal){
       localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
       localStorage.setItem('balar_v5_current_project', currentProjectKey);
       restoreHeader(dailyHeader);
-      // Set lock status from header so UI locks before entries finish loading
-      p2_currentReportStatus      = h.report_status      || '';
-      p2_currentApprovedBy        = h.approved_by        || '';
-      p2_currentApprovedTimestamp = h.approved_timestamp || '';
+      p2_currentReportStatus=h.report_status||'';
+      p2_currentApprovedBy=h.approved_by||'';
+      p2_currentApprovedTimestamp=h.approved_timestamp||'';
       p2_applyLockUI();
       showToast('Header loaded from Sheets', false);
       // Also pull entries for this project/date from Sheets
@@ -1323,10 +1313,9 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
     var url = GOOGLE_SCRIPT_URL+'?action=getEntries&date='+encodeURIComponent(dateLocale)+'&projectNumber='+encodeURIComponent(projectNumber||'')+'&projectName='+encodeURIComponent(projectName);
     var resp = await fetch(url);
     var data = await resp.json();
-    p2_currentReportStatus      = data.report_status      || '';
-    p2_currentApprovedBy        = data.approved_by         || '';
-    p2_currentApprovedTimestamp = data.approved_timestamp  || '';
-    p2_approvedPdfLink          = data.approved_pdf_link   || '';
+    p2_currentReportStatus=data.report_status||'';
+    p2_currentApprovedBy=data.approved_by||'';
+    p2_currentApprovedTimestamp=data.approved_timestamp||'';
     p2_applyLockUI();
     var sheetEntries = (data.entries||[]).filter(function(e){ return e.entryType !== 'header'; });
     if(sheetEntries.length === 0) return;
@@ -1381,7 +1370,7 @@ function postDailyHeader(){
   const pname=document.getElementById('project-name').value.trim();
   const inspector=localStorage.getItem('balar_inspector_name')||document.getElementById('inspector-name').value.trim();
   const weather=document.getElementById('weather').value;
-  if(!pn || !pname){
+  if(!pn||!pname){
     errDiv.textContent='Please select a Client and Project before posting the header.';
     errDiv.style.display='block';
     errDiv.scrollIntoView({behavior:'smooth',block:'center'});
@@ -1828,10 +1817,7 @@ function renderEntries(){
   }
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
     html+='<div style="font-size:15px;font-weight:700;color:#0d1b2a;">'+formatTime(e.time)+(e.station?' &nbsp;&middot;&nbsp; '+e.station:'')+'</div>';
-    if(p2_currentReportStatus !== 'approved'){
-        html+='<button onclick="editEntry(this)" data-id="'+e.id+'" style="background:none;border:1px solid #d0d7de;border-radius:4px;padding:2px 8px;font-size:11px;color:#667;cursor:pointer;">Edit</button>';
-      }
-      html+='</div>';
+    if(p2_currentReportStatus!=='approved'){html+='<button onclick="editEntry(this)" data-id="'+e.id+'" style="background:none;border:1px solid #d0d7de;border-radius:4px;padding:2px 8px;font-size:11px;color:#667;cursor:pointer;">Edit</button>';}html+='</div>';
     if(displayWeather||displayTemp)html+='<div style="font-size:12px;color:#888;margin-bottom:6px;">'+displayWeather+(displayTemp?' · '+displayTemp+'°F':'')+'</div>';
     html+='<div style="font-size:14px;color:#333;line-height:1.5;margin-bottom:8px;">'+e.desc+'</div>';
     if(e.photos&&e.photos.length)html+='<div style="margin-bottom:8px;"><img src="'+e.photos[0]+'" style="width:100%;max-width:300px;height:180px;object-fit:cover;border-radius:6px;border:1px solid #ddd;display:block;"></div>';
@@ -1982,11 +1968,10 @@ function switchToProject(key){
   currentProjectKey = key;
   localStorage.setItem('balar_v5_current_project', currentProjectKey);
   closeSwitchProject();
-  // Reset p2 lock state for new project before restoring
-  p2_currentReportStatus      = dailyHeader.report_status      || '';
-  p2_currentApprovedBy        = dailyHeader.approved_by        || '';
-  p2_currentApprovedTimestamp = dailyHeader.approved_timestamp || '';
-  p2_approvedPdfLink          = '';
+  p2_currentReportStatus=dailyHeader.report_status||'';
+  p2_currentApprovedBy=dailyHeader.approved_by||'';
+  p2_currentApprovedTimestamp=dailyHeader.approved_timestamp||'';
+  p2_approvedPdfLink='';
   restoreHeader(dailyHeader);
   p2_applyLockUI();
   showToast('Switched to '+dailyHeader.project, false);
@@ -1994,11 +1979,10 @@ function switchToProject(key){
 
 function startNewProjectHeader(){
   closeSwitchProject();
-  // Clear p2 lock state — fresh project has no approved status
-  p2_currentReportStatus      = '';
-  p2_currentApprovedBy        = '';
-  p2_currentApprovedTimestamp = '';
-  p2_approvedPdfLink          = '';
+  p2_currentReportStatus='';
+  p2_currentApprovedBy='';
+  p2_currentApprovedTimestamp='';
+  p2_approvedPdfLink='';
   p2_applyLockUI();
   // Reset header form for new project
   dailyHeader = null;
@@ -2029,12 +2013,7 @@ function startNewProjectHeader(){
   var eqNone=document.getElementById('equipment-none-check');if(eqNone)eqNone.checked=false;
   var wfNone=document.getElementById('workforce-none-check');if(wfNone)wfNone.checked=false;
   document.getElementById('header-error').style.display = 'none';
-  // Clear entries display for fresh start
-  entries = entries.filter(function(e){ return e.project !== (dailyHeader ? dailyHeader.project : ''); });
-  renderEntries();
   window.scrollTo({top:0, behavior:'smooth'});
-  // Reset Post Header button LAST — after all DOM resets complete
-  setTimeout(updatePostHeaderBtn, 0);
 }
 
 function openReportModal(){
@@ -2107,13 +2086,13 @@ async function generateReport(){
   btn.disabled=true;btn.textContent='Loading...';
   document.getElementById('modal-error').style.display='none';
 
-  // Open the report window NOW (synchronously, before any async work)
-  // so Chrome doesn't treat it as a popup. We write content into it later.
-  const reportWin = window.open('', '_blank');
-  if(reportWin){
-    reportWin.document.open();
-    reportWin.document.write('<html><body style="font-family:sans-serif;padding:40px;color:#555;"><p>Loading report...</p></body></html>');
-    reportWin.document.close();
+  var reportWin = null;
+  var _ov=document.getElementById('report-overlay');
+  var _if=document.getElementById('report-iframe');
+  if(_ov&&_if){
+    _if.srcdoc='<html><body style="font-family:sans-serif;padding:40px;color:#555;"><p>Loading report...</p></body></html>';
+    _ov.style.display='flex';
+    document.body.style.overflow='hidden';
   }
 
   try{
@@ -2123,11 +2102,11 @@ async function generateReport(){
     p2_currentReportStatus      = data.report_status      || '';
     p2_currentApprovedBy        = data.approved_by         || '';
     p2_currentApprovedTimestamp = data.approved_timestamp  || '';
+    p2_approvedPdfLink          = data.approved_pdf_link   || '';
     p2_applyLockUI();
     if(allRows.length===0){
       showModalError('No entries found.');
       btn.disabled=false;btn.textContent='Generate / Review Report';
-      if(reportWin) reportWin.close();
       return;
     }
     const headerRec=allRows.find(function(e){return e.entryType==='header';})||allRows[0];
@@ -2146,7 +2125,6 @@ async function generateReport(){
     if(missingFields.length>0){
       showModalError('Please complete before generating: '+missingFields.join(', ')+'. Tap Cancel and use Edit Header.');
       btn.disabled=false;btn.textContent='Generate / Review Report';
-      if(reportWin) reportWin.close();
       return;
     }
 
@@ -2167,7 +2145,6 @@ async function generateReport(){
   }catch(err){
     console.error('Report error:',err);
     showModalError('Error: '+(err&&err.message?err.message:String(err)));
-    if(reportWin) reportWin.close();
   }
   finally{btn.disabled=false;btn.textContent='Generate / Review Report';}
 }
@@ -2287,21 +2264,9 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
 
   // Write into the pre-opened window (opened synchronously in generateReport
   // to bypass Chrome's popup blocker)
-  if (reportWin && !reportWin.closed) {
-    reportWin.document.open();
-    reportWin.document.write(doc);
-    reportWin.document.close();
-    p2_onReportGenerated(doc, proj, dateLocale);  // ← add here
-  } else {
-    // Fallback: try opening a new window
-    const fallback = window.open('', '_blank');
-    if (fallback) {
-      fallback.document.open();
-      fallback.document.write(doc);
-      fallback.document.close();
-      p2_onReportGenerated(doc, proj, dateLocale);  // ← and here
-    }
-  }
+  var _oif=document.getElementById('report-iframe');
+  if(_oif) _oif.srcdoc=doc;
+  p2_onReportGenerated(doc, proj, dateLocale);
 
   p2_currentReportDate = (function(s) {
     if (!s) return '';
@@ -2338,12 +2303,38 @@ var p2_approvedPdfLink          = '';
 var p2_currentApprovedBy        = '';
 var p2_currentApprovedTimestamp = '';
 
+function closeReportOverlay(){
+  var ov=document.getElementById('report-overlay');
+  if(ov) ov.style.display='none';
+  document.body.style.overflow='';
+}
+function p2_openSignModal(){
+  // Open sign modal on top of overlay — don't close overlay
+  var modal = document.getElementById('p2-sign-modal');
+  if(modal){
+    // Pre-fill inspector name
+    var nameInput = document.getElementById('p2-sign-name');
+    if(nameInput) nameInput.value = localStorage.getItem('balar_inspector_name') || '';
+    var errEl = document.getElementById('p2-sign-error');
+    if(errEl) errEl.style.display = 'none';
+    modal.style.display = 'flex';
+  }
+}
 function p2_onReportGenerated(docHtml, proj, dateLocale) {
+  var sb=document.getElementById('overlay-sign-btn');
+  var ab=document.getElementById('overlay-approved-badge');
+  if(p2_currentReportStatus==='approved'){if(sb)sb.style.display='none';if(ab)ab.style.display='flex';}
+  else{if(sb)sb.style.display='block';if(ab)ab.style.display='none';}
   p2_docHtml           = docHtml;
   p2_currentProjectId   = proj.number || proj.name || '';
   p2_currentProjectName = proj.name || '';
   p2_currentClient      = getClientDisplayName(proj.client || '');
-  p2_currentReportDate = dateLocale;
+  p2_currentReportDate = (function(s){
+    if(!s) return '';
+    var parts=s.split('/');
+    if(parts.length===3) return parts[2]+'-'+String(parts[0]).padStart(2,'0')+'-'+String(parts[1]).padStart(2,'0');
+    return s;
+  })(dateLocale);
   p2_reportGenerated   = true;
   var section = document.getElementById('p2-approve-section');
   if (section) section.style.display = 'block';
@@ -2382,108 +2373,45 @@ function p2_refreshStatusBanner() {
   }
 }
 
-function p2_applyLockUI() {
-  var isLocked = (p2_currentReportStatus === 'approved');
-
-  // ── Post Header button — disable when locked OR when no client/project selected ──
-  var postBtn = document.getElementById('btn-post-header-main');
-  if (postBtn && isLocked) {
-    postBtn.disabled = true;
-    postBtn.style.opacity = '0.4';
-    postBtn.style.cursor = 'not-allowed';
-    postBtn.style.pointerEvents = 'none';
+function p2_applyLockUI(){
+  var L=(p2_currentReportStatus==='approved');
+  var pb=document.getElementById('btn-post-header-main');
+  if(pb&&L){pb.disabled=true;pb.style.opacity='0.4';pb.style.cursor='not-allowed';pb.style.pointerEvents='none';}
+  var eh=document.querySelector('.btn-edit-header[onclick="editDailyHeader()"]');
+  if(eh) eh.style.display=L?'none':'';
+  ['conditions','checklist','resources'].forEach(function(k){
+    var f=document.getElementById(k+'-form-view'),p=document.getElementById(k+'-posted-view');
+    if(L&&f&&p){f.style.display='none';p.style.display='block';}
+    var eb=document.querySelector('#'+k+'-posted-view .btn-edit-header');
+    if(eb) eb.style.display=L?'none':'';
+  });
+  var ecf=document.querySelector('.entry-card-form');
+  if(ecf) ecf.style.display=L?'none':'';
+  var ee=document.getElementById('entry-error');
+  if(ee) ee.style.display=L?'none':'';
+  var sb=document.getElementById('submit-entry-btn');
+  if(sb) sb.style.display=L?'none':'';
+  var nfv=document.getElementById('narrative-form-view'),npv=document.getElementById('narrative-posted-view');
+  if(nfv) nfv.style.display=L?'none':'block';
+  if(npv) npv.style.display=L?'block':'none';
+  if(L&&npv){
+    var ne=document.getElementById('daily-narrative'),ns=document.getElementById('narrative-summary');
+    var nt=ne?ne.value.trim():(dailyHeader&&dailyHeader.narrative||'');
+    if(ns) ns.innerHTML=nt?nt.replace(/\n/g,'<br>'):'<em style="color:#999;">No narrative entered.</em>';
   }
-
-  // ── Header section buttons — hide Edit Header button, keep Switch Project ──
-  var editHeaderBtn = document.querySelector('.btn-edit-header[onclick="editDailyHeader()"]');
-  if (editHeaderBtn) editHeaderBtn.style.display = isLocked ? 'none' : '';
-
-  // ── Force all header cards into their condensed/posted view ──
-  // Conditions
-  var condForm   = document.getElementById('conditions-form-view');
-  var condPosted = document.getElementById('conditions-posted-view');
-  if (isLocked && condForm && condPosted) {
-    condForm.style.display   = 'none';
-    condPosted.style.display = 'block';
-  }
-  // Remove Edit button from conditions posted view
-  var condEditBtn = document.querySelector('#conditions-posted-view .btn-edit-header');
-  if (condEditBtn) condEditBtn.style.display = isLocked ? 'none' : '';
-
-  // Checklist
-  var clForm   = document.getElementById('checklist-form-view');
-  var clPosted = document.getElementById('checklist-posted-view');
-  if (isLocked && clForm && clPosted) {
-    clForm.style.display   = 'none';
-    clPosted.style.display = 'block';
-  }
-  var clEditBtn = document.querySelector('#checklist-posted-view .btn-edit-header');
-  if (clEditBtn) clEditBtn.style.display = isLocked ? 'none' : '';
-
-  // Resources (Equipment & Workforce)
-  var resForm   = document.getElementById('resources-form-view');
-  var resPosted = document.getElementById('resources-posted-view');
-  if (isLocked && resForm && resPosted) {
-    resForm.style.display   = 'none';
-    resPosted.style.display = 'block';
-  }
-  var resEditBtn = document.querySelector('#resources-posted-view .btn-edit-header');
-  if (resEditBtn) resEditBtn.style.display = isLocked ? 'none' : '';
-
-  // ── Entry form — hide entirely when locked ──
-  var entryCardForm = document.querySelector('.entry-card-form');
-  if (entryCardForm) entryCardForm.style.display = isLocked ? 'none' : '';
-
-  // ── Entry error div and submit button ──
-  var entryError = document.getElementById('entry-error');
-  if (entryError) entryError.style.display = isLocked ? 'none' : '';
-  var submitBtn = document.getElementById('submit-entry-btn');
-  if (submitBtn) submitBtn.style.display = isLocked ? 'none' : '';
-
-  // ── Narrative section — editable vs condensed ──
-  var narrativeFormView   = document.getElementById('narrative-form-view');
-  var narrativePostedView = document.getElementById('narrative-posted-view');
-  if (narrativeFormView)   narrativeFormView.style.display   = isLocked ? 'none' : 'block';
-  if (narrativePostedView) narrativePostedView.style.display = isLocked ? 'block' : 'none';
-  if (isLocked && narrativePostedView) {
-    var narrativeEl  = document.getElementById('daily-narrative');
-    var narrativeSummary = document.getElementById('narrative-summary');
-    var narrativeText = narrativeEl ? narrativeEl.value.trim() : (dailyHeader && dailyHeader.narrative ? dailyHeader.narrative : '');
-    if (narrativeSummary) narrativeSummary.innerHTML = narrativeText
-      ? narrativeText.replace(/\n/g, '<br>')
-      : '<em style="color:#999;">No narrative entered.</em>';
-  }
-
-  // ── Generate / View Approved button swap ──
-  var generateBtn    = document.getElementById('btn-generate-report');
-  var viewApprovedBtn = document.getElementById('btn-view-approved');
-  if (isLocked) {
-    if (generateBtn)     generateBtn.style.display     = 'none';
-    if (viewApprovedBtn) {
-      viewApprovedBtn.style.display = p2_approvedPdfLink ? 'block' : 'none';
-    }
-  } else {
-    if (generateBtn)     generateBtn.style.display     = '';
-    if (viewApprovedBtn) viewApprovedBtn.style.display = 'none';
-  }
-
-  // ── Locked banner above entries list ──
-  var banner = document.getElementById('p2-locked-banner');
-  if (isLocked && !banner) {
-    banner = document.createElement('div');
-    banner.id = 'p2-locked-banner';
-    banner.style.cssText = 'background:#d1f2eb;border:1px solid #a5d6a7;color:#1a5e35;font-size:13px;font-weight:600;padding:10px 16px;border-radius:7px;margin:10px 0;text-align:center;';
-    banner.innerHTML = '🔒 This report was approved by <strong>' + p2_currentApprovedBy + '</strong>. View only — entries cannot be edited.';
-    var entriesList = document.getElementById('entries-list');
-    if (entriesList) entriesList.parentNode.insertBefore(banner, entriesList);
-  } else if (!isLocked && banner) {
-    banner.remove();
-  }
-
-  // ── Re-render entries so Edit buttons update ──
-  if (typeof renderEntries === 'function') renderEntries();
+  var gb=document.getElementById('btn-generate-report'),vb=document.getElementById('btn-view-approved');
+  if(L){if(gb)gb.style.display='none';if(vb)vb.style.display=p2_approvedPdfLink?'block':'none';}
+  else{if(gb){gb.style.display='';gb.disabled=false;gb.style.opacity='';gb.style.pointerEvents='';}if(vb)vb.style.display='none';}
+  var bn=document.getElementById('p2-locked-banner');
+  if(L&&!bn){
+    bn=document.createElement('div');bn.id='p2-locked-banner';
+    bn.style.cssText='background:#d1f2eb;border:1px solid #a5d6a7;color:#1a5e35;font-size:13px;font-weight:600;padding:10px 16px;border-radius:7px;margin:10px 0;text-align:center;';
+    bn.innerHTML='This report was approved by <strong>'+p2_currentApprovedBy+'</strong>. View only.';
+    var el=document.getElementById('entries-list');
+    if(el) el.parentNode.insertBefore(bn,el);
+  } else if(!L&&bn){bn.remove();}
+  if(typeof renderEntries==='function') renderEntries();
 }
-
 function p2_checkLock() {
   if (p2_currentReportStatus === 'approved') {
     alert('This report has been approved by ' + p2_currentApprovedBy +
@@ -2513,6 +2441,7 @@ function p2_initiateSign() {
 function p2_closeSignModal() {
   var modal = document.getElementById('p2-sign-modal');
   if (modal) modal.style.display = 'none';
+  // Don't close overlay — let them keep reviewing
 }
 
 function p2_confirmAndSubmit() {
@@ -2552,6 +2481,8 @@ function p2_confirmAndSubmit() {
     if (response.status === 'success') {
       p2_currentReportStatus = 'pending';
       p2_refreshStatusBanner();
+      p2_closeSignModal();
+      closeReportOverlay();
       alert('\u2705 Report submitted for engineer review.\n\nThe engineer has been notified by email.');
     } else {
       alert('\u274C Submission failed: ' + (response.message || 'Unknown error'));
@@ -2585,29 +2516,31 @@ function p2_niceDate(value) {
 
 init();
 </script>
+
+<!-- Report Preview Overlay -->
+<div id="report-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;flex-direction:column;background:#fff;">
+  <div style="display:flex;align-items:center;justify-content:space-between;background:#0d1b2a;padding:10px 14px;flex-shrink:0;gap:8px;">
+    <button onclick="closeReportOverlay()" style="background:none;border:1px solid #556;color:#aabbcc;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">&#8592; Close</button>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;color:#fff;text-transform:uppercase;">Report Preview</div>
+    <button id="overlay-sign-btn" onclick="p2_openSignModal()" style="display:none;background:#9b1c2e;border:none;color:white;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">&#9998; Approve &amp; Sign</button>
+    <div id="overlay-approved-badge" style="display:none;background:#1a5e35;color:white;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600;flex-shrink:0;">&#10003; Approved</div>
+  </div>
+  <iframe id="report-iframe" style="flex:1;width:100%;border:none;" sandbox="allow-same-origin allow-scripts"></iframe>
+</div>
+
 <!-- ═══ PHASE 2: APPROVE & SIGN SECTION ═══ -->
 
-<!-- Approve & Sign section — hidden until report is generated -->
-<div id="p2-approve-section" style="display:none; margin-top:16px; text-align:center; padding:4px 0 8px;">
+<!-- Approve & Sign section — now only accessible via overlay -->
+<div id="p2-approve-section" style="display:none;">
   <div id="p2-status-banner"
        style="display:none; padding:10px 18px; border-radius:6px;
               font-size:13px; font-weight:bold; margin-bottom:12px; text-align:left;"></div>
-  <button id="p2-approve-btn"
-          onclick="p2_initiateSign()"
-          style="background:#1a3a5c; color:white; border:none; padding:13px 32px;
-                 font-size:15px; font-weight:bold; border-radius:6px; cursor:pointer;
-                 box-shadow:0 2px 6px rgba(0,0,0,0.2); width:100%; max-width:340px;">
-    ✍️ Approve &amp; Sign Report
-  </button>
-  <div style="font-size:11px; color:#888; margin-top:7px;">
-    Review the report in the new tab, then return here to sign and submit for engineer review.
-  </div>
 </div>
 
 <!-- Confirm-name modal -->
 <div id="p2-sign-modal"
      style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
-            background:rgba(0,0,0,0.55); z-index:9999;
+            background:rgba(0,0,0,0.55); z-index:10001;
             align-items:center; justify-content:center;">
   <div style="background:white; border-radius:10px; padding:28px 24px;
               max-width:380px; width:92%; box-shadow:0 8px 32px rgba(0,0,0,0.3);">
