@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Balar FieldLog — User Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy:  #0d1b2a;
+    --steel: #1b2d42;
+    --red:   #9b1c2e;
+    --red-lt:#fde8ea;
+    --gold:  #c8972a;
+    --green: #1a5e35;
+    --grn-lt:#d1f2eb;
+    --blue:  #1a3a5c;
+    --blu-lt:#e8f0f8;
+    --gray:  #f4f5f7;
+    --bdr:   #dde2e8;
+    --text:  #1a1f2e;
+    --muted: #667788;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Barlow',sans-serif;background:#eef0f4;color:var(--text);font-size:15px;line-height:1.65;}
+
+  /* ── Top bar ── */
+  .topbar{background:var(--navy);color:#fff;padding:0 32px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,.35);}
+  .brand{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;letter-spacing:2px;text-transform:uppercase;}
+  .brand span{color:var(--red);}
+  .brand-sub{font-size:11px;color:#7a9ab8;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;}
+
+  /* ── Layout ── */
+  .layout{display:flex;max-width:1120px;margin:0 auto;padding:32px 16px;gap:28px;align-items:flex-start;}
+  .sidebar{width:210px;flex-shrink:0;position:sticky;top:74px;}
+  .main{flex:1;min-width:0;}
+
+  /* ── Sidebar ── */
+  .sb-label{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:0 10px;margin:18px 0 5px;}
+  .sb-label:first-child{margin-top:0;}
+  .sidebar a{display:block;padding:6px 12px;border-radius:5px;font-size:13px;font-weight:500;color:#556;text-decoration:none;border-left:3px solid transparent;transition:.15s;}
+  .sidebar a:hover,.sidebar a.active{background:#fff;color:var(--navy);font-weight:600;border-left-color:var(--red);}
+
+  /* ── Section card ── */
+  .section{background:#fff;border-radius:10px;padding:30px 32px;margin-bottom:24px;box-shadow:0 1px 5px rgba(0,0,0,.06);scroll-margin-top:74px;}
+  .sec-hdr{display:flex;align-items:center;gap:14px;margin-bottom:22px;padding-bottom:16px;border-bottom:2px solid var(--gray);}
+  .sec-icon{width:42px;height:42px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+  .ic-navy{background:var(--navy);}  .ic-red{background:var(--red);}
+  .ic-blue{background:var(--blue);} .ic-green{background:var(--green);}
+  .ic-gold{background:var(--gold);}
+  .sec-title{font-family:'Barlow Condensed',sans-serif;font-size:23px;font-weight:800;color:var(--navy);letter-spacing:.4px;}
+  .sec-sub{font-size:13px;color:var(--muted);margin-top:2px;}
+
+  /* ── Audience badge ── */
+  .aud{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:3px 11px;border-radius:20px;margin-bottom:18px;}
+  .aud-i{background:var(--blu-lt);color:var(--blue);}
+  .aud-e{background:var(--grn-lt);color:var(--green);}
+  .aud-b{background:#f3efd8;color:#7a5c10;}
+
+  /* ── Steps ── */
+  .steps{display:flex;flex-direction:column;gap:14px;}
+  .step{display:flex;gap:14px;align-items:flex-start;}
+  .step-n{width:26px;height:26px;border-radius:50%;background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
+  .step-body{flex:1;}
+  .step-t{font-weight:600;color:var(--navy);margin-bottom:2px;font-size:14px;}
+  .step-d{color:#445566;font-size:13.5px;line-height:1.55;}
+
+  /* ── Info boxes ── */
+  .box{border-radius:7px;padding:13px 15px;font-size:13px;margin:14px 0;display:flex;gap:10px;align-items:flex-start;line-height:1.5;}
+  .box-ico{font-size:16px;flex-shrink:0;margin-top:1px;}
+  .tip {background:var(--blu-lt);border-left:4px solid var(--blue);color:#1a3a5c;}
+  .warn{background:#fff8e1;border-left:4px solid var(--gold);color:#5c4000;}
+  .lock{background:var(--grn-lt);border-left:4px solid var(--green);color:var(--green);}
+  .note{background:var(--gray);border-left:4px solid #aab;color:#445566;}
+  .pend{background:#fef9e7;border-left:4px solid var(--gold);color:#9a7d0a;}
+
+  /* ── Flow ── */
+  .flow{display:flex;flex-direction:column;gap:3px;margin:18px 0;}
+  .flow-step{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--gray);border-radius:7px;font-size:13.5px;font-weight:500;}
+  .flow-arr{text-align:center;color:#aab;font-size:17px;line-height:1;margin:1px 0 1px 18px;}
+  .fl-i{border-left:4px solid var(--blue);}
+  .fl-e{border-left:4px solid var(--green);}
+  .fl-s{border-left:4px solid var(--gold);}
+  .lbl{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:2px 7px;border-radius:4px;flex-shrink:0;}
+  .lbl-i{background:var(--blu-lt);color:var(--blue);}
+  .lbl-e{background:var(--grn-lt);color:var(--green);}
+  .lbl-s{background:#f3efd8;color:#7a5c10;}
+
+  /* ── Cards grid ── */
+  .cgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:13px;margin:14px 0;}
+  .card{background:var(--gray);border-radius:8px;padding:15px;border-top:3px solid var(--navy);}
+  .card-t{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--navy);margin-bottom:5px;}
+  .card-b{font-size:13px;color:#445566;line-height:1.5;}
+
+  /* ── Table ── */
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0;}
+  th{background:var(--navy);color:#fff;text-align:left;padding:9px 12px;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;}
+  td{padding:8px 12px;border-bottom:1px solid var(--bdr);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  tr:nth-child(even) td{background:#fafbfc;}
+
+  /* ── Status pills ── */
+  .pill{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;letter-spacing:.5px;}
+  .pill-y{background:#fef9e7;color:#9a7d0a;border:1px solid #f9e79f;}
+  .pill-g{background:var(--grn-lt);color:var(--green);border:1px solid #a5d6a7;}
+  .pill-r{background:#fadbd8;color:#922b21;border:1px solid #f1948a;}
+
+  hr.div{border:none;border-top:1px solid var(--bdr);margin:22px 0;}
+  @media(max-width:700px){.sidebar{display:none;}.layout{padding:14px;}.section{padding:20px 18px;}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">Balar <span>Field</span>Log</div>
+  <div class="brand-sub">User Guide</div>
+</div>
+
+<div class="layout">
+  <nav class="sidebar">
+    <div class="sb-label">Overview</div>
+    <a href="#overview">What is FieldLog?</a>
+    <a href="#workflow">Approval Workflow</a>
+    <div class="sb-label">Inspector</div>
+    <a href="#login">Logging In</a>
+    <a href="#header">Daily Header</a>
+    <a href="#entries">Adding Entries</a>
+    <a href="#narrative">Narrative</a>
+    <a href="#report">Generating a Report</a>
+    <a href="#sign">Approve &amp; Sign</a>
+    <a href="#status">Report Status</a>
+    <a href="#rejected">After Rejection</a>
+    <a href="#lock">Locked Reports</a>
+    <div class="sb-label">Engineer</div>
+    <a href="#eng-email">Review Email</a>
+    <a href="#eng-review">Review Page</a>
+    <a href="#eng-approve">Approving</a>
+    <a href="#eng-reject">Rejecting</a>
+    <div class="sb-label">Reference</div>
+    <a href="#tips">Tips &amp; Notes</a>
+    <a href="#trouble">Troubleshooting</a>
+  </nav>
+
+  <main class="main">
+
+    <!-- Overview -->
+    <div class="section" id="overview">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-navy">📋</div>
+        <div><div class="sec-title">What is Balar FieldLog?</div><div class="sec-sub">Mobile-first daily inspection logging and report approval system</div></div>
+      </div>
+      <span class="aud aud-b">👥 Everyone</span>
+      <p style="margin-bottom:14px;">FieldLog is a web app used by Balar Associates inspectors to log daily field observations, generate inspection reports, and route them through a digital approval process. All data is stored in Google Sheets; reports and PDFs are saved automatically to Google Drive.</p>
+      <div class="cgrid">
+        <div class="card"><div class="card-t">📱 Inspectors</div><div class="card-b">Log entries in the field, generate reports, and sign and submit for engineer review — from any phone or tablet.</div></div>
+        <div class="card"><div class="card-t">🏗 Engineers</div><div class="card-b">Receive a single email with a review link. Approve or reject with a comment — no login or account required.</div></div>
+        <div class="card"><div class="card-t">☁️ Storage</div><div class="card-b">Entries saved to Google Sheets. Signed PDFs filed in Google Drive by project, organized into Pending Review and Approved folders.</div></div>
+      </div>
+    </div>
+
+    <!-- Workflow -->
+    <div class="section" id="workflow">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-red">🔄</div>
+        <div><div class="sec-title">Approval Workflow</div><div class="sec-sub">How a report moves from the field to final approval</div></div>
+      </div>
+      <span class="aud aud-b">👥 Everyone</span>
+      <div class="flow">
+        <div class="flow-step fl-i"><span class="lbl lbl-i">Inspector</span> Logs entries throughout the day</div>
+        <div class="flow-arr">↓</div>
+        <div class="flow-step fl-i"><span class="lbl lbl-i">Inspector</span> Taps Generate Report — reviews in overlay, then taps <strong>✍ Approve &amp; Sign</strong></div>
+        <div class="flow-arr">↓</div>
+        <div class="flow-step fl-i"><span class="lbl lbl-i">Inspector</span> Confirms name in sign modal → submits</div>
+        <div class="flow-arr">↓</div>
+        <div class="flow-step fl-s"><span class="lbl lbl-s">System</span> Converts report to PDF, saves to Drive (Pending Review), emails engineer</div>
+        <div class="flow-arr">↓</div>
+        <div class="flow-step fl-e"><span class="lbl lbl-e">Engineer</span> Clicks review link from email — no login needed</div>
+        <div class="flow-arr">↓</div>
+        <div class="flow-step fl-e"><span class="lbl lbl-e">Engineer</span> Reviews PDF on review page, then approves or rejects</div>
+        <div class="flow-arr">↓</div>
+        <div class="flow-step fl-s"><span class="lbl lbl-s">System</span> <strong>Approve:</strong> final PDF saved to Approved folder, entries locked</div>
+        <div class="flow-arr">↓</div>
+        <div class="flow-step fl-s"><span class="lbl lbl-s">System</span> <strong>Reject:</strong> inspector notified by email with engineer's comment, entries unlocked for editing</div>
+      </div>
+    </div>
+
+    <!-- Login -->
+    <div class="section" id="login">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-navy">🔐</div>
+        <div><div class="sec-title">Logging In</div><div class="sec-sub">First-time setup and returning access</div></div>
+      </div>
+      <span class="aud aud-i">👷 Inspector</span>
+      <div class="steps">
+        <div class="step"><div class="step-n">1</div><div class="step-body"><div class="step-t">First time on this device</div><div class="step-d">Select your name from the dropdown and enter the 4-digit PIN. Your name is saved to the device — you won't need to select it again.</div></div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-body"><div class="step-t">Returning visits</div><div class="step-d">Your name appears automatically. Enter the PIN to continue.</div></div></div>
+        <div class="step"><div class="step-n">3</div><div class="step-body"><div class="step-t">Switching inspectors</div><div class="step-d">Tap <strong>Not you?</strong> on the welcome screen to return to name selection.</div></div></div>
+      </div>
+      <div class="box warn"><div class="box-ico">⚠️</div><div>The PIN is shared across all inspectors. Do not share it outside Balar Associates field staff.</div></div>
+    </div>
+
+    <!-- Daily Header -->
+    <div class="section" id="header">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-blue">📌</div>
+        <div><div class="sec-title">Daily Header</div><div class="sec-sub">Project setup — required once per project per day</div></div>
+      </div>
+      <span class="aud aud-i">👷 Inspector</span>
+      <p style="margin-bottom:16px;">The daily header captures top-level information for a project on a given day. It must be posted before entries can be added. Working on multiple projects? Each gets its own header.</p>
+      <div class="steps">
+        <div class="step"><div class="step-n">1</div><div class="step-body"><div class="step-t">Select date, client, and project</div><div class="step-d">Date defaults to today. Select the client first — the project dropdown then shows only projects for that client. The <strong>Post Daily Header</strong> button stays grayed out until both are selected.</div></div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-body"><div class="step-t">Post Daily Header</div><div class="step-d">Tap <strong>Post Daily Header</strong>. If a header already exists for this date and project it loads automatically. The button will briefly show <em>Checking...</em> while confirming with the server.</div></div></div>
+        <div class="step"><div class="step-n">3</div><div class="step-body"><div class="step-t">Daily Conditions</div><div class="step-d">Enter weather and temperature. Tap <strong>Auto</strong> to detect weather from your GPS location. Tap <strong>Save Daily Conditions</strong>.</div></div></div>
+        <div class="step"><div class="step-n">4</div><div class="step-body"><div class="step-t">Daily Checklist</div><div class="step-d">Check all items that apply for the day. Tap <strong>Save Checklist</strong>.</div></div></div>
+        <div class="step"><div class="step-n">5</div><div class="step-body"><div class="step-t">Equipment &amp; Workforce</div><div class="step-d">Add items using the dropdowns. Use <strong>Same as last time for this project</strong> to auto-populate from the most recent previous entry. If nothing is on site, check <strong>None on site today</strong>. Tap <strong>Update Equipment &amp; Workforce</strong>.</div></div></div>
+      </div>
+      <div class="box tip"><div class="box-ico">💡</div><div><strong>Same as last time</strong> searches backwards from the day before the active report date — works correctly even when logging past dates.</div></div>
+      <div class="box note"><div class="box-ico">ℹ️</div><div>To work on a different project, tap <strong>Switch Project</strong>. Each project maintains its own header, entries, and report independently.</div></div>
+    </div>
+
+    <!-- Entries -->
+    <div class="section" id="entries">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-red">✏️</div>
+        <div><div class="sec-title">Adding Entries</div><div class="sec-sub">Logging field observations throughout the day</div></div>
+      </div>
+      <span class="aud aud-i">👷 Inspector</span>
+      <div class="steps">
+        <div class="step"><div class="step-n">1</div><div class="step-body"><div class="step-t">Fill in the entry form</div><div class="step-d">Enter time, station/location, description of work, and notes. Checklist items and weather can be added per entry if conditions changed.</div></div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-body"><div class="step-t">Add a photo (optional)</div><div class="step-d">Tap the photo area to take a photo or upload from your gallery. Photos are saved to Google Drive automatically.</div></div></div>
+        <div class="step"><div class="step-n">3</div><div class="step-body"><div class="step-t">Capture GPS (optional)</div><div class="step-d">Tap <strong>Capture</strong> next to the GPS field to record your current coordinates.</div></div></div>
+        <div class="step"><div class="step-n">4</div><div class="step-body"><div class="step-t">Tap Add Entry to Log</div><div class="step-d">Entry saved immediately. Repeat throughout the day. Entries can be edited using the pencil icon — except on pending or approved reports.</div></div></div>
+      </div>
+      <div class="box warn"><div class="box-ico">⚠️</div><div>If an entry fails to save, a red toast will appear with a <strong>Tap to Retry</strong> option. All failed entries must be resolved before a report can be generated.</div></div>
+    </div>
+
+    <!-- Narrative -->
+    <div class="section" id="narrative">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-blue">📝</div>
+        <div><div class="sec-title">Daily Narrative</div><div class="sec-sub">Optional summary of the day's work</div></div>
+      </div>
+      <span class="aud aud-i">👷 Inspector</span>
+      <p style="margin-bottom:14px;">The narrative section appears below the entry log. It allows you to write a free-form summary that will appear at the top of the generated report.</p>
+      <div class="steps">
+        <div class="step"><div class="step-n">1</div><div class="step-body"><div class="step-t">Type your narrative</div><div class="step-d">Enter an overall summary of work performed. This is optional but recommended for complex or significant days.</div></div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-body"><div class="step-t">Tap Save Narrative</div><div class="step-d">Saves your narrative to the local cache. This allows you to save progress before the report is generated.</div></div></div>
+      </div>
+      <div class="box note"><div class="box-ico">ℹ️</div><div>The narrative is saved locally when you tap Save Narrative. It is included automatically when the report is generated.</div></div>
+    </div>
+
+    <!-- Report -->
+    <div class="section" id="report">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-navy">📄</div>
+        <div><div class="sec-title">Generating a Report</div><div class="sec-sub">Creating the daily inspection report for review</div></div>
+      </div>
+      <span class="aud aud-i">👷 Inspector</span>
+      <div class="steps">
+        <div class="step"><div class="step-n">1</div><div class="step-body"><div class="step-t">Tap Generate / Review Report</div><div class="step-d">Found at the bottom of the entry log. A modal will appear — select the date and project, then tap <strong>Generate</strong>.</div></div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-body"><div class="step-t">Review in the overlay</div><div class="step-d">The report opens full-screen within the app. Review all entries, equipment, workforce, checklist, and conditions carefully. Use the <strong>← Close</strong> button to return to the app without signing.</div></div></div>
+        <div class="step"><div class="step-n">3</div><div class="step-body"><div class="step-t">Tap ✍ Approve &amp; Sign when ready</div><div class="step-d">The sign button appears in the top-right corner of the overlay. It is only available while the report is open — closing the overlay removes the option until you regenerate.</div></div></div>
+      </div>
+      <div class="box warn"><div class="box-ico">⚠️</div><div>Review the report carefully before signing. Once submitted, changes require the engineer to reject the report first.</div></div>
+    </div>
+
+    <!-- Sign -->
+    <div class="section" id="sign">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-blue">✍️</div>
+        <div><div class="sec-title">Approve &amp; Sign</div><div class="sec-sub">Inspector sign-off and submission for engineer review</div></div>
+      </div>
+      <span class="aud aud-i">👷 Inspector</span>
+      <div class="steps">
+        <div class="step"><div class="step-n">1</div><div class="step-body"><div class="step-t">Tap ✍ Approve &amp; Sign in the report overlay</div><div class="step-d">The sign confirmation modal appears on top of the report. Your name is pre-filled from your login.</div></div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-body"><div class="step-t">Confirm your name and tap Sign &amp; Submit</div><div class="step-d">A progress overlay appears while the report is converted to PDF, saved to Drive, and the engineer is notified.</div></div></div>
+        <div class="step"><div class="step-n">3</div><div class="step-body"><div class="step-t">Confirmation</div><div class="step-d">A success message confirms submission. The overlay closes and the app returns to the entry view showing a yellow <span class="pill pill-y">PENDING</span> status banner.</div></div></div>
+      </div>
+      <div class="box lock"><div class="box-ico">📬</div><div>After signing, the engineer receives an email with a single button link to review the report. No further action is needed from you until the engineer responds.</div></div>
+    </div>
+
+    <!-- Status -->
+    <div class="section" id="status">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-gold">🏷️</div>
+        <div><div class="sec-title">Report Status</div><div class="sec-sub">Understanding the status banner</div></div>
+      </div>
+      <span class="aud aud-i">👷 Inspector</span>
+      <p style="margin-bottom:14px;">After generating a report, a status banner appears at the bottom of the entry view showing the current state of the report.</p>
+      <table>
+        <tr><th>Status</th><th>What it means</th><th>Can you edit?</th></tr>
+        <tr><td><span class="pill pill-y">PENDING</span></td><td>Report submitted, awaiting engineer review</td><td>No — locked until engineer responds</td></tr>
+        <tr><td><span class="pill pill-g">APPROVED</span></td><td>Engineer has approved the report</td><td>No — permanently locked</td></tr>
+        <tr><td><span class="pill pill-r">REJECTED</span></td><td>Engineer returned with comments</td><td>Yes — correct and resubmit</td></tr>
+      </table>
+      <div class="box pend"><div class="box-ico">⏳</div><div>While a report is <strong>Pending</strong>, all editing is locked — conditions, checklist, equipment, entries, and narrative are all read-only. The Generate Report button is also grayed out.</div></div>
+    </div>
+
+    <!-- Rejected -->
+    <div class="section" id="rejected">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-red">↩️</div>
+        <div><div class="sec-title">After a Rejection</div><div class="sec-sub">What to do when an engineer sends a report back</div></div>
+      </div>
+      <span class="aud aud-i">👷 Inspector</span>
+      <div class="steps">
+        <div class="step"><div class="step-n">1</div><div class="step-body"><div class="step-t">Check your email</div><div class="step-d">You receive an email with the engineer's comment describing what needs to be corrected.</div></div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-body"><div class="step-t">Correct entries in the app</div><div class="step-d">Navigate to the relevant date and project. All sections are unlocked — edit as needed.</div></div></div>
+        <div class="step"><div class="step-n">3</div><div class="step-body"><div class="step-t">Regenerate and resubmit</div><div class="step-d">Tap <strong>Generate / Review Report</strong>, review the updated report, and tap <strong>Approve &amp; Sign</strong> to resubmit. The engineer receives a new notification.</div></div></div>
+      </div>
+    </div>
+
+    <!-- Lock -->
+    <div class="section" id="lock">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-green">🔒</div>
+        <div><div class="sec-title">Locked Reports</div><div class="sec-sub">What happens after engineer approval</div></div>
+      </div>
+      <span class="aud aud-i">👷 Inspector</span>
+      <div class="box lock"><div class="box-ico">🔒</div><div>Once approved, all entries for that project and date are <strong>permanently locked</strong>. Attempting to edit shows a message with the approver's name and timestamp. The <strong>View Approved Report</strong> button replaces the Generate button — tap it to open the final signed PDF.</div></div>
+      <p style="margin-top:12px;font-size:14px;color:#445;">If a correction is needed on an approved report, contact the project engineer directly. You can still switch to other projects and add new entries normally.</p>
+    </div>
+
+    <!-- Engineer Email -->
+    <div class="section" id="eng-email">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-green">📧</div>
+        <div><div class="sec-title">Review Email</div><div class="sec-sub">What the engineer receives when a report is submitted</div></div>
+      </div>
+      <span class="aud aud-e">🏗 Engineer</span>
+      <p style="margin-bottom:14px;">When an inspector submits a signed report, you receive a styled HTML email containing:</p>
+      <table>
+        <tr><th>Field</th><th>Details</th></tr>
+        <tr><td>Project</td><td>Project number — Project name</td></tr>
+        <tr><td>Client</td><td>Client / Owner name</td></tr>
+        <tr><td>Date</td><td>Report date (M/D/YY)</td></tr>
+        <tr><td>Submitted by</td><td>Inspector name</td></tr>
+        <tr><td>Signed at</td><td>Full timestamp of inspector sign-off</td></tr>
+        <tr><td>Action button</td><td><strong>Review &amp; Approve / Reject Report</strong> — single click to the review page</td></tr>
+      </table>
+      <div class="box tip"><div class="box-ico">💡</div><div>The review link is unique to this report. No Google account or login is required to open it.</div></div>
+    </div>
+
+    <!-- Engineer Review -->
+    <div class="section" id="eng-review">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-green">🖥️</div>
+        <div><div class="sec-title">Engineer Review Page</div><div class="sec-sub">The review interface</div></div>
+      </div>
+      <span class="aud aud-e">🏗 Engineer</span>
+      <p style="margin-bottom:14px;">Clicking the link opens a secure page showing:</p>
+      <div class="cgrid">
+        <div class="card"><div class="card-t">Report Details</div><div class="card-b">Project ID, project name, client, report date, and current status.</div></div>
+        <div class="card"><div class="card-t">PDF Link</div><div class="card-b">Button to open the signed PDF in Google Drive. Review before deciding.</div></div>
+        <div class="card"><div class="card-t">Action Buttons</div><div class="card-b">Approve and Reject buttons fixed at the bottom of the page.</div></div>
+      </div>
+      <div class="box note"><div class="box-ico">ℹ️</div><div>No login required. Do not forward the link — it is the secure token for this specific report.</div></div>
+    </div>
+
+    <!-- Engineer Approve -->
+    <div class="section" id="eng-approve">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-green">✅</div>
+        <div><div class="sec-title">Approving a Report</div><div class="sec-sub">Finalizing with engineer sign-off</div></div>
+      </div>
+      <span class="aud aud-e">🏗 Engineer</span>
+      <div class="steps">
+        <div class="step"><div class="step-n">1</div><div class="step-body"><div class="step-t">Review the PDF</div><div class="step-d">Open and read the full report. It includes the inspector's digital signature and timestamp.</div></div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-body"><div class="step-t">Tap Approve</div><div class="step-d">A confirmation modal shows your name. Tap <strong>Confirm Approval</strong>.</div></div></div>
+        <div class="step"><div class="step-n">3</div><div class="step-body"><div class="step-t">Done</div><div class="step-d">Your signature block is added to the PDF and the file moves to the Approved folder in Drive. Entries are locked in the app.</div></div></div>
+      </div>
+      <div class="box lock"><div class="box-ico">🔒</div><div>Approval is permanent. Once approved, entries cannot be edited by the inspector.</div></div>
+    </div>
+
+    <!-- Engineer Reject -->
+    <div class="section" id="eng-reject">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-red">❌</div>
+        <div><div class="sec-title">Rejecting a Report</div><div class="sec-sub">Returning the report for corrections</div></div>
+      </div>
+      <span class="aud aud-e">🏗 Engineer</span>
+      <div class="steps">
+        <div class="step"><div class="step-n">1</div><div class="step-body"><div class="step-t">Tap Reject</div><div class="step-d">A modal appears with a comment box. A comment is required.</div></div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-body"><div class="step-t">Enter your comment</div><div class="step-d">Describe clearly what needs to be corrected. This is sent directly to the inspector by email.</div></div></div>
+        <div class="step"><div class="step-n">3</div><div class="step-body"><div class="step-t">Tap Confirm Rejection</div><div class="step-d">The inspector is notified immediately. Entries are unlocked for correction and resubmission.</div></div></div>
+      </div>
+    </div>
+
+    <!-- Tips -->
+    <div class="section" id="tips">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-gold">💡</div>
+        <div><div class="sec-title">Tips &amp; Notes</div><div class="sec-sub">Useful things to know</div></div>
+      </div>
+      <span class="aud aud-b">👥 Everyone</span>
+      <div class="box tip"><div class="box-ico">📅</div><div><strong>Past dates:</strong> You can log entries and generate reports for past dates. Use the date selector in the report modal.</div></div>
+      <div class="box tip"><div class="box-ico">🔀</div><div><strong>Multiple projects same day:</strong> Use Switch Project to move between projects. Each has its own header, entries, and report.</div></div>
+      <div class="box tip"><div class="box-ico">📁</div><div><strong>Drive folder structure:</strong> Reports are filed as <code>[Project Number] - [Client] - [Project Name] / Pending Review</code> or <code>/ Approved</code>. Filenames: <code>YY.MM.DD Field Report - Client - Project Name - Number.pdf</code></div></div>
+      <div class="box warn"><div class="box-ico">📶</div><div><strong>Internet required:</strong> FieldLog requires an active connection to save entries, generate reports, and submit for review.</div></div>
+    </div>
+
+    <!-- Troubleshooting -->
+    <div class="section" id="trouble">
+      <div class="sec-hdr">
+        <div class="sec-icon ic-red">🔧</div>
+        <div><div class="sec-title">Troubleshooting</div><div class="sec-sub">Common issues and how to resolve them</div></div>
+      </div>
+      <span class="aud aud-b">👥 Everyone</span>
+      <table>
+        <tr><th>Issue</th><th>What to do</th></tr>
+        <tr><td>Post Header button stays grayed out</td><td>Make sure both a date and a project are selected. The button enables only after both are confirmed.</td></tr>
+        <tr><td>Post Header shows "Checking..." for a long time</td><td>Check your internet connection. The app is verifying with the server whether a header already exists.</td></tr>
+        <tr><td>Generate Report button is grayed out</td><td>The report is either Pending or Approved. A pending report must be resolved by the engineer first.</td></tr>
+        <tr><td>✍ Approve &amp; Sign button not visible</td><td>The report overlay must be open. Close it with ← Close and tap Generate again to reopen.</td></tr>
+        <tr><td>Report submission fails with an error</td><td>Check your connection. Verify the engineer's name in the Projects tab matches the Engineers tab exactly.</td></tr>
+        <tr><td>"Same as last time" finds nothing</td><td>No previous header with valid equipment or workforce exists before this date. Add manually.</td></tr>
+        <tr><td>Duplicate entries visible in the log</td><td>Switch to a different project and back — this triggers a fresh sync and removes duplicates from the display.</td></tr>
+        <tr><td>Review link says "Invalid or expired token"</td><td>Use the link directly from the original email without copying and pasting.</td></tr>
+        <tr><td>Engineer name shows "Unknown Engineer" on review page</td><td>Name in Projects tab doesn't match Engineers tab exactly. Check spelling and punctuation.</td></tr>
+        <tr><td>Entry shows locked incorrectly</td><td>Generate the report for that date/project to refresh the status. Contact the administrator if still incorrect.</td></tr>
+      </table>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  const secs = document.querySelectorAll('.section');
+  const links = document.querySelectorAll('.sidebar a');
+  new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if(e.isIntersecting){
+        links.forEach(l=>l.classList.remove('active'));
+        const a = document.querySelector('.sidebar a[href="#'+e.target.id+'"]');
+        if(a) a.classList.add('active');
+      }
+    });
+  },{rootMargin:'-20% 0px -70% 0px'}).observe;
+  secs.forEach(s=>new IntersectionObserver(entries=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){
+        links.forEach(l=>l.classList.remove('active'));
+        const a=document.querySelector('.sidebar a[href="#'+e.target.id+'"]');
+        if(a) a.classList.add('active');
+      }
+    });
+  },{rootMargin:'-20% 0px -70% 0px'}).observe(s));
+</script>
+</body>
+</html>
