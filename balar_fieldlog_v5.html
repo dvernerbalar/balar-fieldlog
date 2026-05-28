@@ -2159,13 +2159,6 @@ async function generateReport(){
   document.getElementById('modal-error').style.display='none';
 
   var reportWin = null;
-  var _ov=document.getElementById('report-overlay');
-  var _if=document.getElementById('report-iframe');
-  if(_ov&&_if){
-    _if.srcdoc='<html><body style="font-family:sans-serif;padding:40px;color:#555;"><p>Loading report...</p></body></html>';
-    _ov.style.display='flex';
-    document.body.style.overflow='hidden';
-  }
 
   try{
     const url=GOOGLE_SCRIPT_URL+'?action=getEntries&date='+encodeURIComponent(dateLocale)+'&projectNumber='+encodeURIComponent(proj.number||'')+'&projectName='+encodeURIComponent(proj.name);
@@ -2211,6 +2204,14 @@ async function generateReport(){
         const localMatch=entries.find(le=>le.project===re.project&&le.time===re.time&&le.desc===re.desc);
         if(localMatch&&localMatch.photos&&localMatch.photos.length>0)re.photos=localMatch.photos;
       });
+    }
+    // Open overlay only after validation passes
+    var _ov2=document.getElementById('report-overlay');
+    var _if2=document.getElementById('report-iframe');
+    if(_ov2&&_if2){
+      _if2.srcdoc='<html><body style="font-family:sans-serif;padding:40px;color:#555;"><p>Loading report...</p></body></html>';
+      _ov2.style.display='flex';
+      document.body.style.overflow='hidden';
     }
     closeReportModal();
     buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin);
