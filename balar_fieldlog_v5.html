@@ -669,6 +669,14 @@ function buildProjectDropdown(){
 function onClientChange(){
   var narrativeEl=document.getElementById('daily-narrative');
   if(narrativeEl) narrativeEl.value='';
+  // Clear batch upload state
+  var batchStatus=document.getElementById('batch-upload-status');
+  var batchResults=document.getElementById('batch-upload-results');
+  var batchWifi=document.getElementById('batch-wifi-banner');
+  if(batchStatus){batchStatus.style.display='none';batchStatus.textContent='';}
+  if(batchResults) batchResults.innerHTML='';
+  if(batchWifi) batchWifi.style.display='none';
+  window._batchFailedFiles=[];
   p2_currentReportStatus='';
   p2_currentApprovedBy='';
   p2_currentApprovedTimestamp='';
@@ -759,6 +767,9 @@ function saveNarrative(){
         originalProject:dailyHeader.project,
         originalDesc:'HEADER',
         originalTime:'',
+        date:dailyHeader.date,
+        time:dailyHeader.time||'',
+        inspector:dailyHeader.inspector||'',
         narrative:dailyHeader.narrative
       })
     })
@@ -1499,6 +1510,16 @@ function restoreHeader(h){
   // Restore narrative from sheet data
   var narrativeEl=document.getElementById('daily-narrative');
   if(narrativeEl && h.narrative) narrativeEl.value=h.narrative;
+  // Restore in-memory arrays so saveResources and validation see correct state
+  equipmentItems = (h.equipment||[]).slice();
+  workforceItems = (h.workforce||[]).slice();
+  // Restore None checkboxes visual state
+  var eqNoneCb = document.getElementById('equipment-none-check');
+  var wfNoneCb = document.getElementById('workforce-none-check');
+  var hasNoneEq = equipmentItems.some(function(e){return e.name==='None';});
+  var hasNoneWf = workforceItems.some(function(w){return w.classification==='None';});
+  if(eqNoneCb) eqNoneCb.checked = hasNoneEq;
+  if(wfNoneCb) wfNoneCb.checked = hasNoneWf;
   // Show posted view
   document.getElementById('header-form-view').style.display='none';
   document.getElementById('header-posted-view').style.display='block';
@@ -2053,6 +2074,14 @@ function switchToProject(key){
   currentProjectKey = key;
   localStorage.setItem('balar_v5_current_project', currentProjectKey);
   closeSwitchProject();
+  // Clear batch upload state
+  var batchStatus=document.getElementById('batch-upload-status');
+  var batchResults=document.getElementById('batch-upload-results');
+  var batchWifi=document.getElementById('batch-wifi-banner');
+  if(batchStatus){batchStatus.style.display='none';batchStatus.textContent='';}
+  if(batchResults) batchResults.innerHTML='';
+  if(batchWifi) batchWifi.style.display='none';
+  window._batchFailedFiles=[];
   p2_currentReportStatus=dailyHeader.report_status||'';
   p2_currentApprovedBy=dailyHeader.approved_by||'';
   p2_currentApprovedTimestamp=dailyHeader.approved_timestamp||'';
@@ -2066,6 +2095,14 @@ function startNewProjectHeader(){
   closeSwitchProject();
   var narrativeEl=document.getElementById('daily-narrative');
   if(narrativeEl) narrativeEl.value='';
+  // Clear batch upload state
+  var batchStatus=document.getElementById('batch-upload-status');
+  var batchResults=document.getElementById('batch-upload-results');
+  var batchWifi=document.getElementById('batch-wifi-banner');
+  if(batchStatus){batchStatus.style.display='none';batchStatus.textContent='';}
+  if(batchResults) batchResults.innerHTML='';
+  if(batchWifi) batchWifi.style.display='none';
+  window._batchFailedFiles=[];
   p2_currentReportStatus='';
   p2_currentApprovedBy='';
   p2_currentApprovedTimestamp='';
@@ -2194,13 +2231,19 @@ async function generateReport(){
     p2_currentReportStatus      = headerRec.report_status      || '';
     p2_currentApprovedBy        = headerRec.approved_by        || '';
     p2_currentApprovedTimestamp = headerRec.approved_timestamp || '';
-    // Validate equipment and workforce
-    var eqList = headerRec.equipment;
-    var wfList = headerRec.workforce;
-    if(typeof eqList==='string'){try{eqList=JSON.parse(eqList);}catch(e){eqList=[];}}
-    if(typeof wfList==='string'){try{wfList=JSON.parse(wfList);}catch(e){wfList=[];}}
+    // Validate — use sheet header row, fall back to local dailyHeader
+    var sheetEq = headerRec.equipment;
+    var sheetWf = headerRec.workforce;
+    if(typeof sheetEq==='string'){try{sheetEq=JSON.parse(sheetEq);}catch(e){sheetEq=[];}}
+    if(typeof sheetWf==='string'){try{sheetWf=JSON.parse(sheetWf);}catch(e){sheetWf=[];}}
+    var localEq = dailyHeader ? (dailyHeader.equipment||[]) : [];
+    var localWf = dailyHeader ? (dailyHeader.workforce||[]) : [];
+    var eqList = (sheetEq&&sheetEq.length>0) ? sheetEq : localEq;
+    var wfList = (sheetWf&&sheetWf.length>0) ? sheetWf : localWf;
     var missingFields=[];
-    if(!headerRec.dailyWeather||!headerRec.dailyTemperature)missingFields.push('Daily Conditions (Weather & Temp)');
+    var weatherOk = (headerRec.dailyWeather&&headerRec.dailyTemperature) ||
+                    (dailyHeader&&dailyHeader.dailyWeather&&dailyHeader.dailyTemperature);
+    if(!weatherOk)missingFields.push('Daily Conditions (Weather & Temp)');
     if(!eqList||eqList.length===0)missingFields.push('Equipment on Site');
     if(!wfList||wfList.length===0)missingFields.push('Workforce on Site');
     if(missingFields.length>0){
