@@ -749,6 +749,9 @@ function saveNarrative(){
   if(!dailyHeader) return;
   var narrativeEl=document.getElementById('daily-narrative');
   if(!narrativeEl) return;
+  // Show saving state on button
+  var saveBtn=document.querySelector('button[onclick="saveNarrative()"]');
+  if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent='Saving...'; }
   dailyHeader.narrative=narrativeEl.value.trim();
   // Save to local cache
   if(currentProjectKey&&dailyHeaders[currentProjectKey]){
@@ -778,9 +781,13 @@ function saveNarrative(){
       if(d.success) showToast('Narrative saved',false);
       else showToast('Narrative saved locally (sheet sync failed)',false);
     })
-    .catch(function(){ showToast('Narrative saved locally (offline)',false); });
+    .catch(function(){ showToast('Narrative saved locally (offline)',false); })
+    .finally(function(){
+      if(saveBtn){ saveBtn.disabled=false; saveBtn.innerHTML='&#128190; Save Narrative'; }
+    });
   } else {
     showToast('Narrative saved',false);
+    if(saveBtn){ saveBtn.disabled=false; saveBtn.innerHTML='&#128190; Save Narrative'; }
   }
 }
 function buildInspectorDropdown(){
@@ -2526,9 +2533,19 @@ async function retryBatchPhoto(btn){
 }
 
 function readFileAsDataUrl(file){
+  // Apply same compression as entry photos going to Drive (max 2000px, 0.90 quality)
   return new Promise(function(resolve,reject){
     var reader=new FileReader();
-    reader.onload=function(e){resolve(e.target.result);};
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        compressForDrive(img,function(compressed){
+          resolve(compressed);
+        });
+      };
+      img.onerror=function(){ resolve(e.target.result); }; // fallback to raw if img fails
+      img.src=e.target.result;
+    };
     reader.onerror=function(){reject(new Error('Failed to read file'));};
     reader.readAsDataURL(file);
   });
