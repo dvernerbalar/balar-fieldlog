@@ -958,6 +958,22 @@ function editResources(){
     var wfNone = document.getElementById('workforce-none-check');
     if(eqNone) eqNone.checked = hasNoneEq;
     if(wfNone) wfNone.checked = hasNoneWf;
+    // Restore equipmentItems and workforceItems from dailyHeader so saveResources sees correct state
+    equipmentItems = (dailyHeader.equipment||[]).slice();
+    workforceItems = (dailyHeader.workforce||[]).slice();
+    renderEquipmentList('equipment-list', equipmentItems);
+    renderWorkforceList('workforce-list', workforceItems);
+    // Disable inputs if None is checked
+    if(hasNoneEq){
+      ['equipment-select','equipment-count','equipment-custom'].forEach(function(id){
+        var el=document.getElementById(id);if(el)el.disabled=true;
+      });
+    }
+    if(hasNoneWf){
+      ['workforce-select','workforce-count','workforce-custom'].forEach(function(id){
+        var el=document.getElementById(id);if(el)el.disabled=true;
+      });
+    }
   }
   // Re-enable all inputs
   ['equipment-select','equipment-count','equipment-custom',
