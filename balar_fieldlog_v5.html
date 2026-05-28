@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Balar Field Inspection Log</title>
 <script>
@@ -446,7 +447,7 @@ textarea{resize:vertical;min-height:90px;}
         <div id="batch-upload-section" style="margin-top:16px;display:none;">
           <div class="section-label">Site Photos</div>
           <div class="card header-card" style="padding:14px 16px;">
-            <div style="font-size:13px;color:#555;margin-bottom:10px;">Upload additional site photos for this date. These are saved directly to the project photo folder at full quality and are accessible to engineers and clients via a link in the report.</div>
+            <div style="font-size:13px;color:#555;margin-bottom:10px;">Upload additional site photos for this date. Saved at full quality to the project photo folder and linked in the report.</div>
             <div id="batch-wifi-banner" style="display:none;background:#fef9e7;border:1px solid #f9e79f;color:#9a7d0a;font-size:12px;padding:8px 12px;border-radius:5px;margin-bottom:10px;">&#128246; For best results, connect to WiFi before uploading large amounts of photos.</div>
             <input type="file" id="batch-photo-input" accept="image/*" multiple style="display:none;">
             <button class="btn-post-header" onclick="batchSelectPhotos()" style="background:#1a3a5c;margin-bottom:10px;">&#128247; Select Photos from Library</button>
@@ -666,12 +667,12 @@ function buildProjectDropdown(){
   });
 }
 function onClientChange(){
+  var narrativeEl=document.getElementById('daily-narrative');
+  if(narrativeEl) narrativeEl.value='';
   p2_currentReportStatus='';
   p2_currentApprovedBy='';
   p2_currentApprovedTimestamp='';
   p2_approvedPdfLink='';
-  var narrativeEl=document.getElementById('daily-narrative');
-  if(narrativeEl) narrativeEl.value='';
   var gb=document.getElementById('btn-generate-report');
   if(gb){gb.disabled=true;gb.style.opacity='0.4';gb.style.pointerEvents='none';}
   p2_applyLockUI();
@@ -801,13 +802,13 @@ function buildInspectorDropdown(){
 }
 function onDateChange(){
   updatePostHeaderBtn();
-  var gb=document.getElementById('btn-generate-report');
-  if(gb){gb.disabled=true;gb.style.opacity='0.4';gb.style.pointerEvents='none';}
-  // Clear status and narrative when date changes
-  p2_currentReportStatus=''; p2_currentApprovedBy=''; p2_currentApprovedTimestamp='';
-  p2_applyLockUI(); p2_refreshStatusBanner();
+  // Clear narrative and status when date changes
   var narrativeEl=document.getElementById('daily-narrative');
   if(narrativeEl) narrativeEl.value='';
+  p2_currentReportStatus=''; p2_currentApprovedBy=''; p2_currentApprovedTimestamp='';
+  p2_applyLockUI(); p2_refreshStatusBanner();
+  var gb=document.getElementById('btn-generate-report');
+  if(gb){gb.disabled=true;gb.style.opacity='0.4';gb.style.pointerEvents='none';}
   var proj = document.getElementById('project-name').value.trim();
   var dateVal = document.getElementById('entry-date').value;
   if(proj&&dateVal){
@@ -1376,7 +1377,8 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
     p2_currentReportStatus=data.report_status||'';
     p2_currentApprovedBy=data.approved_by||'';
     p2_currentApprovedTimestamp=data.approved_timestamp||'';
-    window._photoFolderUrl = data.photo_folder_url || '';
+    p2_approvedPdfLink=data.approved_pdf_link||'';
+    _photoFolderUrl=data.photo_folder_url||'';
     p2_applyLockUI();
     var sheetEntries = (data.entries||[]).filter(function(e){ return e.entryType !== 'header'; });
     if(sheetEntries.length === 0) return;
@@ -1478,12 +1480,9 @@ function postDailyHeader(){
 }
 
 function restoreHeader(h){
-  // Restore narrative from header data (sheet takes priority over local cache)
-  var narrativeEl = document.getElementById('daily-narrative');
-  if (narrativeEl && h.narrative !== undefined && h.narrative !== '') {
-    narrativeEl.value = h.narrative;
-    if (dailyHeader) dailyHeader.narrative = h.narrative;
-  }
+  // Restore narrative from sheet data
+  var narrativeEl=document.getElementById('daily-narrative');
+  if(narrativeEl && h.narrative) narrativeEl.value=h.narrative;
   // Show posted view
   document.getElementById('header-form-view').style.display='none';
   document.getElementById('header-posted-view').style.display='block';
@@ -2049,13 +2048,13 @@ function switchToProject(key){
 
 function startNewProjectHeader(){
   closeSwitchProject();
+  var narrativeEl=document.getElementById('daily-narrative');
+  if(narrativeEl) narrativeEl.value='';
   p2_currentReportStatus='';
   p2_currentApprovedBy='';
   p2_currentApprovedTimestamp='';
   p2_approvedPdfLink='';
   p2_applyLockUI();
-  var narrativeEl=document.getElementById('daily-narrative');
-  if(narrativeEl) narrativeEl.value='';
   // Reset header form for new project
   dailyHeader = null;
   document.getElementById('header-form-view').style.display = 'block';
@@ -2175,6 +2174,8 @@ async function generateReport(){
     p2_currentReportStatus      = data.report_status      || '';
     p2_currentApprovedBy        = data.approved_by         || '';
     p2_currentApprovedTimestamp = data.approved_timestamp  || '';
+    p2_approvedPdfLink          = data.approved_pdf_link   || '';
+    _photoFolderUrl             = data.photo_folder_url    || '';
     if(allRows.length===0){
       showModalError('No entries found.');
       btn.disabled=false;btn.textContent='Generate / Review Report';
@@ -2191,7 +2192,6 @@ async function generateReport(){
     if(typeof wfList==='string'){try{wfList=JSON.parse(wfList);}catch(e){wfList=[];}}
     var missingFields=[];
     if(!headerRec.dailyWeather||!headerRec.dailyTemperature)missingFields.push('Daily Conditions (Weather & Temp)');
-    // Only flag as missing if array is completely empty — None is a valid intentional selection
     if(!eqList||eqList.length===0)missingFields.push('Equipment on Site');
     if(!wfList||wfList.length===0)missingFields.push('Workforce on Site');
     if(missingFields.length>0){
@@ -2300,9 +2300,9 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
       }
       entriesHtml+=
         '<div style="border:1px solid #ddd;border-left:4px solid #9b1c2e;border-radius:5px;padding:12px 14px;margin-bottom:10px;page-break-inside:avoid;break-inside:avoid;">'+ 
-        '<div style="font-size:12px;color:#444;margin-bottom:5px;">'+
-        (e.inspector?'Entry By: <strong>'+e.inspector+'</strong>':'')+
-        (entryWeatherStr?(e.inspector?' &nbsp;|&nbsp; ':'')+entryWeatherStr:'')+'</div>'+
+        '<div style="font-size:12px;color:#444;margin-bottom:5px;"><strong>'+formatTime(e.time)+'</strong>'+
+        (e.inspector?' &nbsp;|&nbsp; Entry By: <strong>'+e.inspector+'</strong>':'')+
+        (entryWeatherStr?' &nbsp;|&nbsp; '+entryWeatherStr:'')+'</div>'+
         (e.station?'<div style="font-size:11px;color:#888;margin-bottom:4px;">📍 Station: '+e.station+'</div>':'')+
         '<div style="font-size:13px;color:#111;line-height:1.6;margin-bottom:8px;">'+e.desc+'</div>'+
         photoHtml+
@@ -2331,7 +2331,7 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
     checkHtml+
     '<div style="font-size:14px;font-weight:bold;color:#0d1b2a;border-bottom:2px solid #9b1c2e;padding-bottom:4px;margin-bottom:12px;">Inspection Log &nbsp;<span style="font-weight:normal;font-size:12px;color:#888;">('+workEntries.length+' entr'+(workEntries.length===1?'y':'ies')+')</span></div>'+
     entriesHtml+
-    (window._photoFolderUrl ? '<div style="margin-top:18px;padding:12px 16px;background:#e8f0f8;border-radius:6px;text-align:center;"><a href="'+window._photoFolderUrl+'" style="color:#1a3a5c;font-size:12px;font-weight:bold;text-decoration:none;">&#128247; View All Site Photos for This Date &#8594;</a></div>' : '')+
+    (_photoFolderUrl ? '<div style="margin-top:18px;padding:12px 16px;background:#e8f0f8;border-radius:6px;text-align:center;"><a href="'+_photoFolderUrl+'" style="color:#1a3a5c;font-size:12px;font-weight:bold;text-decoration:none;">&#128247; View All Site Photos for This Date &#8594;</a></div>' : '')+
     '<div style="text-align:center;font-size:9px;color:#aaa;margin-top:18px;padding-top:10px;border-top:1px solid #eee;">Balar Associates, Inc. &nbsp;·&nbsp; Daily Field Inspection Report &nbsp;·&nbsp; Generated '+new Date().toLocaleString()+'</div>'+
     '</body></html>';
 
@@ -2373,137 +2373,103 @@ var p2_currentReportDate = '';
 
 var p2_currentReportStatus      = '';
 var p2_approvedPdfLink          = '';
+var _photoFolderUrl             = '';
 var p2_currentApprovedBy        = '';
 var p2_currentApprovedTimestamp = '';
 
 // ── BATCH PHOTO UPLOAD ──────────────────────────────────────────
 function batchSelectPhotos(){
-  // Show wifi suggestion banner
-  var banner = document.getElementById('batch-wifi-banner');
-  if(banner) banner.style.display = 'block';
-  // Trigger file input
-  var input = document.getElementById('batch-photo-input');
+  var banner=document.getElementById('batch-wifi-banner');
+  if(banner) banner.style.display='block';
+  var input=document.getElementById('batch-photo-input');
   if(input) input.click();
 }
 
-document.addEventListener('DOMContentLoaded', function(){
-  var input = document.getElementById('batch-photo-input');
-  if(input) input.addEventListener('change', function(e){
-    var files = Array.from(e.target.files);
+document.addEventListener('DOMContentLoaded',function(){
+  var input=document.getElementById('batch-photo-input');
+  if(input) input.addEventListener('change',function(e){
+    var files=Array.from(e.target.files);
     if(!files.length) return;
     batchUploadPhotos(files);
-    // Reset input so same files can be selected again if needed
-    e.target.value = '';
+    e.target.value='';
   });
 });
 
 async function batchUploadPhotos(files){
-  if(!dailyHeader){ showToast('Post a Daily Header first.', true); return; }
-  var status  = document.getElementById('batch-upload-status');
-  var results = document.getElementById('batch-upload-results');
-  status.style.display  = 'block';
-  results.innerHTML     = '';
-  var total    = files.length;
-  var uploaded = 0;
-  var failed   = [];
-
-  for(var i = 0; i < files.length; i++){
-    var file = files[i];
-    status.textContent = 'Uploading ' + (uploaded + failed.length + 1) + ' of ' + total + '...';
-    try {
-      var dataUrl = await readFileAsDataUrl(file);
-      var payload = {
-        action:        'batchUploadPhoto',
-        projectNumber: dailyHeader.projectNumber,
-        project:       dailyHeader.project,
-        client:        dailyHeader.client,
-        date:          dailyHeader.date,
-        fileName:      file.name,
-        photoOriginal: dataUrl
-      };
-      var resp = await fetch(GOOGLE_SCRIPT_URL, {
-        method: 'POST',
-        headers: {'Content-Type': 'text/plain'},
-        redirect: 'follow',
-        body: JSON.stringify(payload)
+  if(!dailyHeader){showToast('Post a Daily Header first.',true);return;}
+  var status=document.getElementById('batch-upload-status');
+  var results=document.getElementById('batch-upload-results');
+  status.style.display='block';
+  results.innerHTML='';
+  var total=files.length, uploaded=0;
+  window._batchFailedFiles=[];
+  for(var i=0;i<files.length;i++){
+    var file=files[i];
+    status.textContent='Uploading '+(uploaded+window._batchFailedFiles.length+1)+' of '+total+'...';
+    try{
+      var dataUrl=await readFileAsDataUrl(file);
+      var resp=await fetch(GOOGLE_SCRIPT_URL,{
+        method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',
+        body:JSON.stringify({action:'batchUploadPhoto',projectNumber:dailyHeader.projectNumber,
+          project:dailyHeader.project,client:dailyHeader.client,date:dailyHeader.date,
+          fileName:file.name,photoOriginal:dataUrl})
       });
-      var data = await resp.json();
-      if(data.status === 'success'){
+      var data=await resp.json();
+      if(data.status==='success'){
         uploaded++;
-        var row = document.createElement('div');
-        row.style.cssText = 'padding:3px 0;color:#1a5e35;font-size:12px;';
-        row.textContent = '✓ ' + file.name;
+        var row=document.createElement('div');
+        row.style.cssText='padding:3px 0;color:#1a5e35;font-size:12px;';
+        row.textContent='✓ '+file.name;
         results.appendChild(row);
-      } else {
-        throw new Error(data.message||'Upload failed');
-      }
+      } else { throw new Error(data.message||'Upload failed'); }
     } catch(err){
-      failed.push({file: file, name: file.name, error: err.toString()});
-      var row = document.createElement('div');
-      row.style.cssText = 'padding:3px 0;color:#9b1c2e;font-size:12px;display:flex;align-items:center;gap:8px;';
-      row.innerHTML = '✗ ' + file.name + ' <button onclick="retryBatchPhoto(this)" data-name="'+file.name+'" style="font-size:11px;padding:2px 8px;border:1px solid #9b1c2e;border-radius:4px;background:none;color:#9b1c2e;cursor:pointer;">Retry</button>';
-      row.dataset.fileIndex = String(failed.length - 1);
+      window._batchFailedFiles.push({file:file,name:file.name});
+      var row=document.createElement('div');
+      row.style.cssText='padding:3px 0;color:#9b1c2e;font-size:12px;display:flex;align-items:center;gap:8px;';
+      row.dataset.fileIndex=String(window._batchFailedFiles.length-1);
+      row.innerHTML='✗ '+file.name+' <button onclick="retryBatchPhoto(this)" style="font-size:11px;padding:2px 8px;border:1px solid #9b1c2e;border-radius:4px;background:none;color:#9b1c2e;cursor:pointer;">Retry</button>';
       results.appendChild(row);
     }
   }
-
-  // Store failed files for retry
-  window._batchFailedFiles = failed;
-
-  if(failed.length === 0){
-    status.textContent = '✅ All ' + total + ' photo' + (total===1?'':'s') + ' uploaded successfully.';
-    status.style.color = '#1a5e35';
+  if(window._batchFailedFiles.length===0){
+    status.textContent='✅ All '+total+' photo'+(total===1?'':'s')+' uploaded successfully.';
+    status.style.color='#1a5e35';
   } else {
-    status.textContent = uploaded + ' of ' + total + ' uploaded. ' + failed.length + ' failed — tap Retry to try again.';
-    status.style.color = '#9a7d0a';
+    status.textContent=uploaded+' of '+total+' uploaded. '+window._batchFailedFiles.length+' failed — tap Retry to try again.';
+    status.style.color='#9a7d0a';
   }
 }
 
 async function retryBatchPhoto(btn){
-  var idx = parseInt(btn.closest('div').dataset.fileIndex);
-  var item = window._batchFailedFiles && window._batchFailedFiles[idx];
+  var idx=parseInt(btn.closest('div').dataset.fileIndex);
+  var item=window._batchFailedFiles&&window._batchFailedFiles[idx];
   if(!item) return;
-  btn.textContent = 'Retrying...';
-  btn.disabled = true;
-  try {
-    var dataUrl = await readFileAsDataUrl(item.file);
-    var payload = {
-      action:        'batchUploadPhoto',
-      projectNumber: dailyHeader.projectNumber,
-      project:       dailyHeader.project,
-      client:        dailyHeader.client,
-      date:          dailyHeader.date,
-      fileName:      item.name,
-      photoOriginal: dataUrl
-    };
-    var resp = await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      headers: {'Content-Type': 'text/plain'},
-      redirect: 'follow',
-      body: JSON.stringify(payload)
+  btn.textContent='Retrying...';btn.disabled=true;
+  try{
+    var dataUrl=await readFileAsDataUrl(item.file);
+    var resp=await fetch(GOOGLE_SCRIPT_URL,{
+      method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',
+      body:JSON.stringify({action:'batchUploadPhoto',projectNumber:dailyHeader.projectNumber,
+        project:dailyHeader.project,client:dailyHeader.client,date:dailyHeader.date,
+        fileName:item.name,photoOriginal:dataUrl})
     });
-    var data = await resp.json();
-    if(data.status === 'success'){
-      var row = btn.closest('div');
-      row.style.color = '#1a5e35';
-      row.innerHTML = '✓ ' + item.name;
-    } else {
-      btn.textContent = 'Retry';
-      btn.disabled = false;
-      showToast('Retry failed: ' + (data.message||'Unknown error'), true);
-    }
+    var data=await resp.json();
+    if(data.status==='success'){
+      var row=btn.closest('div');
+      row.style.color='#1a5e35';
+      row.innerHTML='✓ '+item.name;
+    } else { throw new Error(data.message||'failed'); }
   } catch(err){
-    btn.textContent = 'Retry';
-    btn.disabled = false;
-    showToast('Retry failed: ' + err.toString(), true);
+    btn.textContent='Retry';btn.disabled=false;
+    showToast('Retry failed: '+err.toString(),true);
   }
 }
 
 function readFileAsDataUrl(file){
-  return new Promise(function(resolve, reject){
-    var reader = new FileReader();
-    reader.onload  = function(e){ resolve(e.target.result); };
-    reader.onerror = function(){ reject(new Error('Failed to read file')); };
+  return new Promise(function(resolve,reject){
+    var reader=new FileReader();
+    reader.onload=function(e){resolve(e.target.result);};
+    reader.onerror=function(){reject(new Error('Failed to read file'));};
     reader.readAsDataURL(file);
   });
 }
