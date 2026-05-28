@@ -2191,6 +2191,7 @@ async function generateReport(){
     if(typeof wfList==='string'){try{wfList=JSON.parse(wfList);}catch(e){wfList=[];}}
     var missingFields=[];
     if(!headerRec.dailyWeather||!headerRec.dailyTemperature)missingFields.push('Daily Conditions (Weather & Temp)');
+    // Only flag as missing if array is completely empty — None is a valid intentional selection
     if(!eqList||eqList.length===0)missingFields.push('Equipment on Site');
     if(!wfList||wfList.length===0)missingFields.push('Workforce on Site');
     if(missingFields.length>0){
