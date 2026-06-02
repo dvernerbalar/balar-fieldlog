@@ -764,30 +764,24 @@ function saveNarrative(){
       method:'POST',
       headers:{'Content-Type':'text/plain'},
       redirect:'follow',
-      body:JSON.stringify({
-        action:'updateEntry',
-        entryId:dailyHeader.id,
-        originalProject:dailyHeader.project,
-        originalDesc:'HEADER',
-        originalTime:'',
-        date:dailyHeader.date,
-        time:dailyHeader.time||'',
-        inspector:dailyHeader.inspector||'',
-        contractorPrimary:dailyHeader.contractorPrimary||'',
-        dailyWeather:dailyHeader.dailyWeather||'',
-        dailyTemperature:dailyHeader.dailyTemperature||'',
-        projectEngineer:dailyHeader.projectEngineer||'',
-        dayType:dailyHeader.dayType||'Work Day',
-        equipment:dailyHeader.equipment||[],
-        workforce:dailyHeader.workforce||[],
-        notes:'',
-        narrative:dailyHeader.narrative
-      })
+      body:JSON.stringify({action:'updateHeaderColumns',entryId:dailyHeader.id,
+        columns:{'27':dailyHeader.narrative||''}})
     })
     .then(function(r){return r.json();})
     .then(function(d){
-      if(d.success) showToast('Narrative saved',false);
-      else showToast('Narrative saved locally (sheet sync failed)',false);
+      if(d.success){
+        showToast('Narrative saved',false);
+      } else {
+        // Fallback to updateEntry if row not found yet
+        return fetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',
+          body:JSON.stringify(Object.assign({},dailyHeader,{action:'updateEntry',entryId:dailyHeader.id,
+            originalProject:dailyHeader.project,originalDesc:'HEADER',originalTime:'',photoBase64:'',
+            narrative:dailyHeader.narrative}))
+        }).then(function(r){return r.json();})
+        .then(function(d2){
+          showToast(d2.success?'Narrative saved':'Narrative saved locally (sheet sync failed)',false);
+        });
+      }
     })
     .catch(function(){ showToast('Narrative saved locally (offline)',false); })
     .finally(function(){
@@ -883,8 +877,21 @@ function saveConditions(){
     localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
   }
   // Sync to Sheets
-  if(GOOGLE_SCRIPT_URL){
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:JSON.stringify(Object.assign({},dailyHeader,{action:'updateEntry',entryId:dailyHeader.id,originalProject:dailyHeader.project,originalDesc:'HEADER',originalTime:'',photoBase64:''}))}).catch(function(e){console.warn('Header save failed:',e);});
+  if(GOOGLE_SCRIPT_URL && dailyHeader.id){
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',
+      body:JSON.stringify({action:'updateHeaderColumns',entryId:dailyHeader.id,
+        columns:{'8':dailyHeader.dailyWeather||'','9':dailyHeader.dailyTemperature||''}})
+    })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.success){
+        fetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',
+          body:JSON.stringify(Object.assign({},dailyHeader,{action:'updateEntry',entryId:dailyHeader.id,
+            originalProject:dailyHeader.project,originalDesc:'HEADER',originalTime:'',photoBase64:''}))
+        }).catch(function(e){console.warn('Header fallback failed:',e);});
+      }
+    })
+    .catch(function(e){console.warn('Header save failed:',e);});
   }
   // Show posted view
   document.getElementById('conditions-form-view').style.display='none';
@@ -912,8 +919,21 @@ function saveChecklist(){
     dailyHeaders[currentProjectKey] = dailyHeader;
     localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
   }
-  if(GOOGLE_SCRIPT_URL){
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:JSON.stringify(Object.assign({},dailyHeader,{action:'updateEntry',entryId:dailyHeader.id,originalProject:dailyHeader.project,originalDesc:'HEADER',originalTime:'',photoBase64:''}))}).catch(function(e){console.warn('Header save failed:',e);});
+  if(GOOGLE_SCRIPT_URL && dailyHeader.id){
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',
+      body:JSON.stringify({action:'updateHeaderColumns',entryId:dailyHeader.id,
+        columns:{'13':(dailyHeader.checks||[]).join(', '),'28':dailyHeader.allChecklistItems||[]}})
+    })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.success){
+        fetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',
+          body:JSON.stringify(Object.assign({},dailyHeader,{action:'updateEntry',entryId:dailyHeader.id,
+            originalProject:dailyHeader.project,originalDesc:'HEADER',originalTime:'',photoBase64:''}))
+        }).catch(function(e){console.warn('Header fallback failed:',e);});
+      }
+    })
+    .catch(function(e){console.warn('Header save failed:',e);});
   }
   // Show condensed view
   var checked = checks.length > 0 ? checks.join(', ') : 'No items checked';
@@ -955,8 +975,21 @@ function saveResources(){
     dailyHeaders[currentProjectKey] = dailyHeader;
     localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
   }
-  if(GOOGLE_SCRIPT_URL){
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:JSON.stringify(Object.assign({},dailyHeader,{action:'updateEntry',entryId:dailyHeader.id,originalProject:dailyHeader.project,originalDesc:'HEADER',originalTime:'',photoBase64:''}))}).catch(function(e){console.warn('Header save failed:',e);});
+  if(GOOGLE_SCRIPT_URL && dailyHeader.id){
+    fetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',
+      body:JSON.stringify({action:'updateHeaderColumns',entryId:dailyHeader.id,
+        columns:{'20':dailyHeader.equipment||[],'21':dailyHeader.workforce||[]}})
+    })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.success){
+        fetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',
+          body:JSON.stringify(Object.assign({},dailyHeader,{action:'updateEntry',entryId:dailyHeader.id,
+            originalProject:dailyHeader.project,originalDesc:'HEADER',originalTime:'',photoBase64:''}))
+        }).catch(function(e){console.warn('Header fallback failed:',e);});
+      }
+    })
+    .catch(function(e){console.warn('Header save failed:',e);});
   }
   // Show condensed view
   var eqSum = dailyHeader.equipment.map(function(e){return e.name+(e.count>0?' ('+e.count+')':'');}).join(', ')||'None';
