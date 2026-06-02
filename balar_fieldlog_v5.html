@@ -1503,7 +1503,8 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
           photos: se.photos||[],
           gpsLocation: se.gpsLocation||'',
           fromSheets: true,
-          drivePhotoFailed: (se.photoCount>0 && (!se.photoLinks||se.photoLinks.length===0))
+          // Only flag Drive photo failed for today's entries — older ones can't be recovered
+          drivePhotoFailed: (se.photoCount>0 && (!se.photoLinks||se.photoLinks.length===0) && se.date===new Date().toLocaleDateString('en-US'))
         });
       }
     });
