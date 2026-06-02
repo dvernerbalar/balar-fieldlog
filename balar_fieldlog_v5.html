@@ -773,6 +773,14 @@ function saveNarrative(){
         date:dailyHeader.date,
         time:dailyHeader.time||'',
         inspector:dailyHeader.inspector||'',
+        contractorPrimary:dailyHeader.contractorPrimary||'',
+        dailyWeather:dailyHeader.dailyWeather||'',
+        dailyTemperature:dailyHeader.dailyTemperature||'',
+        projectEngineer:dailyHeader.projectEngineer||'',
+        dayType:dailyHeader.dayType||'Work Day',
+        equipment:dailyHeader.equipment||[],
+        workforce:dailyHeader.workforce||[],
+        notes:'',
         narrative:dailyHeader.narrative
       })
     })
@@ -2344,14 +2352,27 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
     (inspectors.length>0?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Report Contributors:</td><td colspan="3">'+inspectors.join(', ')+'</td></tr>':'')+
     '</table>';
 
-  const equipHtml=equipment.length>0?
+  // Equipment — always show section, display None if selected
+  var equipRows = equipment.length>0 ? equipment : [];
+  var isNoneEq = equipRows.length===1 && equipRows[0].name==='None';
+  var equipRowsHtml = isNoneEq
+    ? '<div style="font-size:13px;padding:2px 0;color:#888;font-style:italic;">None on site today</div>'
+    : equipRows.map(eq=>'<div style="font-size:13px;padding:2px 0;">'+eq.name+(eq.count?' &nbsp;—&nbsp; <strong>'+eq.count+'</strong>':'')+'</div>').join('');
+  const equipHtml = equipRows.length>0 ?
     '<div style="display:inline-block;vertical-align:top;width:48%;margin-right:2%;margin-bottom:14px;">'+
     '<div style="font-weight:bold;font-size:13px;color:#0d1b2a;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:8px;">Equipment on Site</div>'+
-    equipment.map(eq=>'<div style="font-size:13px;padding:2px 0;">'+eq.name+' &nbsp;—&nbsp; <strong>'+eq.count+'</strong></div>').join('')+'</div>':'';
-  const workHtml=workforce.length>0?
+    equipRowsHtml+'</div>' : '';
+
+  // Workforce — always show section, display None if selected
+  var workRows = workforce.length>0 ? workforce : [];
+  var isNoneWf = workRows.length===1 && workRows[0].classification==='None';
+  var workRowsHtml = isNoneWf
+    ? '<div style="font-size:13px;padding:2px 0;color:#888;font-style:italic;">None on site today</div>'
+    : workRows.map(w=>'<div style="font-size:13px;padding:2px 0;">'+w.classification+(w.count?' &nbsp;—&nbsp; <strong>'+w.count+'</strong>':'')+'</div>').join('');
+  const workHtml = workRows.length>0 ?
     '<div style="display:inline-block;vertical-align:top;width:48%;margin-bottom:14px;">'+
     '<div style="font-weight:bold;font-size:13px;color:#0d1b2a;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:8px;">Workforce on Site</div>'+
-    workforce.map(w=>'<div style="font-size:13px;padding:2px 0;">'+w.classification+' &nbsp;—&nbsp; <strong>'+w.count+'</strong></div>').join('')+'</div>':'';
+    workRowsHtml+'</div>' : '';
   // Show all checklist items - checked and unchecked
   const allItems = headerRow.allChecklistItems || CHECKLIST_ITEMS;
   const checkHtml = allItems.length > 0 ?
