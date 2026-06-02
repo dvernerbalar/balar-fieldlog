@@ -1503,6 +1503,7 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
           photos: se.photos||[],
           gpsLocation: se.gpsLocation||'',
           fromSheets: true,
+          drivePhotoFailed: (se.photoCount>0 && (!se.photoLinks||se.photoLinks.length===0))
         });
       }
     });
@@ -1833,14 +1834,27 @@ function submitEntry(){
     });
     fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
     .then(function(r){ return r.json(); })
-    .then(function(){
+    .then(function(resp){
       var idx=entries.findIndex(function(e){return String(e.id)===String(entry.id);});
-      if(idx>=0){entries[idx].synced=true;entries[idx].photoOriginals=[];}
+      if(idx>=0){
+        entries[idx].synced=true;
+        // If photo was included but Drive upload failed, flag it
+        if(resp.hasPhoto && !resp.driveSaved){
+          entries[idx].drivePhotoFailed=true;
+        } else {
+          entries[idx].drivePhotoFailed=false;
+          entries[idx].photoOriginals=[];
+        }
+      }
       saveEntriesWithPhotos();
       enableEntryForm();
       clearEntryForm();
       renderEntries();
-      showToast('Entry saved ✓',false);
+      if(resp.hasPhoto && !resp.driveSaved){
+        showToast('Entry saved — photo didn\'t reach Drive. Tap Retry Photo on the entry.',true);
+      } else {
+        showToast('Entry saved ✓',false);
+      }
     })
     .catch(function(){
       var idx=entries.findIndex(function(e){return String(e.id)===String(entry.id);});
@@ -1990,7 +2004,9 @@ function renderEntries(){
   }
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
     html+='<div style="font-size:15px;font-weight:700;color:#0d1b2a;">'+formatTime(e.time)+(e.station?' &nbsp;&middot;&nbsp; '+e.station:'')+'</div>';
-    if(p2_currentReportStatus!=='approved'&&p2_currentReportStatus!=='pending'){html+='<button onclick="editEntry(this)" data-id="'+e.id+'" style="background:none;border:1px solid #d0d7de;border-radius:4px;padding:2px 8px;font-size:11px;color:#667;cursor:pointer;">Edit</button>';}html+='</div>';
+    if(p2_currentReportStatus!=='approved'&&p2_currentReportStatus!=='pending'){html+='<button onclick="editEntry(this)" data-id="'+e.id+'" style="background:none;border:1px solid #d0d7de;border-radius:4px;padding:2px 8px;font-size:11px;color:#667;cursor:pointer;">Edit</button>';}
+    if(e.drivePhotoFailed){html+='<div style="margin-top:6px;background:#fde8ea;border:1px solid #f5b7bc;border-radius:5px;padding:6px 10px;font-size:12px;color:#9b1c2e;display:flex;align-items:center;justify-content:space-between;"><span>&#9888; Photo didn't reach Drive</span><button onclick="retryDrivePhoto(''+e.id+'')" style="background:#9b1c2e;color:white;border:none;border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;">Retry Photo</button></div>';}
+    html+='</div>';
     if(displayWeather||displayTemp)html+='<div style="font-size:12px;color:#888;margin-bottom:6px;">'+displayWeather+(displayTemp?' · '+displayTemp+'°F':'')+'</div>';
     html+='<div style="font-size:14px;color:#333;line-height:1.5;margin-bottom:8px;">'+e.desc+'</div>';
     if(e.photos&&e.photos.length)html+='<div style="margin-bottom:8px;"><img src="'+e.photos[0]+'" style="width:100%;max-width:300px;height:180px;object-fit:cover;border-radius:6px;border:1px solid #ddd;display:block;"></div>';
@@ -2642,6 +2658,86 @@ function readFileAsDataUrl(file){
     reader.onerror=function(){reject(new Error('Failed to read file'));};
     reader.readAsDataURL(file);
   });
+}
+
+// ── RETRY DRIVE PHOTO UPLOAD ──────────────────────────────────
+async function retryDrivePhoto(entryId){
+  var entry = entries.find(function(e){return String(e.id)===String(entryId);});
+  if(!entry) return;
+
+  // Show retrying state
+  var btn = document.querySelector('button[onclick="retryDrivePhoto(\''+entryId+'\')"]');
+  if(btn){btn.textContent='Retrying...';btn.disabled=true;}
+
+  var photoData = entry.photoOriginals&&entry.photoOriginals.length>0 ? entry.photoOriginals[0] : '';
+
+  if(photoData){
+    // Photo still in memory — send directly to Drive
+    try{
+      var resp = await fetch(GOOGLE_SCRIPT_URL,{
+        method:'POST',
+        headers:{'Content-Type':'text/plain'},
+        redirect:'follow',
+        body:JSON.stringify({
+          action:'saveToDrive',
+          entryId:String(entry.id),
+          photoOriginal:photoData,
+          project:entry.project,
+          projectNumber:entry.projectNumber||dailyHeader.projectNumber||'',
+          client:entry.client||dailyHeader.client||'',
+          date:entry.date,
+          station:entry.station||'',
+          time:entry.time||''
+        })
+      });
+      var data = await resp.json();
+      if(data.success){
+        var idx=entries.findIndex(function(e){return String(e.id)===String(entryId);});
+        if(idx>=0){entries[idx].drivePhotoFailed=false;entries[idx].photoOriginals=[];}
+        saveEntriesWithPhotos();
+        renderEntries();
+        showToast('Photo uploaded to Drive ✓',false);
+        return;
+      }
+    } catch(err){}
+  }
+
+  // Photo not in memory or saveToDrive failed — retry full entry
+  if(!entry.synced){
+    showToast('Full retry required — use the Retry button on the entry.',true);
+    if(btn){btn.textContent='Retry Photo';btn.disabled=false;}
+    return;
+  }
+
+  // Resend the full entry to trigger Drive upload attempt server-side
+  var entryData = Object.assign({},entry,{
+    photos:[],
+    photoBase64: entry.photos&&entry.photos.length>0?entry.photos[0]:'',
+    photoOriginal:'',
+    entryId:entry.id
+  });
+  try{
+    var resp2 = await fetch(GOOGLE_SCRIPT_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain'},
+      redirect:'follow',
+      body:JSON.stringify(entryData)
+    });
+    var data2 = await resp2.json();
+    if(data2.success){
+      var idx2=entries.findIndex(function(e){return String(e.id)===String(entryId);});
+      if(idx2>=0) entries[idx2].drivePhotoFailed=false;
+      saveEntriesWithPhotos();
+      renderEntries();
+      showToast('Entry resynced — original photo may need to be re-added.',false);
+    } else {
+      showToast('Retry failed. Check connection.',true);
+      if(btn){btn.textContent='Retry Photo';btn.disabled=false;}
+    }
+  } catch(err){
+    showToast('Retry failed: '+err.toString(),true);
+    if(btn){btn.textContent='Retry Photo';btn.disabled=false;}
+  }
 }
 
 function closeReportOverlay(){
