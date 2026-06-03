@@ -2369,9 +2369,11 @@ function showModalError(msg){const e=document.getElementById('modal-error');e.te
 
 function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
   const dateStr=new Date(dateLocale).toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  const engineer=headerRow.projectEngineer||proj.engineer||'';
-  const client=headerRow.client||proj.client||'';
-  const contractor=headerRow.contractorPrimary||proj.contractor||'';
+  // Use project dropdown data as primary source — these don't change day to day
+  // Fall back to header row only if project data is missing
+  const engineer=proj.engineer||headerRow.projectEngineer||'';
+  const client=proj.client||headerRow.client||'';
+  const contractor=proj.contractor||headerRow.contractorPrimary||'';
   const inspectors=[...new Set([headerRow.inspector,...workEntries.map(e=>e.inspector)].filter(Boolean))];
   const dailyWeatherStr=headerRow.dailyWeather?(headerRow.dailyWeather+(headerRow.dailyTemperature?' · '+headerRow.dailyTemperature+'°F':'')):'';
   var equipment=headerRow.equipment||[];if(typeof equipment==="string"){try{equipment=JSON.parse(equipment);}catch(e){equipment=[];}}
