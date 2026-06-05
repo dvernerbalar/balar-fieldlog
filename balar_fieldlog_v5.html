@@ -343,7 +343,7 @@ textarea{resize:vertical;min-height:90px;}
           </div>
           <div class="item-list" id="equipment-list"><div style="color:#aaa;font-size:13px;padding:4px 0;">No equipment added yet.</div></div>
           <div class="add-item-row">
-            <select id="equipment-select" style="flex:2;"><option value="">Select equipment...</option></select>
+            <select id="equipment-select" style="flex:2;" onchange="toggleCustomInput('equipment-select','equipment-custom')"><option value="">Select equipment...</option></select>
             <input type="number" id="equipment-count" placeholder="Qty" min="1" style="max-width:75px;flex:0 0 75px;">
             <button class="add-item-btn" onclick="addEquipmentItem()">+</button>
           </div>
@@ -360,7 +360,7 @@ textarea{resize:vertical;min-height:90px;}
           </div>
           <div class="item-list" id="workforce-list"><div style="color:#aaa;font-size:13px;padding:4px 0;">No workforce added yet.</div></div>
           <div class="add-item-row">
-            <select id="workforce-select" style="flex:2;"><option value="">Select classification...</option></select>
+            <select id="workforce-select" style="flex:2;" onchange="toggleCustomInput('workforce-select','workforce-custom')"><option value="">Select classification...</option></select>
             <input type="number" id="workforce-count" placeholder="No." min="1" style="max-width:75px;flex:0 0 75px;">
             <button class="add-item-btn" onclick="addWorkforceItem()">+</button>
           </div>
@@ -1208,6 +1208,19 @@ function addEditWorkforceItem(){
   document.getElementById('edit-workforce-custom').value='';
   renderWorkforceList('edit-workforce-list',editWorkforceItems);
 }
+function toggleCustomInput(selId, customId){
+  var sel = document.getElementById(selId);
+  var custom = document.getElementById(customId);
+  if(!sel || !custom) return;
+  if(sel.value === '__other__'){
+    custom.style.display = 'block';
+    custom.focus();
+  } else {
+    custom.style.display = 'none';
+    custom.value = '';
+  }
+}
+
 function getItemName(selId,customId){
   const sel=document.getElementById(selId);
   const custom=document.getElementById(customId);
