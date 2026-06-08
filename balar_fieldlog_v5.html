@@ -720,7 +720,7 @@ function onProjectSelectChange(){
   if(dateVal){
     var phb2=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
     if(phb2){phb2.disabled=true;phb2.textContent='Checking...';}
-    checkForExistingHeader(sel.dataset.name,dateVal).finally(function(){
+    checkForExistingHeader(sel.dataset.name,dateVal,sel.dataset.number||'').finally(function(){
       var b2=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
       if(b2&&b2.textContent==='Checking...'){b2.disabled=false;b2.textContent='Post Daily Header';}
       if(p2_currentReportStatus!=='approved'&&p2_currentReportStatus!=='pending'){
@@ -832,9 +832,11 @@ function onDateChange(){
   var proj = document.getElementById('project-name').value.trim();
   var dateVal = document.getElementById('entry-date').value;
   if(proj&&dateVal){
+    var projSel2=document.getElementById('project-select');
+    var pnum2=projSel2&&projSel2.selectedIndex>0?projSel2.options[projSel2.selectedIndex].dataset.number||'':'';
     var phb=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
     if(phb){phb.disabled=true;phb.textContent='Checking...';}
-    checkForExistingHeader(proj,dateVal).finally(function(){
+    checkForExistingHeader(proj,dateVal,pnum2).finally(function(){
       var b=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
       if(b&&b.textContent==='Checking...'){b.disabled=false;b.textContent='Post Daily Header';}
       if(p2_currentReportStatus!=='approved'&&p2_currentReportStatus!=='pending'){
@@ -1069,7 +1071,7 @@ async function toggleSameAsLast(type){
   // Always fetch from Sheets - local cache may be stale
   if(GOOGLE_SCRIPT_URL){
     try{
-      var url = GOOGLE_SCRIPT_URL+'?action=getLastHeader&projectName='+encodeURIComponent(projectKey)+'&excludeDate='+encodeURIComponent(today);
+      var url = GOOGLE_SCRIPT_URL+'?action=getLastHeader&projectName='+encodeURIComponent(projectKey)+'&projectNumber='+encodeURIComponent(dailyHeader&&dailyHeader.projectNumber?dailyHeader.projectNumber:'')+'&excludeDate='+encodeURIComponent(today);
       var resp = await fetch(url);
       var data = await resp.json();
       if(data.header) lastHeader = data.header;
@@ -1417,14 +1419,16 @@ function removePhoto(i){photoDataUrls.splice(parseInt(i),1);photoOriginals.splic
 
 
 // ── CHECK FOR EXISTING HEADER ────────────────────────────────
-async function checkForExistingHeader(projectName, dateVal){
+async function checkForExistingHeader(projectName, dateVal, projectNumber){
   if(!GOOGLE_SCRIPT_URL || !projectName || !dateVal) return;
   var parts = dateVal.split('-');
   var dateLocale = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2])).toLocaleDateString('en-US');
 
-  // First check local dailyHeaders cache
+  // First check local dailyHeaders cache — match on projectNumber+name+date if number available
   var localKey = Object.keys(dailyHeaders).find(function(k){
     var p = k.split('||');
+    // Match number then name; fall back to name only if no number provided
+    if(projectNumber) return p[0] === projectNumber && p[1] === projectName && p[2] === dateLocale;
     return p[1] === projectName && p[2] === dateLocale;
   });
   if(localKey && dailyHeaders[localKey]){
@@ -1445,7 +1449,7 @@ async function checkForExistingHeader(projectName, dateVal){
 
   // Not in local cache — check Sheets
   try{
-    var url = GOOGLE_SCRIPT_URL+'?action=getHeader&date='+encodeURIComponent(dateLocale)+'&projectName='+encodeURIComponent(projectName);
+    var url = GOOGLE_SCRIPT_URL+'?action=getHeader&date='+encodeURIComponent(dateLocale)+'&projectName='+encodeURIComponent(projectName)+'&projectNumber='+encodeURIComponent(projectNumber||'');
     var resp = await fetch(url);
     var data = await resp.json();
     if(data.header){
