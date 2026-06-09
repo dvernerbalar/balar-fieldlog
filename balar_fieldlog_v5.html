@@ -562,7 +562,7 @@ let currentProjectKey = localStorage.getItem('balar_v5_current_project') || null
 let dailyHeader = null; // set from dailyHeaders[currentProjectKey]
 let photoDataUrls = [];
 let photoOriginals = [];
-let projectsData = [], inspectorsData = [], contractorsData = [], equipmentData = [], workforceData = [];
+let projectsData = [], inspectorsData = [], contractorsData = [], equipmentData = {all:[],street:[],utility:[],plant:[]}, workforceData = [];
 let equipmentItems = [], workforceItems = [];
 let editEquipmentItems = [], editWorkforceItems = [];
 
@@ -715,6 +715,12 @@ function onProjectSelectChange(){
   document.getElementById('project-name').value=sel.dataset.name||'';
   document.getElementById('client-name').value=sel.dataset.client||'';
   document.getElementById('project-engineer').value=sel.dataset.engineer||'';
+  // Store projectType for equipment dropdown filtering
+  if(!dailyHeader) dailyHeader = {};
+  dailyHeader.projectType = sel.dataset.projectType||'';
+  // Rebuild equipment dropdown with correct type filter
+  buildEquipmentDropdown('equipment-select');
+  buildEquipmentDropdown('edit-equipment-select');
   document.getElementById('contractor-primary').value=sel.dataset.contractor||'';
   var dateVal=document.getElementById('entry-date').value;
   if(dateVal){
@@ -852,7 +858,16 @@ function buildEquipmentDropdown(selId){
   const sel=document.getElementById(selId);
   if(!sel)return;
   sel.innerHTML='<option value="">Select equipment...</option>';
-  equipmentData.forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);});
+  // Get project type from dailyHeader if available
+  var pType = (dailyHeader&&dailyHeader.projectType ? dailyHeader.projectType.toLowerCase() : '');
+  var list = [];
+  if(pType==='street')        list = equipmentData.street  || [];
+  else if(pType==='utility')  list = equipmentData.utility || [];
+  else if(pType==='plant')    list = equipmentData.plant   || [];
+  else                        list = equipmentData.all     || [];
+  list.forEach(function(n){
+    const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);
+  });
   const other=document.createElement('option');other.value='__other__';other.textContent='Other / Not Listed...';sel.appendChild(other);
 }
 function buildWorkforceDropdown(selId){
@@ -1561,6 +1576,7 @@ function postDailyHeader(){
     client:document.getElementById('client-name').value.trim(),
     projectEngineer:document.getElementById('project-engineer').value.trim(),
     contractorPrimary:document.getElementById('contractor-primary').value.trim(),
+    projectType:(function(){ var s=document.getElementById('project-select'); return s&&s.selectedIndex>0?s.options[s.selectedIndex].dataset.projectType||'':''; })(),
     inspector, date:entryDate,
     dayType:document.getElementById('day-type').value,
     dailyWeather:weather,
@@ -1578,24 +1594,97 @@ function postDailyHeader(){
   localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
   localStorage.setItem('balar_v5_current_project', currentProjectKey);
 
-  // Post to Sheets
+  // Post to Sheets — check response and flag if failed
+  var hdrBtn = document.getElementById('btn-post-header-main');
+  if(hdrBtn){ hdrBtn.disabled=true; hdrBtn.textContent='Posting...'; }
+  dailyHeader.sheetSynced = false;
+
   if(GOOGLE_SCRIPT_URL){
     fetch(GOOGLE_SCRIPT_URL,{
       method:'POST',
       headers:{'Content-Type':'text/plain'},
       redirect:'follow',
       body:JSON.stringify(Object.assign({},dailyHeader,{action:'saveEntry',entryId:dailyHeader.id,type:'header',desc:'HEADER'}))
-    }).catch(function(e){ console.warn('Header post failed:',e); });
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(resp){
+      if(resp.success){
+        dailyHeader.sheetSynced = true;
+        if(currentProjectKey && dailyHeaders[currentProjectKey]){
+          dailyHeaders[currentProjectKey].sheetSynced = true;
+          localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
+        }
+        restoreHeader(dailyHeader);
+        showToast('Daily header posted ✓', false);
+      } else {
+        _showHeaderSyncError();
+      }
+    })
+    .catch(function(e){
+      console.warn('Header post failed:', e);
+      _showHeaderSyncError();
+    });
+  } else {
+    restoreHeader(dailyHeader);
+    showToast('Daily header posted (offline)', false);
   }
+}
 
+function _showHeaderSyncError(){
+  // Show persistent retry banner
+  var existing = document.getElementById('header-sync-error');
+  if(existing) existing.remove();
+  var banner = document.createElement('div');
+  banner.id = 'header-sync-error';
+  banner.style.cssText = 'background:#fde8ea;border:1px solid #f5b7bc;border-radius:7px;padding:10px 14px;margin:10px 0;font-size:13px;color:#9b1c2e;display:flex;align-items:center;justify-content:space-between;';
+  banner.innerHTML = '<span>⚠️ Header failed to save to sheet. Entries may not post correctly.</span>' +
+    '<button onclick="retryHeaderPost()" style="background:#9b1c2e;color:white;border:none;border-radius:5px;padding:5px 12px;font-size:12px;cursor:pointer;margin-left:10px;">Retry</button>';
+  var efs = document.getElementById('entries-form-section');
+  if(efs) efs.parentNode.insertBefore(banner, efs);
+  // Still restore header locally so they can continue
   restoreHeader(dailyHeader);
-  showToast('Daily header posted',false);
+  showToast('Header saved locally — sheet sync failed. Tap Retry.', true);
+}
+
+function retryHeaderPost(){
+  if(!dailyHeader) return;
+  var btn = document.querySelector('#header-sync-error button');
+  if(btn){ btn.textContent='Retrying...'; btn.disabled=true; }
+  fetch(GOOGLE_SCRIPT_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain'},
+    redirect:'follow',
+    body:JSON.stringify(Object.assign({},dailyHeader,{action:'saveEntry',entryId:dailyHeader.id,type:'header',desc:'HEADER'}))
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(resp){
+    if(resp.success){
+      dailyHeader.sheetSynced = true;
+      if(currentProjectKey && dailyHeaders[currentProjectKey]){
+        dailyHeaders[currentProjectKey].sheetSynced = true;
+        localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
+      }
+      var banner = document.getElementById('header-sync-error');
+      if(banner) banner.remove();
+      showToast('Header synced to sheet ✓', false);
+    } else {
+      if(btn){ btn.textContent='Retry'; btn.disabled=false; }
+      showToast('Retry failed. Check connection.', true);
+    }
+  })
+  .catch(function(){
+    if(btn){ btn.textContent='Retry'; btn.disabled=false; }
+    showToast('Retry failed. Check connection.', true);
+  });
 }
 
 function restoreHeader(h){
   // Restore narrative from sheet data
   var narrativeEl=document.getElementById('daily-narrative');
   if(narrativeEl && h.narrative) narrativeEl.value=h.narrative;
+  // Rebuild equipment dropdown with correct project type filter
+  buildEquipmentDropdown('equipment-select');
+  buildEquipmentDropdown('edit-equipment-select');
   // Restore in-memory arrays so saveResources and validation see correct state
   equipmentItems = (h.equipment||[]).slice();
   workforceItems = (h.workforce||[]).slice();
@@ -2249,6 +2338,11 @@ function openReportModal(){
   var unsynced=entries.filter(function(e){
     return (e.synced===false||e.synced==='syncing')&&e.date===checkDate&&(!activeProject||e.project===activeProject);
   });
+  // Block if header hasn't confirmed sheet sync
+  if(dailyHeader && dailyHeader.sheetSynced===false){
+    alert('The Daily Header has not confirmed saving to the sheet. Please tap Retry on the header sync error before generating.');
+    return;
+  }
   if(unsynced.length>0){
     alert(unsynced.length+' entr'+(unsynced.length===1?'y':'ies')+' have not synced to the server. Please retry all unsynced entries before generating the report.');
     return;
@@ -2328,7 +2422,12 @@ async function generateReport(){
       btn.disabled=false;btn.textContent='Generate / Review Report';
       return;
     }
-    const headerRec=allRows.find(function(e){return e.entryType==='header';})||allRows[0];
+    const headerRec=allRows.find(function(e){return e.entryType==='header';});
+    if(!headerRec){
+      showModalError('No header found in the sheet for this date and project. Please re-post the Daily Header before generating.');
+      btn.disabled=false;btn.textContent='Generate / Review Report';
+      return;
+    }
     p2_currentReportStatus      = headerRec.report_status      || '';
     p2_currentApprovedBy        = headerRec.approved_by        || '';
     p2_currentApprovedTimestamp = headerRec.approved_timestamp || '';
@@ -2354,7 +2453,8 @@ async function generateReport(){
     }
 
     // Separate header from work entries
-    const headerRow=allRows.find(e=>e.entryType==='header')||allRows[0];
+    const headerRow=allRows.find(e=>e.entryType==='header');
+    if(!headerRow){ showModalError('Header row missing from sheet. Re-post the Daily Header.'); return; }
     const workEntries=allRows.filter(e=>e.entryType!=='header');
 
     // Enrich with local photos for today
