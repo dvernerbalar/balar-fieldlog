@@ -698,6 +698,7 @@ function onClientChange(){
     o.dataset.number=p.number;o.dataset.name=p.name;o.dataset.client=p.client;
     o.dataset.engineer=p.engineer||'';
     o.dataset.contractor=p.contractor||'';
+    o.dataset.projectType=p.projectType||'';
     o.textContent=(p.number?p.number+' — ':'')+p.name;
     projSel.appendChild(o);
   });
