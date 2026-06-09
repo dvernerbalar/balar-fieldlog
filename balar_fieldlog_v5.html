@@ -734,6 +734,12 @@ function onProjectSelectChange(){
         var gb2=document.getElementById('btn-generate-report');
         if(gb2){gb2.disabled=false;gb2.style.opacity='';gb2.style.pointerEvents='';}
       }
+      // Ensure projectType is set after header restore
+      if(dailyHeader){
+        dailyHeader.projectType=sel.dataset.projectType||'';
+        buildEquipmentDropdown('equipment-select');
+        buildEquipmentDropdown('edit-equipment-select');
+      }
     });
   }
 }
@@ -849,6 +855,13 @@ function onDateChange(){
       if(p2_currentReportStatus!=='approved'&&p2_currentReportStatus!=='pending'){
         var gb=document.getElementById('btn-generate-report');
         if(gb){gb.disabled=false;gb.style.opacity='';gb.style.pointerEvents='';}
+      }
+      // Ensure projectType is set on dailyHeader after header restore
+      var ps=document.getElementById('project-select');
+      if(ps&&ps.selectedIndex>0&&dailyHeader){
+        dailyHeader.projectType=ps.options[ps.selectedIndex].dataset.projectType||'';
+        buildEquipmentDropdown('equipment-select');
+        buildEquipmentDropdown('edit-equipment-select');
       }
     });
   }
@@ -1683,6 +1696,13 @@ function restoreHeader(h){
   // Restore narrative from sheet data
   var narrativeEl=document.getElementById('daily-narrative');
   if(narrativeEl && h.narrative) narrativeEl.value=h.narrative;
+  // Apply projectType from current project selection if not on header object
+  if(!h.projectType){
+    var projSel=document.getElementById('project-select');
+    if(projSel&&projSel.selectedIndex>0){
+      h.projectType=projSel.options[projSel.selectedIndex].dataset.projectType||'';
+    }
+  }
   // Rebuild equipment dropdown with correct project type filter
   buildEquipmentDropdown('equipment-select');
   buildEquipmentDropdown('edit-equipment-select');
