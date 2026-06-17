@@ -232,7 +232,7 @@ textarea{resize:vertical;min-height:90px;}
     <div id="header-form-view">
       <div class="card header-card">
         <div class="form-row two-col">
-          <div><label>Date of Work</label><input type="date" id="entry-date" onchange="onDateChange()"></div>
+          <div><label>Date of Work</label><input type="date" id="entry-date" placeholder="Select date of work" onchange="onDateChange()"></div>
           <div><label>Day Type</label><select id="day-type"><option value="Work Day">Work Day</option><option value="Non-Work Day">Non-Work Day</option><option value="Rain Day">Rain Day</option><option value="Holiday">Holiday</option></select></div>
         </div>
         <div class="form-row two-col">
@@ -579,7 +579,12 @@ async function init(){
   const hh=String(now.getHours()).padStart(2,'0'), mm=String(now.getMinutes()).padStart(2,'0');
   document.getElementById('entry-time').value = hh+':'+mm;
   const yyyy=now.getFullYear(), mo=String(now.getMonth()+1).padStart(2,'0'), dd=String(now.getDate()).padStart(2,'0');
-  document.getElementById('entry-date').value = yyyy+'-'+mo+'-'+dd;
+  // Don't pre-fill date — inspector must consciously select it
+  // Set min to reasonable past date and highlight today via placeholder attribute
+  var todayStr = yyyy+'-'+mo+'-'+dd;
+  var dateInput = document.getElementById('entry-date');
+  dateInput.value = '';
+  dateInput.dataset.today = todayStr; // store today for reference
   // Pre-set and lock inspector field from login
   var savedInspector = localStorage.getItem('balar_inspector_name');
   if(savedInspector){
