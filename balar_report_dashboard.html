@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Balar FieldLog — Pending Reports</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0d1b2a;
+    --steel: #1b2d42;
+    --red: #9b1c2e;
+    --green: #1a5e35;
+    --gold: #c8972a;
+    --gray: #f4f5f7;
+    --bdr: #dde2e8;
+    --muted: #667788;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Barlow', sans-serif; background: #eef0f4; color: #1a1f2e; min-height: 100vh; }
+
+  .topbar {
+    background: var(--navy);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 10px rgba(0,0,0,.3);
+  }
+  .brand { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: #fff; }
+  .brand span { color: var(--red); }
+  .brand-sub { font-size: 11px; color: #7a9ab8; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 28px 16px; }
+
+  .controls {
+    background: #fff;
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .controls label { font-size: 13px; font-weight: 600; color: var(--navy); white-space: nowrap; }
+  .controls select {
+    font-family: 'Barlow', sans-serif;
+    font-size: 14px;
+    padding: 8px 12px;
+    border: 1px solid var(--bdr);
+    border-radius: 6px;
+    background: var(--gray);
+    color: var(--navy);
+    min-width: 220px;
+    cursor: pointer;
+  }
+  .refresh-btn {
+    margin-left: auto;
+    background: var(--navy);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-family: 'Barlow', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .refresh-btn:hover { background: var(--steel); }
+
+  .summary-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .summary-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 14px 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    flex: 1;
+    min-width: 140px;
+    text-align: center;
+  }
+  .summary-num { font-family: 'Barlow Condensed', sans-serif; font-size: 28px; font-weight: 800; color: var(--navy); }
+  .summary-num.red { color: var(--red); }
+  .summary-num.gold { color: var(--gold); }
+  .summary-lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+  .table-card {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    overflow: hidden;
+  }
+  .table-hdr {
+    background: var(--navy);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .table-hdr-title { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 1px; color: #fff; text-transform: uppercase; }
+  .table-hdr-sub { font-size: 12px; color: #7a9ab8; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    background: #f8f9fa;
+    text-align: left;
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 2px solid var(--bdr);
+  }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--bdr); font-size: 13.5px; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafbfc; }
+
+  .pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .5px;
+  }
+  .pill-red { background: #fadbd8; color: #922b21; border: 1px solid #f1948a; }
+  .pill-gold { background: #fef9e7; color: #9a7d0a; border: 1px solid #f9e79f; }
+  .pill-gray { background: var(--gray); color: var(--muted); border: 1px solid var(--bdr); }
+
+  .review-btn {
+    display: inline-block;
+    background: var(--navy);
+    color: #fff;
+    padding: 6px 14px;
+    border-radius: 5px;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .review-btn:hover { background: var(--steel); }
+  .no-link { font-size: 12px; color: var(--muted); font-style: italic; }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+  }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-msg { font-size: 15px; font-weight: 600; color: var(--navy); margin-bottom: 6px; }
+  .empty-sub { font-size: 13px; }
+
+  .loading {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .error-msg {
+    background: #fadbd8;
+    border: 1px solid #f1948a;
+    border-radius: 8px;
+    padding: 14px 18px;
+    color: #922b21;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+
+  .last-updated { font-size: 12px; color: var(--muted); margin-top: 14px; text-align: right; }
+
+  @media(max-width: 700px) {
+    .controls { flex-direction: column; align-items: flex-start; }
+    .refresh-btn { margin-left: 0; }
+    th:nth-child(3), td:nth-child(3),
+    th:nth-child(5), td:nth-child(5) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">Balar <span>Field</span>Log</div>
+  <div class="brand-sub">Pending Reports</div>
+</div>
+
+<div class="container">
+
+  <div class="controls">
+    <label for="engineer-filter">Show reports for:</label>
+    <select id="engineer-filter" onchange="filterReports()">
+      <option value="all">All Engineers</option>
+    </select>
+    <button class="refresh-btn" onclick="loadDashboard()">&#8635; Refresh</button>
+  </div>
+
+  <div class="summary-bar" id="summary-bar" style="display:none;">
+    <div class="summary-card">
+      <div class="summary-num" id="count-total">—</div>
+      <div class="summary-lbl">Total Pending</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-num gold" id="count-week">—</div>
+      <div class="summary-lbl">Under 1 Week</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-num red" id="count-overdue">—</div>
+      <div class="summary-lbl">Over 1 Week</div>
+    </div>
+  </div>
+
+  <div id="error-container"></div>
+
+  <div class="table-card">
+    <div class="table-hdr">
+      <div class="table-hdr-title">Pending Reports</div>
+      <div class="table-hdr-sub" id="table-sub">Loading...</div>
+    </div>
+    <div id="table-container">
+      <div class="loading">&#9203; Loading pending reports...</div>
+    </div>
+  </div>
+
+  <div class="last-updated" id="last-updated"></div>
+
+</div>
+
+<script>
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzboPnRIKSebUQEPoKYILSt8Zj8WbJJ0AYa7fU2Vl4n7Jx1_vvCnjdWk_2K1pE5uQOH/exec';
+var REVIEW_URL = 'https://dvernerbalar.github.io/balar-fieldlog/balar_report_review.html';
+
+var allReports = [];
+
+function loadDashboard() {
+  document.getElementById('table-container').innerHTML = '<div class="loading">&#9203; Loading pending reports...</div>';
+  document.getElementById('table-sub').textContent = 'Loading...';
+  document.getElementById('summary-bar').style.display = 'none';
+  document.getElementById('error-container').innerHTML = '';
+
+  fetch(APPS_SCRIPT_URL + '?action=getDashboard')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      allReports = data.pending || [];
+
+      // Populate engineer dropdown
+      var sel = document.getElementById('engineer-filter');
+      var currentVal = sel.value;
+      // Keep existing options beyond "All"
+      while (sel.options.length > 1) sel.remove(1);
+      (data.engineers || []).forEach(function(name) {
+        var o = document.createElement('option');
+        o.value = name;
+        o.textContent = name;
+        sel.appendChild(o);
+      });
+      if (currentVal && currentVal !== 'all') sel.value = currentVal;
+
+      document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleString();
+      filterReports();
+    })
+    .catch(function(err) {
+      document.getElementById('table-container').innerHTML = '<div class="loading">Failed to load. Check connection.</div>';
+      document.getElementById('error-container').innerHTML =
+        '<div class="error-msg">&#9888; Could not connect to the FieldLog server. ' + err.toString() + '</div>';
+    });
+}
+
+function filterReports() {
+  var filter = document.getElementById('engineer-filter').value;
+  var filtered = filter === 'all'
+    ? allReports
+    : allReports.filter(function(r) { return r.engineer === filter; });
+
+  // Update summary
+  var overdue = filtered.filter(function(r) { return r.daysPending !== null && r.daysPending >= 7; }).length;
+  var recent  = filtered.filter(function(r) { return r.daysPending === null || r.daysPending < 7; }).length;
+  document.getElementById('count-total').textContent   = filtered.length;
+  document.getElementById('count-week').textContent    = recent;
+  document.getElementById('count-overdue').textContent = overdue;
+  document.getElementById('summary-bar').style.display = filtered.length > 0 ? 'flex' : 'none';
+
+  document.getElementById('table-sub').textContent =
+    filtered.length === 0 ? 'No pending reports' : filtered.length + ' report' + (filtered.length === 1 ? '' : 's') + ' pending';
+
+  if (filtered.length === 0) {
+    document.getElementById('table-container').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">&#10003;</div>' +
+      '<div class="empty-msg">All caught up!</div>' +
+      '<div class="empty-sub">No pending reports' + (filter !== 'all' ? ' for ' + filter : '') + '.</div></div>';
+    return;
+  }
+
+  // Sort by days pending descending
+  filtered.sort(function(a, b) {
+    return (b.daysPending || 0) - (a.daysPending || 0);
+  });
+
+  var rows = filtered.map(function(r) {
+    var days = r.daysPending !== null ? r.daysPending + ' day' + (r.daysPending === 1 ? '' : 's') : '—';
+    var pillClass = r.daysPending !== null && r.daysPending >= 7 ? 'pill-red' : (r.daysPending !== null ? 'pill-gold' : 'pill-gray');
+    var reviewLink = r.token
+      ? '<a href="' + REVIEW_URL + '?token=' + encodeURIComponent(r.token) + '" target="_blank" class="review-btn">Review &#8594;</a>'
+      : '<span class="no-link">No link</span>';
+    return '<tr>' +
+      '<td><strong>' + r.projectNumber + '</strong></td>' +
+      '<td>' + r.projectName + '<br><span style="font-size:12px;color:var(--muted);">' + r.client + '</span></td>' +
+      '<td>' + r.reportDate + '</td>' +
+      '<td>' + r.inspector + '</td>' +
+      '<td>' + r.engineer + '</td>' +
+      '<td><span class="pill ' + pillClass + '">' + days + '</span></td>' +
+      '<td>' + reviewLink + '</td>' +
+      '</tr>';
+  }).join('');
+
+  document.getElementById('table-container').innerHTML =
+    '<table>' +
+    '<thead><tr>' +
+    '<th>Project #</th><th>Project / Client</th><th>Report Date</th>' +
+    '<th>Inspector</th><th>Engineer</th><th>Pending</th><th></th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+// Load on page open
+loadDashboard();
+</script>
+</body>
+</html>
