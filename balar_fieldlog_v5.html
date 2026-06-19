@@ -762,6 +762,31 @@ function updatePostHeaderBtn(){
   btn.style.cursor=ready?'pointer':'not-allowed';
   btn.style.pointerEvents=ready?'':'none';
 }
+function refreshReportStatus(){
+  if(!dailyHeader) return;
+  var btn = document.getElementById('p2-refresh-status-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Checking...'; }
+  var url = GOOGLE_SCRIPT_URL+'?action=getEntries&date='+encodeURIComponent(dailyHeader.date)+
+    '&projectNumber='+encodeURIComponent(dailyHeader.projectNumber||'')+
+    '&projectName='+encodeURIComponent(dailyHeader.project);
+  fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      p2_currentReportStatus      = data.report_status      || '';
+      p2_currentApprovedBy        = data.approved_by        || '';
+      p2_currentApprovedTimestamp = data.approved_timestamp || '';
+      p2_approvedPdfLink          = data.approved_pdf_link  || '';
+      _photoFolderUrl             = data.photo_folder_url   || '';
+      p2_applyLockUI();
+      p2_refreshStatusBanner();
+      if(btn){ btn.disabled=false; btn.innerHTML='&#8635; Refresh Status'; }
+    })
+    .catch(function(){
+      if(btn){ btn.disabled=false; btn.innerHTML='&#8635; Refresh Status'; }
+      showToast('Could not check status. Try again.',true);
+    });
+}
+
 function saveNarrative(){
   if(p2_checkLock()) return;
   if(!dailyHeader) return;
@@ -2610,11 +2635,11 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
             // If it's a /file/d/ID/view style URL extract the ID
             var match = src.match(/\/file\/d\/([^\/]+)/);
             if(match) embedSrc = 'https://drive.google.com/uc?export=view&id='+match[1];
-            photoHtml+='<img src="'+embedSrc+'" style="width:100%;max-width:400px;border-radius:5px;border:1px solid #ddd;display:block;margin-bottom:4px;" onerror="this.src=\''+( e.photos&&e.photos[0]?e.photos[0]:'')+'\'">';
+            photoHtml+='<img src="'+embedSrc+'" style="width:100%;max-width:400px;max-height:280px;object-fit:contain;border-radius:5px;border:1px solid #ddd;display:block;margin-bottom:4px;background:#f8f8f8;" onerror="this.src=\''+( e.photos&&e.photos[0]?e.photos[0]:'')+'\'">';
             photoHtml+='<div style="margin-bottom:8px;"><a href="'+src+'" target="_blank" style="font-size:11px;color:#1565c0;">&#128279; View full resolution in Drive</a></div>';
           } else {
             // Fallback: base64 thumbnail
-            photoHtml+='<img src="'+src+'" style="width:100%;max-width:400px;border-radius:5px;border:1px solid #ddd;display:block;margin-bottom:4px;">';
+            photoHtml+='<img src="'+src+'" style="width:100%;max-width:400px;max-height:280px;object-fit:contain;border-radius:5px;border:1px solid #ddd;display:block;margin-bottom:4px;background:#f8f8f8;">';
           }
         });
         photoHtml+='</div>';
@@ -2902,9 +2927,11 @@ function p2_refreshStatusBanner() {
   var banner = document.getElementById('p2-status-banner');
   if (!banner) return;
   var section = document.getElementById('p2-approve-section');
+  var refreshBtn = document.getElementById('p2-refresh-status-btn');
   var status = p2_currentReportStatus;
   if (status === 'approved') {
     if(section) section.style.display='block';
+    if(refreshBtn) refreshBtn.style.display='none';
     banner.style.display = 'block';
     banner.style.background = '#d5f5e3';
     banner.style.color = '#1e6b44';
@@ -2912,6 +2939,7 @@ function p2_refreshStatusBanner() {
     banner.innerHTML = '✅ Approved by ' + p2_currentApprovedBy + ' on ' + p2_niceDate(p2_currentApprovedTimestamp);
   } else if (status === 'pending') {
     if(section) section.style.display='block';
+    if(refreshBtn) refreshBtn.style.display='block';
     banner.style.display = 'block';
     banner.style.background = '#fef9e7';
     banner.style.color = '#9a7d0a';
@@ -2919,6 +2947,7 @@ function p2_refreshStatusBanner() {
     banner.innerHTML = '⏳ Submitted — awaiting engineer review';
   } else if (status === 'rejected') {
     if(section) section.style.display='block';
+    if(refreshBtn) refreshBtn.style.display='block';
     banner.style.display = 'block';
     banner.style.background = '#fadbd8';
     banner.style.color = '#922b21';
@@ -2927,6 +2956,7 @@ function p2_refreshStatusBanner() {
   } else {
     banner.style.display = 'none';
     if(section) section.style.display='none';
+    if(refreshBtn) refreshBtn.style.display='none';
   }
 }
 
@@ -3096,9 +3126,16 @@ init();
 
 <!-- Status banner — shown after report generated -->
 <div id="p2-approve-section" style="display:none; margin-top:16px;">
-  <div id="p2-status-banner"
-       style="display:none; padding:10px 18px; border-radius:6px;
-              font-size:13px; font-weight:bold; margin-bottom:12px; text-align:left;"></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+    <div id="p2-status-banner"
+         style="display:none; padding:10px 18px; border-radius:6px;
+                font-size:13px; font-weight:bold; flex:1; text-align:left;"></div>
+    <button id="p2-refresh-status-btn" onclick="refreshReportStatus()"
+            style="display:none;background:none;border:1px solid #ccd;border-radius:6px;
+                   padding:8px 12px;font-size:12px;color:#556;cursor:pointer;white-space:nowrap;flex-shrink:0;">
+      &#8635; Refresh Status
+    </button>
+  </div>
 </div>
 
 <!-- Confirm-name modal -->
