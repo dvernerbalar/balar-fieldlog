@@ -3052,7 +3052,7 @@ function p2_confirmAndSubmit() {
     return;
   }
   p2_closeSignModal();
-  p2_showProgress('Uploading report\u2026');
+  p2_showProgress('Generating PDF and uploading\u2026 This may take a moment.');
   fetch(P2_APPS_SCRIPT_URL, {
     method: 'POST',
     redirect: 'follow',
@@ -3175,7 +3175,7 @@ init();
 <!-- Progress overlay -->
 <div id="p2-progress"
      style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
-            background:rgba(255,255,255,0.85); z-index:9998;
+            background:rgba(255,255,255,0.92); z-index:10002;
             align-items:center; justify-content:center; flex-direction:column; gap:16px;">
   <div style="width:42px; height:42px; border:5px solid #e0e0e0;
               border-top-color:#1a3a5c; border-radius:50%;
