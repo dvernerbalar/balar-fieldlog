@@ -152,6 +152,37 @@ var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzboPnRIKSebUQEPo
 var allReports = [];
 var currentTab = 'active';
 
+function fetchAndOpenPdf(btn) {
+  var projectNum  = btn.dataset.num    || '';
+  var projectName = btn.dataset.name   || '';
+  var client      = btn.dataset.client || '';
+  var status      = btn.dataset.status || '';
+  btn.textContent = '...';
+  btn.disabled = true;
+  var url = APPS_SCRIPT_URL + '?action=getReportPdf' +
+    '&status=' + encodeURIComponent(status) +
+    '&projectNum=' + encodeURIComponent(projectNum) +
+    '&projectName=' + encodeURIComponent(projectName) +
+    '&client=' + encodeURIComponent(client);
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.textContent = 'View PDF';
+      btn.disabled = false;
+      if (data.url) {
+        window.open(data.url, '_blank');
+      } else {
+        btn.textContent = 'Not found';
+        setTimeout(function(){ btn.textContent = 'View PDF'; }, 2000);
+      }
+    })
+    .catch(function() {
+      btn.textContent = 'Error';
+      btn.disabled = false;
+      setTimeout(function(){ btn.textContent = 'View PDF'; }, 2000);
+    });
+}
+
 function loadDashboard() {
   document.getElementById('table-container').innerHTML = '<div class="loading">&#9203; Loading...</div>';
   document.getElementById('table-sub').textContent = 'Loading...';
@@ -279,7 +310,9 @@ function renderDashboard() {
         '<td>' + r.inspector + '</td>' +
         '<td>' + r.engineer + '</td>' +
         '<td>' + pill + comment + '</td>' +
-        '<td>' + (r.pdfLink ? '<a href="' + r.pdfLink + '" target="_blank" style="background:#0d1b2a;color:#fff;padding:5px 12px;border-radius:5px;text-decoration:none;font-size:12px;font-weight:600;white-space:nowrap;">View PDF</a>' : '<span style="font-size:12px;color:var(--muted);">—</span>') + '</td>' +
+        '<td>' + (r.status !== 'rejected'
+        ? '<button onclick="fetchAndOpenPdf(this)" data-num="' + r.projectNumber + '" data-name="' + r.projectName.replace(/"/g,'&quot;') + '" data-client="' + r.client.replace(/"/g,'&quot;') + '" data-status="' + r.status + '" style="background:#0d1b2a;color:#fff;border:none;padding:5px 12px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">View PDF</button>'
+        : '<span style="font-size:12px;color:var(--muted);">—</span>') + '</td>' +
         '</tr>';
     }).join('');
 
@@ -296,7 +329,7 @@ function renderDashboard() {
         '<td>' + r.inspector + '</td>' +
         '<td>' + r.engineer + '</td>' +
         '<td><span class="status-pill pill-approved">&#10003; Approved</span></td>' +
-        '<td>' + (r.pdfLink ? '<a href="' + r.pdfLink + '" target="_blank" style="background:#0d1b2a;color:#fff;padding:5px 12px;border-radius:5px;text-decoration:none;font-size:12px;font-weight:600;white-space:nowrap;">View PDF</a>' : '<span style="font-size:12px;color:var(--muted);">—</span>') + '</td>' +
+        '<td><button onclick="fetchAndOpenPdf(this)" data-num="' + r.projectNumber + '" data-name="' + r.projectName.replace(/"/g,'&quot;') + '" data-client="' + r.client.replace(/"/g,'&quot;') + '" data-status="approved" style="background:#0d1b2a;color:#fff;border:none;padding:5px 12px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">View PDF</button></td>' +
         '</tr>';
     }).join('');
 
