@@ -231,12 +231,18 @@ function renderDashboard() {
     return;
   }
 
-  // Sort — rejected first, then pending, then by date
+  // Sort
   if (currentTab === 'active') {
+    // Rejected first, then pending
     filtered.sort(function(a, b) {
       if (a.status === 'rejected' && b.status !== 'rejected') return -1;
       if (b.status === 'rejected' && a.status !== 'rejected') return 1;
       return 0;
+    });
+  } else {
+    // Approved — newest report date first
+    filtered.sort(function(a, b) {
+      return new Date(b.reportDate) - new Date(a.reportDate);
     });
   }
 
