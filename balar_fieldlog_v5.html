@@ -47,9 +47,10 @@ document.addEventListener('DOMContentLoaded', checkLogin);
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500;600&display=swap');
 :root{--navy:#0d1b2a;--steel:#1b2d42;--red:#9b1c2e;--red-dark:#7a1522;--slate:#8d9fb5;--white:#fff;--success:#2ecc71;}
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Barlow',sans-serif;background:#f4f6f8;color:#222;min-height:100vh;padding-bottom:max(60px, calc(60px + env(safe-area-inset-bottom)));}
-header{background:var(--navy);border-bottom:3px solid var(--red);padding:max(10px, env(safe-area-inset-top)) 20px 10px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+*{box-sizing:border-box;margin:0;padding:0;max-width:100%;}
+html{overflow-x:hidden;padding-top:env(safe-area-inset-top);background:var(--navy);}
+body{font-family:'Barlow',sans-serif;background:#f4f6f8;color:#222;min-height:100vh;padding-bottom:max(60px, calc(60px + env(safe-area-inset-bottom)));overflow-x:hidden;}
+header{background:var(--navy);border-bottom:3px solid var(--red);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
 .header-logo{height:44px;}
 .date-badge{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--slate);letter-spacing:1px;text-transform:uppercase;}
 main{max-width:700px;margin:0 auto;padding:20px 16px;}
