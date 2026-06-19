@@ -103,6 +103,10 @@
     box-shadow: 0 1px 4px rgba(0,0,0,.06);
     overflow: hidden;
   }
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
   .table-hdr {
     background: var(--navy);
     padding: 12px 20px;
@@ -185,8 +189,7 @@
   @media(max-width: 700px) {
     .controls { flex-direction: column; align-items: flex-start; }
     .refresh-btn { margin-left: 0; }
-    th:nth-child(3), td:nth-child(3),
-    th:nth-child(5), td:nth-child(5) { display: none; }
+    table { min-width: 600px; }
   }
 </style>
 </head>
@@ -229,7 +232,7 @@
       <div class="table-hdr-title">Pending Reports</div>
       <div class="table-hdr-sub" id="table-sub">Loading...</div>
     </div>
-    <div id="table-container">
+    <div id="table-container"><div class="table-scroll" id="table-scroll-wrap">
       <div class="loading">&#9203; Loading pending reports...</div>
     </div>
   </div>
@@ -326,11 +329,11 @@ function filterReports() {
   }).join('');
 
   document.getElementById('table-container').innerHTML =
-    '<table>' +
+    '<div class="table-scroll"><table>' +
     '<thead><tr>' +
     '<th>Project #</th><th>Project / Client</th><th>Report Date</th>' +
     '<th>Inspector</th><th>Engineer</th><th>Pending</th><th></th>' +
-    '</tr></thead><tbody>' + rows + '</tbody></table>';
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
 // Load on page open
