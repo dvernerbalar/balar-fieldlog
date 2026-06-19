@@ -279,12 +279,13 @@ function renderDashboard() {
         '<td>' + r.inspector + '</td>' +
         '<td>' + r.engineer + '</td>' +
         '<td>' + pill + comment + '</td>' +
+        '<td>' + (r.pdfLink ? '<a href="' + r.pdfLink + '" target="_blank" style="background:#0d1b2a;color:#fff;padding:5px 12px;border-radius:5px;text-decoration:none;font-size:12px;font-weight:600;white-space:nowrap;">View PDF</a>' : '<span style="font-size:12px;color:var(--muted);">—</span>') + '</td>' +
         '</tr>';
     }).join('');
 
     document.getElementById('table-container').innerHTML =
       '<div class="table-scroll"><table>' +
-      '<thead><tr><th>Project #</th><th>Project Name</th><th>Report Date</th><th>Inspector</th><th>Engineer</th><th>Status</th></tr></thead>' +
+      '<thead><tr><th>Project #</th><th>Project Name</th><th>Report Date</th><th>Inspector</th><th>Engineer</th><th>Status</th><th></th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table></div>';
   } else {
     rows = filtered.map(function(r) {
@@ -295,12 +296,13 @@ function renderDashboard() {
         '<td>' + r.inspector + '</td>' +
         '<td>' + r.engineer + '</td>' +
         '<td><span class="status-pill pill-approved">&#10003; Approved</span></td>' +
+        '<td>' + (r.pdfLink ? '<a href="' + r.pdfLink + '" target="_blank" style="background:#0d1b2a;color:#fff;padding:5px 12px;border-radius:5px;text-decoration:none;font-size:12px;font-weight:600;white-space:nowrap;">View PDF</a>' : '<span style="font-size:12px;color:var(--muted);">—</span>') + '</td>' +
         '</tr>';
     }).join('');
 
     document.getElementById('table-container').innerHTML =
       '<div class="table-scroll"><table>' +
-      '<thead><tr><th>Project #</th><th>Project Name</th><th>Report Date</th><th>Inspector</th><th>Approved By</th><th>Status</th></tr></thead>' +
+      '<thead><tr><th>Project #</th><th>Project Name</th><th>Report Date</th><th>Inspector</th><th>Approved By</th><th>Status</th><th></th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table></div>';
   }
 }
