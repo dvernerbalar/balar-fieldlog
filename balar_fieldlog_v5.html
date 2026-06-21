@@ -1553,10 +1553,23 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
     var sheetEntries = (data.entries||[]).filter(function(e){ return e.entryType !== 'header'; });
     if(sheetEntries.length === 0) return;
 
-    // Remove any previously synced sheet entries for this project/date before re-adding
-    // This prevents duplicates when switching projects back and forth
+    // Build the set of entry IDs coming back from the sheet (the authoritative copy).
+    var _incomingIds = {};
+    sheetEntries.forEach(function(se){
+      var sid = String(se.entryId||'').replace(/\.0$/,'').trim();
+      if(sid) _incomingIds[sid] = true;
+    });
+    // For this project/date, remove (a) previously-fetched sheet copies, and
+    // (b) the local original of any entry now coming back from the sheet — matched
+    // by the REAL entry ID — so the same entry can't appear twice. Local UNSYNCED
+    // entries aren't in the sheet yet, so they're left untouched.
     entries = entries.filter(function(e){
-      return !(e.fromSheets && e.project === projectName && e.date === dateLocale);
+      if(e.project === projectName && e.date === dateLocale){
+        if(e.fromSheets) return false;
+        var eid = String(e.id||'').replace(/\.0$/,'').trim();
+        if(eid && _incomingIds[eid]) return false;
+      }
+      return true;
     });
 
     // Convert sheet entries to local format
@@ -1564,7 +1577,7 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
     sheetEntries.forEach(function(se){
       {
         entries.push({
-          id: Date.now() + Math.random(),
+          id: se.entryId || (Date.now() + Math.random()),
           type: 'entry',
           project: projectName,
           projectNumber: projectNumber||'',
