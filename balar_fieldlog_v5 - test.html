@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" href="data:,">
-<meta name="viewport" content="width=device-width, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Balar Field Inspection Log</title>
 <script>
 const SHARED_PIN = '4422';
@@ -47,14 +47,13 @@ document.addEventListener('DOMContentLoaded', checkLogin);
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500;600&display=swap');
 :root{--navy:#0d1b2a;--steel:#1b2d42;--red:#9b1c2e;--red-dark:#7a1522;--slate:#8d9fb5;--white:#fff;--success:#2ecc71;}
-*{box-sizing:border-box;margin:0;padding:0;}
-img,video,canvas,svg{max-width:100%;height:auto;}
-html{height:100%;overflow:hidden;background:var(--navy);}
-body{font-family:'Barlow',sans-serif;background:#f4f6f8;color:#222;height:100%;display:flex;flex-direction:column;overflow:hidden;}
-header{background:var(--navy);border-bottom:3px solid var(--red);padding:10px 20px;padding-top:calc(10px + env(safe-area-inset-top));display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:100;}
+*{box-sizing:border-box;margin:0;padding:0;max-width:100%;}
+html{overflow-x:hidden;padding-top:env(safe-area-inset-top);background:var(--navy);}
+body{font-family:'Barlow',sans-serif;background:#f4f6f8;color:#222;min-height:100vh;padding-bottom:max(60px, calc(60px + env(safe-area-inset-bottom)));overflow-x:hidden;}
+header{background:var(--navy);border-bottom:3px solid var(--red);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
 .header-logo{height:44px;}
 .date-badge{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--slate);letter-spacing:1px;text-transform:uppercase;}
-main{max-width:700px;width:100%;margin:0 auto;padding:20px 16px;padding-bottom:max(60px, calc(60px + env(safe-area-inset-bottom)));flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+main{max-width:700px;margin:0 auto;padding:20px 16px;}
 .section-label{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--red);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
 .section-label::after{content:'';flex:1;height:1px;background:#ddd;}
 .card{background:#fff;border:1px solid #e0e5ea;border-radius:10px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
@@ -62,7 +61,7 @@ main{max-width:700px;width:100%;margin:0 auto;padding:20px 16px;padding-bottom:m
 .card.entry-card-form{border-left:4px solid var(--red);}
 .card.posted{border-left:4px solid var(--success);background:#f9fffc;}
 label{display:block;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#667;margin-bottom:5px;}
-input[type="text"],input[type="time"],input[type="date"],input[type="number"],select,textarea{width:100%;background:#f8fafc;border:1px solid #d0d7de;border-radius:7px;color:#222;font-family:'Barlow',sans-serif;font-size:16px;padding:10px 13px;outline:none;transition:border-color 0.2s;-webkit-appearance:none;box-sizing:border-box;min-height:44px;}
+input[type="text"],input[type="time"],input[type="date"],input[type="number"],select,textarea{width:100%;background:#f8fafc;border:1px solid #d0d7de;border-radius:7px;color:#222;font-family:'Barlow',sans-serif;font-size:15px;padding:10px 13px;outline:none;transition:border-color 0.2s;-webkit-appearance:none;box-sizing:border-box;min-height:44px;}
 input:focus,select:focus,textarea:focus{border-color:var(--red);background:#fff;box-shadow:0 0 0 3px rgba(155,28,46,0.08);}
 input:disabled,select:disabled{background:#eef0f3;color:#666;cursor:not-allowed;}
 textarea{resize:vertical;min-height:90px;}
@@ -129,7 +128,7 @@ textarea{resize:vertical;min-height:90px;}
 .modal-sub{font-size:12px;color:#999;margin-bottom:20px;}
 .modal-field{margin-bottom:14px;}
 .modal-field label{display:block;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#667;margin-bottom:5px;}
-.modal-field input,.modal-field select{width:100%;padding:10px 13px;border:1px solid #d0d7de;border-radius:7px;font-family:'Barlow',sans-serif;font-size:16px;color:#222;background:#f8fafc;outline:none;-webkit-appearance:none;}
+.modal-field input,.modal-field select{width:100%;padding:10px 13px;border:1px solid #d0d7de;border-radius:7px;font-family:'Barlow',sans-serif;font-size:15px;color:#222;background:#f8fafc;outline:none;-webkit-appearance:none;}
 .modal-actions{display:flex;gap:10px;margin-top:20px;}
 .btn-cancel{flex:1;background:#f0f2f5;color:#555;border:1px solid #ddd;border-radius:7px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;}
 .btn-primary{flex:2;background:var(--red);color:white;border:none;border-radius:7px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:background 0.2s;}
@@ -155,17 +154,15 @@ textarea{resize:vertical;min-height:90px;}
 .login-error{background:#fde8ea;border:1px solid #f5b7bc;color:var(--red);border-radius:6px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:14px;display:none;}
 .login-field{margin-bottom:14px;text-align:left;}
 .login-field label{color:#555;font-size:12px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:5px;display:block;}
-.login-field input{width:100%;padding:12px 14px;border:1px solid #d0d7de;border-radius:7px;font-family:'Barlow',sans-serif;font-size:16px;color:#222;background:#f8fafc;outline:none;}
+.login-field input{width:100%;padding:12px 14px;border:1px solid #d0d7de;border-radius:7px;font-family:'Barlow',sans-serif;font-size:15px;color:#222;background:#f8fafc;outline:none;}
 .btn-login{width:100%;background:var(--red);color:white;border:none;border-radius:8px;padding:14px;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;}
 .btn-login:hover{background:var(--red-dark);}
 @media(max-width:480px){.two-col,.weather-row{grid-template-columns:1fr;}.checklist-grid{grid-template-columns:1fr;}.add-item-row{flex-wrap:wrap;}}
 @media print{body,html{background:white !important;}.no-print{display:none !important;}#report-container{display:block !important;position:absolute;top:0;left:0;width:100%;}}
-#keyboard-toolbar{display:none;position:fixed;bottom:0;left:0;right:0;background:#d1d5db;border-top:1px solid #b0b3b8;padding:6px 12px;z-index:9998;justify-content:flex-end;}
-#keyboard-toolbar button{background:none;border:none;color:#007aff;font-size:17px;font-weight:600;padding:4px 8px;cursor:pointer;font-family:'Barlow',sans-serif;}
 </style>
 </head>
 <body>
-<div id="keyboard-toolbar"><button onclick="document.activeElement.blur()">Done</button></div>
+
 <!-- LOGIN — First time setup -->
 <div id="login-screen" style="position:fixed;inset:0;background:#0d1b2a;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;">
   <div class="login-card">
@@ -175,13 +172,13 @@ textarea{resize:vertical;min-height:90px;}
     <div class="login-error" id="setup-error" style="display:none;"></div>
     <div class="login-field">
       <label>Your Name</label>
-      <select id="setup-name" style="width:100%;padding:12px 14px;border:1px solid #d0d7de;border-radius:7px;font-family:'Barlow',sans-serif;font-size:16px;color:#222;background:#f8fafc;outline:none;-webkit-appearance:none;">
+      <select id="setup-name" style="width:100%;padding:12px 14px;border:1px solid #d0d7de;border-radius:7px;font-family:'Barlow',sans-serif;font-size:15px;color:#222;background:#f8fafc;outline:none;-webkit-appearance:none;">
         <option value="">Select your name...</option>
       </select>
     </div>
     <div class="login-field">
       <label>Access PIN</label>
-      <input type="password" inputmode="numeric" maxlength="4" id="setup-pin" placeholder="Enter 4-digit PIN" onkeydown="if(event.key==='Enter')attemptFirstLogin()" style="width:100%;padding:12px 14px;border:1px solid #d0d7de;border-radius:7px;font-family:'Barlow',sans-serif;font-size:16px;color:#222;background:#f8fafc;outline:none;letter-spacing:6px;">
+      <input type="password" inputmode="numeric" maxlength="4" id="setup-pin" placeholder="Enter 4-digit PIN" onkeydown="if(event.key==='Enter')attemptFirstLogin()" style="width:100%;padding:12px 14px;border:1px solid #d0d7de;border-radius:7px;font-family:'Barlow',sans-serif;font-size:15px;color:#222;background:#f8fafc;outline:none;letter-spacing:6px;">
     </div>
     <button class="btn-login" onclick="attemptFirstLogin()">Continue to FieldLog</button>
     <div style="font-size:11px;color:#bbb;margin-top:16px;">Balar Associates, Inc. &nbsp;·&nbsp; Authorized Personnel Only</div>
@@ -197,7 +194,7 @@ textarea{resize:vertical;min-height:90px;}
     <div class="login-error" id="welcome-error" style="display:none;"></div>
     <div class="login-field">
       <label>Enter PIN to continue</label>
-      <input type="password" inputmode="numeric" maxlength="4" id="welcome-pin" placeholder="4-digit PIN" onkeydown="if(event.key==='Enter')attemptWelcomeLogin()" style="width:100%;padding:12px 14px;border:1px solid #d0d7de;border-radius:7px;font-family:'Barlow',sans-serif;font-size:16px;color:#222;background:#f8fafc;outline:none;letter-spacing:6px;">
+      <input type="password" inputmode="numeric" maxlength="4" id="welcome-pin" placeholder="4-digit PIN" onkeydown="if(event.key==='Enter')attemptWelcomeLogin()" style="width:100%;padding:12px 14px;border:1px solid #d0d7de;border-radius:7px;font-family:'Barlow',sans-serif;font-size:15px;color:#222;background:#f8fafc;outline:none;letter-spacing:6px;">
     </div>
     <button class="btn-login" onclick="attemptWelcomeLogin()">Continue to FieldLog</button>
     <div style="font-size:12px;color:#aaa;margin-top:16px;cursor:pointer;" onclick="resetIdentity()">Not you? Switch user</div>
@@ -435,7 +432,7 @@ textarea{resize:vertical;min-height:90px;}
           <div id="narrative-form-view">
             <div class="card header-card">
               <div style="font-size:13px;color:#555;margin-bottom:10px;">Provide an overall summary of work performed today. This will appear at the top of the generated report.</div>
-              <textarea id="daily-narrative" rows="5" placeholder="Enter daily summary narrative..." style="width:100%;font-size:16px;padding:10px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;resize:vertical;font-family:'Barlow',sans-serif;line-height:1.5;box-sizing:border-box;"></textarea>
+              <textarea id="daily-narrative" rows="5" placeholder="Enter daily summary narrative..." style="width:100%;font-size:14px;padding:10px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;resize:vertical;font-family:'Barlow',sans-serif;line-height:1.5;box-sizing:border-box;"></textarea>
               <button class="btn-post-header" onclick="saveNarrative()" style="margin-top:10px;background:#1b2d42;">&#128190; Save Narrative</button>
             </div>
           </div>
@@ -608,12 +605,6 @@ async function init(){
   window._capacitorReady = false;
   if(window.Capacitor && window.Capacitor.isNativePlatform()){
     window._capacitorReady = true;
-    if(window.Capacitor.getPlatform() === 'ios'){
-      try{
-        const { Keyboard } = window.Capacitor.Plugins;
-        await Keyboard.setAccessoryBarVisible({ isVisible: true });
-      } catch(e){ console.log('Keyboard plugin error:', e); }
-    }
   }
   if(GOOGLE_SCRIPT_URL){ await loadDropdownData(); }
   else{ document.getElementById('loading-state').innerHTML='<span style="color:#e67e22;">Google Script URL not set.</span>'; showForm(); }
@@ -1562,10 +1553,23 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
     var sheetEntries = (data.entries||[]).filter(function(e){ return e.entryType !== 'header'; });
     if(sheetEntries.length === 0) return;
 
-    // Remove any previously synced sheet entries for this project/date before re-adding
-    // This prevents duplicates when switching projects back and forth
+    // Build the set of entry IDs coming back from the sheet (the authoritative copy).
+    var _incomingIds = {};
+    sheetEntries.forEach(function(se){
+      var sid = String(se.entryId||'').replace(/\.0$/,'').trim();
+      if(sid) _incomingIds[sid] = true;
+    });
+    // For this project/date, remove (a) previously-fetched sheet copies, and
+    // (b) the local original of any entry now coming back from the sheet — matched
+    // by the REAL entry ID — so the same entry can't appear twice. Local UNSYNCED
+    // entries aren't in the sheet yet, so they're left untouched.
     entries = entries.filter(function(e){
-      return !(e.fromSheets && e.project === projectName && e.date === dateLocale);
+      if(e.project === projectName && e.date === dateLocale){
+        if(e.fromSheets) return false;
+        var eid = String(e.id||'').replace(/\.0$/,'').trim();
+        if(eid && _incomingIds[eid]) return false;
+      }
+      return true;
     });
 
     // Convert sheet entries to local format
@@ -1573,7 +1577,7 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
     sheetEntries.forEach(function(se){
       {
         entries.push({
-          id: Date.now() + Math.random(),
+          id: se.entryId || (Date.now() + Math.random()),
           type: 'entry',
           project: projectName,
           projectNumber: projectNumber||'',
@@ -2061,7 +2065,7 @@ function clearEntryForm(){
   var et=document.getElementById('entry-time');
   if(et)et.value=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
   var ef=document.getElementById('entries-form-section');
-  var mainEl=document.querySelector('main');if(ef&&mainEl)mainEl.scrollTo({top:ef.offsetTop,behavior:'smooth'});
+  if(ef)window.scrollTo({top:ef.offsetTop,behavior:'smooth'});
 }
 
 // ── RENDER ENTRIES ───────────────────────────────────────
@@ -2396,7 +2400,7 @@ function startNewProjectHeader(){
   var eqNone=document.getElementById('equipment-none-check');if(eqNone)eqNone.checked=false;
   var wfNone=document.getElementById('workforce-none-check');if(wfNone)wfNone.checked=false;
   document.getElementById('header-error').style.display = 'none';
-  var mainEl=document.querySelector('main');if(mainEl)mainEl.scrollTo({top:0, behavior:'smooth'});
+  window.scrollTo({top:0, behavior:'smooth'});
 }
 
 function openReportModal(){
@@ -2568,25 +2572,37 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
   const narrativeEl=document.getElementById('daily-narrative');
   const dailyNarrative=narrativeEl?narrativeEl.value.trim():'';
 
-  const headerInfoHtml=
-    '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px;">'+
-    '<tr>'+
-    '<td style="padding:4px 8px 4px 0;color:#555;width:140px;font-weight:bold;vertical-align:top;">Project:</td>'+
-    '<td style="padding:4px 16px 4px 0;vertical-align:top;">'+(proj.number?proj.number+' — ':'')+proj.name+'</td>'+
-    '<td style="padding:4px 8px 4px 0;color:#555;width:140px;font-weight:bold;vertical-align:top;">Date:</td>'+
-    '<td style="padding:4px 0;vertical-align:top;">'+dateStr+'</td></tr>'+
-    (dayType?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Day Type:</td><td style="padding:4px 16px 4px 0;">'+dayType+'</td><td></td><td></td></tr>':'')+
-    '<tr>'+
-    '<td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;vertical-align:top;">Client:</td>'+
-    '<td style="padding:4px 16px 4px 0;vertical-align:top;">'+client+'</td>'+
-    '<td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;vertical-align:top;">Project Engineer:</td>'+
-    '<td style="padding:4px 0;vertical-align:top;">'+(engineer||'')+'</td></tr>'+
-    '<tr>'+
-    '<td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;vertical-align:top;">Prime Contractor:</td>'+
-    '<td style="padding:4px 16px 4px 0;vertical-align:top;">'+(contractor||'')+'</td>'+
-    '<td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;vertical-align:top;">Weather:</td>'+
-    '<td style="padding:4px 0;vertical-align:top;">'+(dailyWeatherStr||'')+'</td></tr>'+
-    (inspectors.length>0?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Report Contributors:</td><td colspan="3">'+inspectors.join(', ')+'</td></tr>':'')+
+  var _leftItems = [
+    ['Client', client],
+    ['Project', proj.name || ''],
+    ['Project Number', proj.number || ''],
+    ['Prime Contractor', contractor || ''],
+    ['Report Contributors', inspectors.join(', ')]
+  ].filter(function(it){ return it[1]; });
+  var _rightItems = [
+    ['Date', dateStr],
+    ['Day Type', dayType || ''],
+    ['Weather', dailyWeatherStr || ''],
+    ['Project Engineer', engineer || '']
+  ].filter(function(it){ return it[1]; });
+  var _hdrLbl  = 'padding:4px 8px 4px 0;color:#555;width:140px;font-weight:bold;vertical-align:top;';
+  var _hdrLVal = 'padding:4px 16px 4px 0;vertical-align:top;';
+  var _hdrRVal = 'padding:4px 0;vertical-align:top;white-space:nowrap;';
+  var _hdrRows = '';
+  for (var _hr = 0; _hr < Math.max(_leftItems.length, _rightItems.length); _hr++) {
+    var _L = _leftItems[_hr], _R = _rightItems[_hr];
+    if (_L && !_R) {
+      _hdrRows += '<tr><td style="'+_hdrLbl+'">'+_L[0]+':</td><td colspan="3" style="'+_hdrLVal+'">'+_L[1]+'</td></tr>';
+    } else {
+      _hdrRows += '<tr>' +
+        (_L ? '<td style="'+_hdrLbl+'">'+_L[0]+':</td><td style="'+_hdrLVal+'">'+_L[1]+'</td>' : '<td></td><td></td>') +
+        (_R ? '<td style="'+_hdrLbl+'">'+_R[0]+':</td><td style="'+_hdrRVal+'">'+_R[1]+'</td>' : '<td></td><td></td>') +
+        '</tr>';
+    }
+  }
+  const headerInfoHtml =
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px;">' +
+    _hdrRows +
     '</table>';
 
   // Equipment — always show section, display None if selected
@@ -2757,42 +2773,6 @@ document.addEventListener('DOMContentLoaded',function(){
     batchUploadPhotos(files);
     e.target.value='';
   });
-  // Keyboard Done toolbar
-  var toolbar=document.getElementById('keyboard-toolbar');
-  function positionToolbar(){
-    if(window.visualViewport){
-      var vv=window.visualViewport;
-      var keyboardHeight=window.innerHeight - vv.height;
-      toolbar.style.transform='translateY(-'+keyboardHeight+'px)';
-    } else {
-      toolbar.style.transform='translateY(0)';
-    }
-  }
-  function resetToolbar(){
-    toolbar.style.transform='translateY(0)';
-    toolbar.style.display='none';
-  }
-  document.addEventListener('focusin',function(e){
-    if(e.target.matches('input,textarea,select')){
-      toolbar.style.display='flex';
-      positionToolbar();
-    }
-  });
-  document.addEventListener('focusout',function(){
-    setTimeout(function(){
-      if(!document.activeElement.matches('input,textarea,select')){
-        resetToolbar();
-      }
-    },100);
-  });
-  if(window.visualViewport){
-    window.visualViewport.addEventListener('resize',function(){
-      if(toolbar.style.display==='flex') positionToolbar();
-    });
-    window.visualViewport.addEventListener('scroll',function(){
-      if(toolbar.style.display==='flex') positionToolbar();
-    });
-  }
 });
 
 async function batchUploadPhotos(files){
