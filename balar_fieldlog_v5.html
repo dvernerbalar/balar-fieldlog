@@ -2572,25 +2572,37 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
   const narrativeEl=document.getElementById('daily-narrative');
   const dailyNarrative=narrativeEl?narrativeEl.value.trim():'';
 
-  const headerInfoHtml=
-    '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px;">'+
-    '<tr>'+
-    '<td style="padding:4px 8px 4px 0;color:#555;width:140px;font-weight:bold;vertical-align:top;">Project:</td>'+
-    '<td style="padding:4px 16px 4px 0;vertical-align:top;">'+(proj.number?proj.number+' — ':'')+proj.name+'</td>'+
-    '<td style="padding:4px 8px 4px 0;color:#555;width:140px;font-weight:bold;vertical-align:top;">Date:</td>'+
-    '<td style="padding:4px 0;vertical-align:top;">'+dateStr+'</td></tr>'+
-    (dayType?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Day Type:</td><td style="padding:4px 16px 4px 0;">'+dayType+'</td><td></td><td></td></tr>':'')+
-    '<tr>'+
-    '<td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;vertical-align:top;">Client:</td>'+
-    '<td style="padding:4px 16px 4px 0;vertical-align:top;">'+client+'</td>'+
-    '<td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;vertical-align:top;">Project Engineer:</td>'+
-    '<td style="padding:4px 0;vertical-align:top;">'+(engineer||'')+'</td></tr>'+
-    '<tr>'+
-    '<td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;vertical-align:top;">Prime Contractor:</td>'+
-    '<td style="padding:4px 16px 4px 0;vertical-align:top;">'+(contractor||'')+'</td>'+
-    '<td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;vertical-align:top;">Weather:</td>'+
-    '<td style="padding:4px 0;vertical-align:top;">'+(dailyWeatherStr||'')+'</td></tr>'+
-    (inspectors.length>0?'<tr><td style="padding:4px 8px 4px 0;color:#555;font-weight:bold;">Report Contributors:</td><td colspan="3">'+inspectors.join(', ')+'</td></tr>':'')+
+  var _leftItems = [
+    ['Client', client],
+    ['Project', proj.name || ''],
+    ['Project Number', proj.number || ''],
+    ['Prime Contractor', contractor || ''],
+    ['Report Contributors', inspectors.join(', ')]
+  ].filter(function(it){ return it[1]; });
+  var _rightItems = [
+    ['Date', dateStr],
+    ['Day Type', dayType || ''],
+    ['Weather', dailyWeatherStr || ''],
+    ['Project Engineer', engineer || '']
+  ].filter(function(it){ return it[1]; });
+  var _hdrLbl  = 'padding:4px 8px 4px 0;color:#555;width:140px;font-weight:bold;vertical-align:top;';
+  var _hdrLVal = 'padding:4px 16px 4px 0;vertical-align:top;';
+  var _hdrRVal = 'padding:4px 0;vertical-align:top;white-space:nowrap;';
+  var _hdrRows = '';
+  for (var _hr = 0; _hr < Math.max(_leftItems.length, _rightItems.length); _hr++) {
+    var _L = _leftItems[_hr], _R = _rightItems[_hr];
+    if (_L && !_R) {
+      _hdrRows += '<tr><td style="'+_hdrLbl+'">'+_L[0]+':</td><td colspan="3" style="'+_hdrLVal+'">'+_L[1]+'</td></tr>';
+    } else {
+      _hdrRows += '<tr>' +
+        (_L ? '<td style="'+_hdrLbl+'">'+_L[0]+':</td><td style="'+_hdrLVal+'">'+_L[1]+'</td>' : '<td></td><td></td>') +
+        (_R ? '<td style="'+_hdrLbl+'">'+_R[0]+':</td><td style="'+_hdrRVal+'">'+_R[1]+'</td>' : '<td></td><td></td>') +
+        '</tr>';
+    }
+  }
+  const headerInfoHtml =
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px;">' +
+    _hdrRows +
     '</table>';
 
   // Equipment — always show section, display None if selected
