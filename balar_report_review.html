@@ -58,6 +58,31 @@
   .center-message .icon { font-size: 48px; margin-bottom: 16px; }
   .center-message h2    { font-size: 20px; color: #333; margin-bottom: 8px; }
   .center-message p     { font-size: 14px; color: #888; max-width: 380px; margin: 0 auto; }
+  .retry-btn {
+    margin-top: 18px;
+    padding: 10px 24px;
+    background: #1a3a5c;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .retry-btn:hover { background: #25537a; }
+
+  /* ── Verify-after-error banner ── */
+  .action-retry-banner {
+    display: none;
+    background: #fff8e1;
+    border: 1px solid #ffc107;
+    color: #7a5c00;
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    line-height: 1.5;
+  }
 
   /* ── Info card ── */
   .info-card {
@@ -241,7 +266,7 @@
   <div class="center-message" id="loadingScreen">
     <div class="icon">⏳</div>
     <h2>Loading report…</h2>
-    <p>Fetching report data. This should only take a moment.</p>
+    <p id="loadingMessage">Fetching report data. If the server is slow, this will keep retrying automatically.</p>
   </div>
 
   <!-- Error state -->
@@ -249,6 +274,7 @@
     <div class="icon">⚠️</div>
     <h2 id="errorTitle">Unable to load report</h2>
     <p id="errorMessage">The link may be invalid or expired. Please contact the inspector for a new submission link.</p>
+    <button id="retryLoadBtn" class="retry-btn" onclick="retryLoad()">↻ Retry</button>
   </div>
 
   <!-- Already resolved (approved/rejected) -->
@@ -256,10 +282,14 @@
     <div class="icon" id="resolvedIcon"></div>
     <h2 id="resolvedTitle"></h2>
     <p id="resolvedMessage"></p>
+    <button id="resolvedRefreshBtn" class="retry-btn" style="display:none;" onclick="location.reload()">↻ Refresh status</button>
   </div>
 
   <!-- Report content (shown after successful data load) -->
   <div id="reportContent" style="display:none;">
+
+    <!-- Verify-after-error banner (couldn't confirm an approve/reject) -->
+    <div class="action-retry-banner" id="actionRetryBanner"></div>
 
     <!-- Report info card -->
     <div class="info-card">
@@ -350,10 +380,10 @@
 
 <script>
 // =============================================================================
-// CONFIGURATION — replace with your deployed Apps Script URL
+// CONFIGURATION — same deployed Apps Script URL as the main FieldLog app
 // =============================================================================
 var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzboPnRIKSebUQEPoKYILSt8Zj8WbJJ0AYa7fU2Vl4n7Jx1_vvCnjdWk_2K1pE5uQOH/exec';
-// Same URL as the main FieldLog app — this page just sends different actions.
+// This page just sends different actions than the main app.
 
 // =============================================================================
 // STATE
@@ -371,6 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (!_token) {
     showError('No review token found', 'This URL is missing the required access token. Please use the link from the email sent to you.');
+    document.getElementById('retryLoadBtn').style.display = 'none';
     return;
   }
 
@@ -378,20 +409,30 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function loadReport() {
-  postAction({ action: 'getReportByToken', token: _token })
+  document.getElementById('errorScreen').style.display = 'none';
+  document.getElementById('loadingScreen').style.display = 'block';
+  document.getElementById('retryLoadBtn').style.display = 'inline-block';
+
+  // getReportByToken is a READ — safe to retry through the flaky serving layer
+  // instead of dying on the first miss.
+  postActionRetry({ action: 'getReportByToken', token: _token }, { attempts: 6, timeoutMs: 12000, backoffMs: 1500 })
     .then(function(response) {
-      if (response.status !== 'success') {
-        showError('Report not found', response.message || 'Invalid or expired token. Please contact the inspector.');
+      if (!response || response.status !== 'success') {
+        showError('Report not found', (response && response.message) || 'Invalid or expired token. Please contact the inspector.');
         return;
       }
-
       _reportData = response.data;
       _engineerName = _reportData.engineerName || '';
       renderReport(_reportData);
     })
     .catch(function(err) {
-      showError('Connection error', 'Could not reach the server. Check your internet connection and try again.');
+      showError('Server is slow right now',
+        'Could not reach the server after several tries — this is usually a temporary hiccup on Google’s side, not a problem with the report. Tap Retry, or reopen the link in a minute.');
     });
+}
+
+function retryLoad() {
+  loadReport();
 }
 
 // =============================================================================
@@ -399,6 +440,7 @@ function loadReport() {
 // =============================================================================
 function renderReport(data) {
   document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('errorScreen').style.display = 'none';
 
   var status = data.reportStatus || '';
 
@@ -407,7 +449,7 @@ function renderReport(data) {
   badge.innerHTML = '<span class="status-badge status-' + (status || 'pending') + '">' +
                     (status || 'pending') + '</span>';
 
-  // If already approved or rejected, show resolved screen instead of action buttons
+  // If already approved, show resolved screen instead of action buttons
   if (status === 'approved') {
     showResolvedScreen(
       '✅',
@@ -417,16 +459,9 @@ function renderReport(data) {
     return;
   }
 
-  if (status === 'rejected') {
-    // Rejected but still review-able — engineer may want to see it again
-    // Show content but no action buttons (inspector needs to resubmit)
-    document.getElementById('actionBar').classList.remove('hidden');
-    // Actually allow re-review in case engineer wants to re-approve after resubmit
-    // The action bar stays active; report_status will be reset to "pending" when inspector resubmits
-  }
-
   // Show report content
   document.getElementById('reportContent').style.display = 'block';
+  document.getElementById('actionRetryBanner').style.display = 'none';
 
   // Populate info card
   document.getElementById('infoProjectId').textContent   = data.projectId   || '—';
@@ -444,7 +479,7 @@ function renderReport(data) {
     document.getElementById('pdfUnavailable').style.display = 'block';
   }
 
-  // Show action bar if report is pending (or rejected — engineer can still act)
+  // Show action bar if report is pending or rejected (engineer can still act)
   if (status === 'pending' || status === 'rejected' || !status) {
     document.getElementById('actionBar').classList.remove('hidden');
   }
@@ -454,6 +489,7 @@ function renderReport(data) {
 // APPROVE FLOW
 // =============================================================================
 function openApproveModal() {
+  document.getElementById('actionRetryBanner').style.display = 'none';
   document.getElementById('approveEngineerName').textContent = _engineerName || 'Unknown Engineer';
   document.getElementById('approveModal').classList.add('open');
 }
@@ -469,39 +505,33 @@ function submitApproval() {
     return;
   }
   closeApproveModal();
-
+  document.getElementById('actionRetryBanner').style.display = 'none';
   showSpinner('Submitting approval…');
 
-  postAction({
-    action: 'approveReport',
-    token:  _token,
-    engineerName: name
-  }).then(function(response) {
-    hideSpinner();
-    if (response.status === 'success') {
-      showResolvedScreen(
-        '✅',
-        'Report Approved',
-        'Approved by ' + name + ' on ' + formatDate(new Date().toISOString()) + '.\n' +
-        'The PDF has been moved to the Approved folder and the inspector\u2019s entries are now locked.'
-      );
-      document.getElementById('actionBar').classList.add('hidden');
-      // Update header badge
-      var badge = document.getElementById('headerStatusBadge');
-      badge.innerHTML = '<span class="status-badge status-approved">approved</span>';
-    } else {
-      alert('❌ Approval failed: ' + response.message);
-    }
-  }).catch(function(err) {
-    hideSpinner();
-    alert('❌ Network error: ' + err.toString());
-  });
+  // SIDE-EFFECT action: exactly one attempt — never auto-retried.
+  postActionOnce({ action: 'approveReport', token: _token, engineerName: name }, 25000)
+    .then(function(response) {
+      hideSpinner();
+      if (response && response.status === 'success') {
+        showApprovedResolved(name, null);
+      } else {
+        // Server answered with an error — re-check status before alarming the user.
+        verifyAfterError('approve', name, (response && response.message) || '');
+      }
+    })
+    .catch(function(err) {
+      hideSpinner();
+      // Lost acknowledgment (timeout / 404 / network). Do NOT resend — verify what
+      // actually happened on the server instead.
+      verifyAfterError('approve', name, '');
+    });
 }
 
 // =============================================================================
 // REJECT FLOW
 // =============================================================================
 function openRejectModal() {
+  document.getElementById('actionRetryBanner').style.display = 'none';
   document.getElementById('rejectCommentInput').value = '';
   document.getElementById('rejectCommentError').style.display = 'none';
   document.getElementById('rejectModal').classList.add('open');
@@ -515,43 +545,109 @@ function closeRejectModal() {
 function submitRejection() {
   var name    = _engineerName;
   var comment = document.getElementById('rejectCommentInput').value.trim();
-  var valid   = true;
 
   if (!comment) {
     document.getElementById('rejectCommentError').style.display = 'block';
-    valid = false;
-  } else {
-    document.getElementById('rejectCommentError').style.display = 'none';
+    return;
   }
-
-  if (!valid) return;
+  document.getElementById('rejectCommentError').style.display = 'none';
   closeRejectModal();
-
+  document.getElementById('actionRetryBanner').style.display = 'none';
   showSpinner('Submitting rejection…');
 
-  postAction({
-    action: 'rejectReport',
-    token:  _token,
-    engineerName: name,
-    comment: comment
-  }).then(function(response) {
-    hideSpinner();
-    if (response.status === 'success') {
-      showResolvedScreen(
-        '❌',
-        'Report Rejected',
-        'The inspector has been notified by email with your comment. They will make corrections and resubmit.'
-      );
-      document.getElementById('actionBar').classList.add('hidden');
-      var badge = document.getElementById('headerStatusBadge');
-      badge.innerHTML = '<span class="status-badge status-rejected">rejected</span>';
-    } else {
-      alert('❌ Rejection failed: ' + response.message);
-    }
-  }).catch(function(err) {
-    hideSpinner();
-    alert('❌ Network error: ' + err.toString());
-  });
+  postActionOnce({ action: 'rejectReport', token: _token, engineerName: name, comment: comment }, 25000)
+    .then(function(response) {
+      hideSpinner();
+      if (response && response.status === 'success') {
+        showRejectedResolved();
+      } else {
+        verifyAfterError('reject', comment, (response && response.message) || '');
+      }
+    })
+    .catch(function(err) {
+      hideSpinner();
+      verifyAfterError('reject', comment, '');
+    });
+}
+
+// =============================================================================
+// VERIFY-AFTER-ERROR
+// After an approve/reject error or lost reply, re-check the report's status with a
+// safe READ before deciding what to show — never blindly re-send the action.
+// =============================================================================
+function verifyAfterError(kind, nameOrComment, origMsg) {
+  showSpinner('Confirming with the server…');
+  postActionRetry({ action: 'getReportByToken', token: _token }, { attempts: 4, timeoutMs: 12000, backoffMs: 1500 })
+    .then(function(resp) {
+      hideSpinner();
+      if (resp && resp.status === 'success') {
+        var st = (resp.data && resp.data.reportStatus) || '';
+        if (kind === 'approve' && st === 'approved') {
+          // It DID go through — the only thing that failed was the reply.
+          showApprovedResolved(resp.data.approvedBy || nameOrComment, resp.data.approvedTimestamp);
+        } else if (kind === 'reject' && st === 'rejected') {
+          showRejectedResolved();
+        } else {
+          // Status is still pending (or unexpected): the action did NOT apply.
+          showActionRetry(kind, origMsg);
+        }
+      } else {
+        // Server responded but the token is no longer valid.
+        if (kind === 'reject') {
+          // rejectReport clears the token on success, so an invalid token here means
+          // the rejection almost certainly went through.
+          showRejectedResolved();
+        } else {
+          showCantConfirm(kind);
+        }
+      }
+    })
+    .catch(function() {
+      hideSpinner();
+      // Couldn't even reach the server to check — don't guess.
+      showCantConfirm(kind);
+    });
+}
+
+function showApprovedResolved(name, ts) {
+  document.getElementById('actionBar').classList.add('hidden');
+  var when = ts ? formatDate(ts) : formatDate(new Date().toISOString());
+  showResolvedScreen('✅', 'Report Approved',
+    'Approved by ' + (name || _engineerName) + ' on ' + when + '.\n' +
+    'The PDF has been moved to the Approved folder and the inspector’s entries are now locked.');
+  document.getElementById('headerStatusBadge').innerHTML =
+    '<span class="status-badge status-approved">approved</span>';
+}
+
+function showRejectedResolved() {
+  document.getElementById('actionBar').classList.add('hidden');
+  showResolvedScreen('❌', 'Report Rejected',
+    'The inspector has been notified by email with your comment. They will make corrections and resubmit.');
+  document.getElementById('headerStatusBadge').innerHTML =
+    '<span class="status-badge status-rejected">rejected</span>';
+}
+
+// The action didn't apply — keep the report visible and let the engineer retry.
+function showActionRetry(kind, origMsg) {
+  var verbCap = kind === 'approve' ? 'Approve' : 'Reject';
+  var noun    = kind === 'approve' ? 'approval' : 'rejection';
+  var banner  = document.getElementById('actionRetryBanner');
+  banner.textContent = 'We couldn’t confirm the ' + noun + ' went through' +
+    (origMsg ? ' (' + origMsg + ')' : '') + ', and it was NOT applied. Tap ' + verbCap + ' to try again.';
+  document.getElementById('resolvedScreen').style.display = 'none';
+  document.getElementById('reportContent').style.display = 'block';
+  banner.style.display = 'block';
+  document.getElementById('actionBar').classList.remove('hidden');
+}
+
+// Couldn't reach the server to verify — don't claim success or failure.
+function showCantConfirm(kind) {
+  document.getElementById('actionBar').classList.add('hidden');
+  var noun = kind === 'approve' ? 'approval' : 'rejection';
+  showResolvedScreen('⏳', 'Couldn’t confirm',
+    'The server didn’t respond in time, so we can’t tell whether the ' + noun + ' went through — it may well have. ' +
+    'Refresh in a moment to see the current status.');
+  document.getElementById('resolvedRefreshBtn').style.display = 'inline-block';
 }
 
 // =============================================================================
@@ -560,6 +656,7 @@ function submitRejection() {
 function showError(title, message) {
   document.getElementById('loadingScreen').style.display  = 'none';
   document.getElementById('reportContent').style.display  = 'none';
+  document.getElementById('resolvedScreen').style.display = 'none';
   document.getElementById('errorScreen').style.display    = 'block';
   document.getElementById('errorTitle').textContent       = title;
   document.getElementById('errorMessage').textContent     = message;
@@ -569,10 +666,13 @@ function showError(title, message) {
 function showResolvedScreen(icon, title, message) {
   document.getElementById('loadingScreen').style.display  = 'none';
   document.getElementById('reportContent').style.display  = 'none';
+  document.getElementById('errorScreen').style.display    = 'none';
   document.getElementById('resolvedScreen').style.display = 'block';
   document.getElementById('resolvedIcon').textContent     = icon;
   document.getElementById('resolvedTitle').textContent    = title;
   document.getElementById('resolvedMessage').textContent  = message;
+  document.getElementById('resolvedMessage').style.whiteSpace = 'pre-line';
+  document.getElementById('resolvedRefreshBtn').style.display = 'none';
 }
 
 function showSpinner(label) {
@@ -588,8 +688,8 @@ function formatDate(value) {
   if (!value) return '—';
   try {
     var s = String(value);
-    // If it looks like a plain date (YYYY-MM-DD), parse without time
-    // to avoid UTC-to-local conversion shifting the day
+    // If it looks like a plain date (YYYY-MM-DD), parse without time to avoid
+    // UTC-to-local conversion shifting the day.
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
       var parts = s.split('-');
       return new Date(
@@ -607,13 +707,44 @@ function formatDate(value) {
 // =============================================================================
 // APPS SCRIPT POST
 // =============================================================================
-function postAction(payload) {
-  return fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(payload)
-  }).then(function(res) { return res.json(); });
+// One POST attempt with a timeout. Rejects on timeout, non-2xx, or bad JSON so
+// the caller can decide whether to retry (reads) or verify (side effects).
+function _fetchOnce(payload, timeoutMs) {
+  return new Promise(function(resolve, reject) {
+    var ctrl = new AbortController();
+    var timer = setTimeout(function() { ctrl.abort(); }, timeoutMs || 15000);
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal
+    }).then(function(res) {
+      clearTimeout(timer);
+      if (!res.ok) { reject(new Error('HTTP ' + res.status)); return; }
+      res.json().then(function(j) { resolve(j); }, function() { reject(new Error('bad-json')); });
+    }).catch(function(err) { clearTimeout(timer); reject(err); });
+  });
+}
+
+// READ actions only (getReportByToken): safe to retry with backoff.
+function postActionRetry(payload, opts) {
+  opts = opts || {};
+  var attempts  = opts.attempts  || 5;
+  var timeoutMs = opts.timeoutMs || 12000;
+  var backoffMs = opts.backoffMs || 1500;
+  function tryOnce(n) {
+    return _fetchOnce(payload, timeoutMs).catch(function(err) {
+      if (n >= attempts) throw err;
+      return new Promise(function(r) { setTimeout(r, backoffMs * n); }).then(function() { return tryOnce(n + 1); });
+    });
+  }
+  return tryOnce(1);
+}
+
+// SIDE-EFFECT actions (approve/reject): single attempt — never auto-retried.
+function postActionOnce(payload, timeoutMs) {
+  return _fetchOnce(payload, timeoutMs || 22000);
 }
 </script>
 </body>
