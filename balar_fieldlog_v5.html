@@ -223,12 +223,12 @@ textarea{resize:vertical;min-height:90px;}
           <div class="posted-badge">✓ Daily Header Posted</div>
           <div style="display:flex;gap:8px;">
             <button class="btn-edit-header" onclick="editDailyHeader()">Edit Header</button>
-            <button class="btn-edit-header" id="btn-repost-header" onclick="flRepostHeader(false)" title="Push this header to the sheet again">Re-post</button>
             <button class="btn-edit-header" onclick="openSwitchProject()" style="border-color:var(--red);color:var(--red);">Switch Project</button>
           </div>
         </div>
         <div id="header-summary" style="font-size:13px;color:#333;line-height:1.8;"></div>
         <div id="fl-header-sync-state"></div>
+        <button class="btn-edit-header" id="btn-repost-header" onclick="flRepostHeader(false)" title="Push this header to the sheet again" style="width:100%;display:block;margin-top:14px;min-height:44px;">&#8635; Re-post Header to Sheet</button>
       </div>
     </div>
 
@@ -1731,9 +1731,8 @@ function _flRenderHeaderBadge(){
   if(!dailyHeader) return;
   if(!pv || pv.style.display === 'none') return;
   if(_flHeaderIsConfirmed()) return;
-  var html = '<div id="header-sync-error" style="background:#fde8ea;border:1px solid #f5b7bc;border-radius:7px;padding:10px 14px;margin:10px 0 0 0;font-size:13px;color:#9b1c2e;display:flex;align-items:center;justify-content:space-between;gap:10px;">'+
-    '<span>&#9888;&#65039; This header is <b>not confirmed in the sheet</b>. Your entries are still saving. Retrying automatically &mdash; a report cannot be generated until it lands.</span>'+
-    '<button id="fl-hdr-retry-btn" onclick="flRepostHeader(false)" style="background:#9b1c2e;color:white;border:none;border-radius:5px;padding:6px 12px;font-size:12px;cursor:pointer;white-space:nowrap;">Retry now</button>'+
+  var html = '<div id="header-sync-error" style="background:#fde8ea;border:1px solid #f5b7bc;border-radius:7px;padding:10px 14px;margin:12px 0 0 0;font-size:13px;color:#9b1c2e;line-height:1.5;">'+
+    '<span>&#9888;&#65039; This header is <b>not confirmed in the sheet</b>. Your entries are still saving. Retrying automatically &mdash; a report cannot be generated until it lands. Tap <b>Re-post Header to Sheet</b> below to push it now.</span>'+
     '</div>';
   if(host){ host.innerHTML = html; return; }
   var efs = document.getElementById('entries-form-section');
@@ -1751,12 +1750,8 @@ function _flRenderHeaderBadge(){
 // no-op, discarding any edits.)
 function flRepostHeader(silent){
   if(!dailyHeader || !GOOGLE_SCRIPT_URL) return Promise.resolve(false);
-  var btn = document.getElementById('fl-hdr-retry-btn');
   var mainBtn = document.getElementById('btn-repost-header');
-  if(!silent){
-    if(btn){ btn.textContent='Retrying...'; btn.disabled=true; }
-    if(mainBtn){ mainBtn.textContent='Posting...'; mainBtn.disabled=true; }
-  }
+  if(!silent && mainBtn){ mainBtn.textContent='Posting...'; mainBtn.disabled=true; }
   var payload = Object.assign({}, dailyHeader, {
     action:'upsertHeader', entryId: dailyHeader.id, type:'header', desc:'HEADER'
   });
@@ -1768,21 +1763,41 @@ function flRepostHeader(silent){
   }, 30000)
   .then(function(r){ return r.json(); })
   .then(function(resp){
-    if(resp && resp.success){
-      _flCancelHeaderRetry();
-      _flSetHeaderConfirmed(true);
+    if(!(resp && resp.success)) throw new Error((resp && resp.error) || 'upsert failed');
+    // A success response is NOT proof the row landed. Confirm against the sheet
+    // before flipping the flag — trusting the ack is the exact failure this
+    // whole mechanism exists to catch. A missing `mode` also means the backend
+    // that answered has no upsertHeader action (old deployment still serving).
+    var staleBackend = !resp.mode;
+    return _flCheckHeaderInSheet().then(function(present){
       var mb = document.getElementById('btn-repost-header');
-      if(mb){ mb.textContent='Re-post'; mb.disabled=false; }
-      if(!silent) showToast(resp.mode === 'appended' ? 'Header posted to sheet \u2713' : 'Header synced to sheet \u2713', false);
-      return true;
-    }
-    throw new Error((resp && resp.error) || 'upsert failed');
+      if(mb){ mb.innerHTML='&#8635; Re-post Header to Sheet'; mb.disabled=false; }
+      if(present === true){
+        _flCancelHeaderRetry();
+        _flSetHeaderConfirmed(true);
+        if(!silent) showToast(resp.mode === 'appended' ? 'Header posted to sheet \u2713' : 'Header synced to sheet \u2713', false);
+        return true;
+      }
+      if(present === null){
+        // Couldn't verify. Don't claim success, don't demote.
+        if(!silent) showToast('Sent, but could not confirm it in the sheet yet.', true);
+        _flScheduleHeaderRetry();
+        return false;
+      }
+      // Server said OK, sheet says the row is not there.
+      _flSetHeaderConfirmed(false);
+      if(!silent) showToast(staleBackend
+        ? 'Server accepted it but the row is not in the sheet \u2014 the Apps Script deployment looks out of date (upsertHeader missing).'
+        : 'Server accepted it but the row is still not in the sheet.', true);
+      _flScheduleHeaderRetry();
+      return false;
+    });
   })
   .catch(function(e){
     console.warn('Header upsert failed:', e);
     _flSetHeaderConfirmed(false);
     var mb2 = document.getElementById('btn-repost-header');
-    if(mb2){ mb2.textContent='Re-post'; mb2.disabled=false; }
+    if(mb2){ mb2.innerHTML='&#8635; Re-post Header to Sheet'; mb2.disabled=false; }
     if(!silent) showToast('Still cannot reach the sheet. Will keep retrying.', true);
     _flScheduleHeaderRetry();
     return false;
@@ -1803,31 +1818,35 @@ function _flCancelHeaderRetry(){
   _flHeaderRetryDelay = 0;
 }
 
-// Re-verify a cached header against the sheet. Confirms on a hit, DEMOTES on a
-// definitive "no header" answer (the deleted-row case), and deliberately does
-// NOTHING on a network failure — no response is not the same as no row, and
-// demoting on a dead connection would flag every offline inspector as broken.
-function _flVerifyHeaderAgainstSheet(){
-  if(!dailyHeader || !GOOGLE_SCRIPT_URL) return;
+// Ask the sheet whether this header row actually exists.
+// Resolves true (row present), false (definitively absent), or null (couldn't
+// tell — network failure). null is NOT the same as false: demoting on an
+// unreachable server would flag every offline inspector as broken.
+function _flCheckHeaderInSheet(){
+  if(!dailyHeader || !GOOGLE_SCRIPT_URL) return Promise.resolve(null);
   var d  = dailyHeader.date;
   var nm = dailyHeader.project;
   var pn = dailyHeader.projectNumber || '';
-  if(!d || !nm) return;
+  if(!d || !nm) return Promise.resolve(null);
   var url = GOOGLE_SCRIPT_URL+'?action=getHeader&date='+encodeURIComponent(d)+
-            '&projectName='+encodeURIComponent(nm)+'&projectNumber='+encodeURIComponent(pn);
-  _flFetch(url, {}, 20000)
+            '&projectName='+encodeURIComponent(nm)+'&projectNumber='+encodeURIComponent(pn)+
+            '&_ts='+Date.now();
+  return _flFetch(url, {}, 20000)
     .then(function(r){ return r.json(); })
     .then(function(data){
-      if(!dailyHeader || dailyHeader.date !== d || dailyHeader.project !== nm) return;
-      if(data && data.header){
-        _flCancelHeaderRetry();
-        _flSetHeaderConfirmed(true);
-      } else {
-        _flSetHeaderConfirmed(false);
-        _flScheduleHeaderRetry();
-      }
+      if(!dailyHeader || dailyHeader.date !== d || dailyHeader.project !== nm) return null;
+      return !!(data && data.header);
     })
-    .catch(function(){ /* unreachable != missing; leave the flag as-is */ });
+    .catch(function(){ return null; });
+}
+
+// Re-verify a cached header against the sheet on load / project select.
+function _flVerifyHeaderAgainstSheet(){
+  _flCheckHeaderInSheet().then(function(present){
+    if(present === null) return;              // unreachable — leave the flag alone
+    if(present){ _flCancelHeaderRetry(); _flSetHeaderConfirmed(true); }
+    else { _flSetHeaderConfirmed(false); _flScheduleHeaderRetry(); }
+  });
 }
 
 // Belt-and-suspenders for the stuck "Checking..." button.
