@@ -208,6 +208,7 @@ textarea{resize:vertical;min-height:90px;}
 
 <main class="no-print">
   <div id="loading-state" class="loading-bar"><span class="spinner"></span> Loading projects and inspectors...</div>
+  <div id="fl-offline-banner" style="display:none;background:#fff8e1;border:1px solid #ffc107;color:#7a5c00;border-radius:7px;padding:10px 14px;margin:8px 0;font-size:13px;">Working from your saved project list — the server is slow right now. Your entries will still save and sync when it recovers.</div>
   <div id="form-body" style="display:none;">
 
     <!-- ════════════════════════════════════════════
@@ -222,10 +223,12 @@ textarea{resize:vertical;min-height:90px;}
           <div class="posted-badge">✓ Daily Header Posted</div>
           <div style="display:flex;gap:8px;">
             <button class="btn-edit-header" onclick="editDailyHeader()">Edit Header</button>
+            <button class="btn-edit-header" id="btn-repost-header" onclick="flRepostHeader(false)" title="Push this header to the sheet again">Re-post</button>
             <button class="btn-edit-header" onclick="openSwitchProject()" style="border-color:var(--red);color:var(--red);">Switch Project</button>
           </div>
         </div>
         <div id="header-summary" style="font-size:13px;color:#333;line-height:1.8;"></div>
+        <div id="fl-header-sync-state"></div>
       </div>
     </div>
 
@@ -233,7 +236,7 @@ textarea{resize:vertical;min-height:90px;}
     <div id="header-form-view">
       <div class="card header-card">
         <div class="form-row two-col">
-          <div><label>Date of Work</label><input type="date" id="entry-date" placeholder="Select date of work" onchange="onDateChange()" style="min-width:160px;"></div>
+          <div><label>Date of Work</label><input type="date" id="entry-date" placeholder="Select date of work" onchange="flGuardFutureDate(this);onDateChange()" style="min-width:160px;"></div>
           <div><label>Day Type</label><select id="day-type"><option value="Work Day">Work Day</option><option value="Non-Work Day">Non-Work Day</option><option value="Rain Day">Rain Day</option><option value="Holiday">Holiday</option></select></div>
         </div>
         <div class="form-row two-col">
@@ -484,7 +487,7 @@ textarea{resize:vertical;min-height:90px;}
     <div class="modal-title">Generate Inspection Report</div>
     <div class="modal-sub">Select date and project to generate report.</div>
     <div class="modal-error" id="modal-error"></div>
-    <div class="modal-field"><label>Report Date</label><input type="date" id="report-date" onchange="loadReportProjects()"></div>
+    <div class="modal-field"><label>Report Date</label><input type="date" id="report-date" onchange="flGuardFutureDate(this);loadReportProjects()"></div>
     <div class="modal-field"><label>Project</label><select id="report-project" onchange="document.getElementById('btn-generate').disabled=!this.value;"><option value="">Select a date first...</option></select></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeReportModal()">Cancel</button>
@@ -631,10 +634,32 @@ async function init(){
 
 
 
+// ── Resilient GET: timeout + retry-with-backoff for the flaky Apps Script serving layer ──
+var FL_DROPDOWN_CACHE_KEY = 'fl_dropdowns_cache_v1';
+function flFetchJson(url, attempts, timeoutMs, backoffMs){
+  attempts = attempts || 4; timeoutMs = timeoutMs || 12000; backoffMs = backoffMs || 1500;
+  function once(){
+    return new Promise(function(resolve, reject){
+      var ctrl = new AbortController();
+      var timer = setTimeout(function(){ ctrl.abort(); }, timeoutMs);
+      fetch(url, { signal: ctrl.signal }).then(function(res){
+        clearTimeout(timer);
+        if(!res.ok){ reject(new Error('HTTP '+res.status)); return; }
+        res.json().then(resolve, function(){ reject(new Error('bad-json')); });
+      }).catch(function(e){ clearTimeout(timer); reject(e); });
+    });
+  }
+  function tryN(n){
+    return once().catch(function(err){
+      if(n >= attempts) throw err;
+      return new Promise(function(r){ setTimeout(r, backoffMs*n); }).then(function(){ return tryN(n+1); });
+    });
+  }
+  return tryN(1);
+}
+
 async function loadDropdownData(){
-  try{
-    const resp = await fetch(GOOGLE_SCRIPT_URL+'?action=getDropdowns');
-    const data = await resp.json();
+  function applyData(data, fromCache){
     projectsData=data.projects||[]; inspectorsData=data.inspectors||[];
     contractorsData=data.contractors||[]; equipmentData=data.equipment||[]; workforceData=data.workforce||[];
     buildProjectDropdown(); buildInspectorDropdown();
@@ -647,12 +672,39 @@ async function loadDropdownData(){
     renderEquipmentList('equipment-list', equipmentItems);
     renderWorkforceList('workforce-list', workforceItems);
     document.getElementById('loading-state').style.display='none';
-    showForm();
-  }catch(err){
-    document.getElementById('loading-state').innerHTML='<span style="color:var(--red);">Could not load data. Check Script URL.</span>';
+    var _b=document.getElementById('fl-offline-banner');
+    if(_b) _b.style.display = fromCache ? 'block' : 'none';
     showForm();
   }
+  try{
+    // Retry through a bad serving window; cache the good copy for offline fallback.
+    const data = await flFetchJson(GOOGLE_SCRIPT_URL+'?action=getDropdowns', 4, 12000, 1500);
+    try{ localStorage.setItem(FL_DROPDOWN_CACHE_KEY, JSON.stringify(data)); }catch(e){}
+    applyData(data, false);
+  }catch(err){
+    // All retries failed — fall back to the last good list so the inspector can keep working.
+    var cached=null;
+    try{ cached=JSON.parse(localStorage.getItem(FL_DROPDOWN_CACHE_KEY)); }catch(e){}
+    if(cached){
+      applyData(cached, true);
+    }else{
+      document.getElementById('loading-state').innerHTML='<span style="color:var(--red);">Server is slow right now — couldn’t load the project list, and no saved copy is on this device yet. <a href="#" onclick="loadDropdownData();return false;" style="color:var(--red);font-weight:700;">Tap to retry</a></span>';
+      showForm();
+    }
+  }
 }
+
+// ── Cap the work-date fields to today (past dates still allowed for backdating; future blocked) ──
+function flTodayISO(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function flApplyDateMax(){
+  ['entry-date','report-date'].forEach(function(id){ var el=document.getElementById(id); if(el) el.setAttribute('max', flTodayISO()); });
+}
+function flGuardFutureDate(el){
+  if(!el || !el.value) return;
+  if(el.value > flTodayISO()){ el.value=flTodayISO(); try{ alert('Future dates aren’t allowed — the work date can’t be later than today.'); }catch(e){} }
+}
+flApplyDateMax();
+['entry-date','report-date'].forEach(function(id){ var el=document.getElementById(id); if(el){ el.addEventListener('focus', flApplyDateMax); } });
 function showForm(){ document.getElementById('form-body').style.display='block'; }
 
 // ── PROJECT DROPDOWNS ────────────────────────────────────
@@ -736,7 +788,7 @@ function onProjectSelectChange(){
   var dateVal=document.getElementById('entry-date').value;
   if(dateVal){
     var phb2=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
-    if(phb2){phb2.disabled=true;phb2.textContent='Checking...';}
+    if(phb2){phb2.disabled=true;phb2.textContent='Checking...';_flArmPostHeaderWatchdog();}
     checkForExistingHeader(sel.dataset.name,dateVal,sel.dataset.number||'').finally(function(){
       var b2=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
       if(b2&&b2.textContent==='Checking...'){b2.disabled=false;b2.textContent='Post Daily Header';}
@@ -883,7 +935,7 @@ function onDateChange(){
     var projSel2=document.getElementById('project-select');
     var pnum2=projSel2&&projSel2.selectedIndex>0?projSel2.options[projSel2.selectedIndex].dataset.number||'':'';
     var phb=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
-    if(phb){phb.disabled=true;phb.textContent='Checking...';}
+    if(phb){phb.disabled=true;phb.textContent='Checking...';_flArmPostHeaderWatchdog();}
     checkForExistingHeader(proj,dateVal,pnum2).finally(function(){
       var b=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
       if(b&&b.textContent==='Checking...'){b.disabled=false;b.textContent='Post Daily Header';}
@@ -1504,6 +1556,12 @@ async function checkForExistingHeader(projectName, dateVal, projectNumber){
     p2_currentApprovedBy=dailyHeader.approved_by||'';
     p2_currentApprovedTimestamp=dailyHeader.approved_timestamp||'';
     p2_applyLockUI();
+    _flRenderHeaderBadge();
+    // Restored from cache: trust it for display, but re-check the sheet in the
+    // background. Catches both a header that never landed and one whose row was
+    // deleted after the fact.
+    _flVerifyHeaderAgainstSheet();
+    if(!_flHeaderIsConfirmed()) _flScheduleHeaderRetry();
     showToast('Header restored from today', false);
     // Sync any new entries from Sheets not in local cache
     var dp = dateLocale;
@@ -1514,10 +1572,13 @@ async function checkForExistingHeader(projectName, dateVal, projectNumber){
   // Not in local cache — check Sheets
   try{
     var url = GOOGLE_SCRIPT_URL+'?action=getHeader&date='+encodeURIComponent(dateLocale)+'&projectName='+encodeURIComponent(projectName)+'&projectNumber='+encodeURIComponent(projectNumber||'');
-    var resp = await fetch(url);
+    var resp = await _flFetch(url, {}, 20000);
     var data = await resp.json();
     if(data.header){
       var h = data.header;
+      // It came back FROM the sheet, so it demonstrably landed.
+      h.headerConfirmed = true;
+      h.sheetSynced = true;
       var key = (h.projectNumber||'')+'||'+h.project+'||'+h.date;
       dailyHeaders[key] = h;
       currentProjectKey = key;
@@ -1612,6 +1673,182 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
 }
 
 // ── POST DAILY HEADER ────────────────────────────────────
+
+// ── HEADER CONFIRMATION TRACKING ─────────────────────────
+// A header is "confirmed" only when the sheet has actually accepted it.
+// The flag is persisted with the header in localStorage, so it survives an app
+// restart, and it is re-verified against the sheet on load (a row can be
+// deleted out from under us). Entries are NOT blocked on it — report
+// generation is.
+var _flHeaderRetryTimer = null;
+var _flHeaderRetryDelay = 0;
+
+// fetch with a hard timeout. A hung request (no response, no rejection) is what
+// left the Post Daily Header button stuck on "Checking..." with no way back.
+function _flFetch(url, opts, ms){
+  opts = opts || {};
+  ms = ms || 20000;
+  if(typeof AbortController === 'undefined') return fetch(url, opts);
+  var ctrl = new AbortController();
+  opts.signal = ctrl.signal;
+  var t = setTimeout(function(){ try{ ctrl.abort(); }catch(e){} }, ms);
+  return fetch(url, opts).then(
+    function(r){ clearTimeout(t); return r; },
+    function(e){ clearTimeout(t); throw e; }
+  );
+}
+
+function _flHeaderKey(h){
+  if(!h) return '';
+  return (h.projectNumber||'')+'||'+(h.project||'')+'||'+(h.date||'');
+}
+
+function _flHeaderIsConfirmed(){
+  return !!(dailyHeader && dailyHeader.headerConfirmed === true);
+}
+
+function _flSetHeaderConfirmed(val){
+  if(!dailyHeader) return;
+  dailyHeader.headerConfirmed = val;
+  dailyHeader.sheetSynced = val;  // legacy flag kept in step
+  var k = currentProjectKey || _flHeaderKey(dailyHeader);
+  if(k && dailyHeaders[k]){
+    dailyHeaders[k].headerConfirmed = val;
+    dailyHeaders[k].sheetSynced = val;
+  }
+  try{ localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders)); }catch(e){}
+  _flRenderHeaderBadge();
+}
+
+// Rebuilt from the persisted flag on every load, so it can never vanish the way
+// the old DOM-only banner did.
+function _flRenderHeaderBadge(){
+  var old = document.getElementById('header-sync-error');
+  if(old) old.remove();
+  var host = document.getElementById('fl-header-sync-state');
+  if(host) host.innerHTML = '';
+  var pv = document.getElementById('header-posted-view');
+  if(!dailyHeader) return;
+  if(!pv || pv.style.display === 'none') return;
+  if(_flHeaderIsConfirmed()) return;
+  var html = '<div id="header-sync-error" style="background:#fde8ea;border:1px solid #f5b7bc;border-radius:7px;padding:10px 14px;margin:10px 0 0 0;font-size:13px;color:#9b1c2e;display:flex;align-items:center;justify-content:space-between;gap:10px;">'+
+    '<span>&#9888;&#65039; This header is <b>not confirmed in the sheet</b>. Your entries are still saving. Retrying automatically &mdash; a report cannot be generated until it lands.</span>'+
+    '<button id="fl-hdr-retry-btn" onclick="flRepostHeader(false)" style="background:#9b1c2e;color:white;border:none;border-radius:5px;padding:6px 12px;font-size:12px;cursor:pointer;white-space:nowrap;">Retry now</button>'+
+    '</div>';
+  if(host){ host.innerHTML = html; return; }
+  var efs = document.getElementById('entries-form-section');
+  if(efs && efs.parentNode){
+    var wrap = document.createElement('div');
+    wrap.innerHTML = html;
+    efs.parentNode.insertBefore(wrap.firstChild, efs);
+  }
+}
+
+// Push the header to the sheet. Uses the upsertHeader backend action, which
+// updates the row if it exists and appends it if it doesn't — so this both
+// repairs a header that never landed AND applies edits to one that did.
+// (A plain saveEntry re-post would hit the doPost dedup guard and silently
+// no-op, discarding any edits.)
+function flRepostHeader(silent){
+  if(!dailyHeader || !GOOGLE_SCRIPT_URL) return Promise.resolve(false);
+  var btn = document.getElementById('fl-hdr-retry-btn');
+  var mainBtn = document.getElementById('btn-repost-header');
+  if(!silent){
+    if(btn){ btn.textContent='Retrying...'; btn.disabled=true; }
+    if(mainBtn){ mainBtn.textContent='Posting...'; mainBtn.disabled=true; }
+  }
+  var payload = Object.assign({}, dailyHeader, {
+    action:'upsertHeader', entryId: dailyHeader.id, type:'header', desc:'HEADER'
+  });
+  var narrEl = document.getElementById('daily-narrative');
+  if(narrEl) payload.narrative = narrEl.value;
+  return _flFetch(GOOGLE_SCRIPT_URL, {
+    method:'POST', headers:{'Content-Type':'text/plain'}, redirect:'follow',
+    body: JSON.stringify(payload)
+  }, 30000)
+  .then(function(r){ return r.json(); })
+  .then(function(resp){
+    if(resp && resp.success){
+      _flCancelHeaderRetry();
+      _flSetHeaderConfirmed(true);
+      var mb = document.getElementById('btn-repost-header');
+      if(mb){ mb.textContent='Re-post'; mb.disabled=false; }
+      if(!silent) showToast(resp.mode === 'appended' ? 'Header posted to sheet \u2713' : 'Header synced to sheet \u2713', false);
+      return true;
+    }
+    throw new Error((resp && resp.error) || 'upsert failed');
+  })
+  .catch(function(e){
+    console.warn('Header upsert failed:', e);
+    _flSetHeaderConfirmed(false);
+    var mb2 = document.getElementById('btn-repost-header');
+    if(mb2){ mb2.textContent='Re-post'; mb2.disabled=false; }
+    if(!silent) showToast('Still cannot reach the sheet. Will keep retrying.', true);
+    _flScheduleHeaderRetry();
+    return false;
+  });
+}
+
+function _flScheduleHeaderRetry(){
+  if(_flHeaderRetryTimer) return;
+  _flHeaderRetryDelay = _flHeaderRetryDelay ? Math.min(_flHeaderRetryDelay * 2, 300000) : 15000;
+  _flHeaderRetryTimer = setTimeout(function(){
+    _flHeaderRetryTimer = null;
+    if(dailyHeader && !_flHeaderIsConfirmed()) flRepostHeader(true);
+  }, _flHeaderRetryDelay);
+}
+
+function _flCancelHeaderRetry(){
+  if(_flHeaderRetryTimer){ clearTimeout(_flHeaderRetryTimer); _flHeaderRetryTimer = null; }
+  _flHeaderRetryDelay = 0;
+}
+
+// Re-verify a cached header against the sheet. Confirms on a hit, DEMOTES on a
+// definitive "no header" answer (the deleted-row case), and deliberately does
+// NOTHING on a network failure — no response is not the same as no row, and
+// demoting on a dead connection would flag every offline inspector as broken.
+function _flVerifyHeaderAgainstSheet(){
+  if(!dailyHeader || !GOOGLE_SCRIPT_URL) return;
+  var d  = dailyHeader.date;
+  var nm = dailyHeader.project;
+  var pn = dailyHeader.projectNumber || '';
+  if(!d || !nm) return;
+  var url = GOOGLE_SCRIPT_URL+'?action=getHeader&date='+encodeURIComponent(d)+
+            '&projectName='+encodeURIComponent(nm)+'&projectNumber='+encodeURIComponent(pn);
+  _flFetch(url, {}, 20000)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!dailyHeader || dailyHeader.date !== d || dailyHeader.project !== nm) return;
+      if(data && data.header){
+        _flCancelHeaderRetry();
+        _flSetHeaderConfirmed(true);
+      } else {
+        _flSetHeaderConfirmed(false);
+        _flScheduleHeaderRetry();
+      }
+    })
+    .catch(function(){ /* unreachable != missing; leave the flag as-is */ });
+}
+
+// Belt-and-suspenders for the stuck "Checking..." button.
+function _flArmPostHeaderWatchdog(){
+  setTimeout(function(){
+    var b = document.getElementById('btn-post-header-main');
+    if(b && b.textContent.indexOf('Checking') >= 0){
+      b.disabled = false;
+      b.textContent = 'Post Daily Header';
+      b.style.opacity = ''; b.style.cursor = ''; b.style.pointerEvents = '';
+    }
+  }, 25000);
+}
+
+window.addEventListener('online', function(){
+  if(dailyHeader && !_flHeaderIsConfirmed()){
+    _flCancelHeaderRetry();
+    flRepostHeader(true);
+  }
+});
+
 function postDailyHeader(){
   if(p2_checkLock()) return;
   const errDiv=document.getElementById('header-error');
@@ -1650,6 +1887,11 @@ function postDailyHeader(){
     timestamp:new Date().toISOString(),
   };
 
+  // Persist as UNCONFIRMED before the POST. Previously the cache was written
+  // first and the flag only set afterwards, so a failed header persisted with
+  // the flag undefined and was indistinguishable from a good one on reload.
+  dailyHeader.headerConfirmed = false;
+  dailyHeader.sheetSynced = false;
   const projectKey = dailyHeader.projectNumber + '||' + dailyHeader.project + '||' + dailyHeader.date;
   dailyHeaders[projectKey] = dailyHeader;
   currentProjectKey = projectKey;
@@ -1671,12 +1913,9 @@ function postDailyHeader(){
     .then(function(r){ return r.json(); })
     .then(function(resp){
       if(resp.success){
-        dailyHeader.sheetSynced = true;
-        if(currentProjectKey && dailyHeaders[currentProjectKey]){
-          dailyHeaders[currentProjectKey].sheetSynced = true;
-          localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
-        }
+        _flCancelHeaderRetry();
         restoreHeader(dailyHeader);
+        _flSetHeaderConfirmed(true);
         showToast('Daily header posted ✓', false);
       } else {
         _showHeaderSyncError();
@@ -1688,57 +1927,26 @@ function postDailyHeader(){
     });
   } else {
     restoreHeader(dailyHeader);
+    _flSetHeaderConfirmed(false);
     showToast('Daily header posted (offline)', false);
   }
 }
 
 function _showHeaderSyncError(){
-  // Show persistent retry banner
-  var existing = document.getElementById('header-sync-error');
-  if(existing) existing.remove();
-  var banner = document.createElement('div');
-  banner.id = 'header-sync-error';
-  banner.style.cssText = 'background:#fde8ea;border:1px solid #f5b7bc;border-radius:7px;padding:10px 14px;margin:10px 0;font-size:13px;color:#9b1c2e;display:flex;align-items:center;justify-content:space-between;';
-  banner.innerHTML = '<span>⚠️ Header failed to save to sheet. Entries may not post correctly.</span>' +
-    '<button onclick="retryHeaderPost()" style="background:#9b1c2e;color:white;border:none;border-radius:5px;padding:5px 12px;font-size:12px;cursor:pointer;margin-left:10px;">Retry</button>';
-  var efs = document.getElementById('entries-form-section');
-  if(efs) efs.parentNode.insertBefore(banner, efs);
-  // Still restore header locally so they can continue
+  // The header did NOT land. Per design, the inspector keeps working (entries
+  // save on their own rows and reconcile by project+date when the header
+  // arrives), but the unconfirmed state is recorded durably, a persistent badge
+  // is shown, and a background retry runs until it lands.
+  var hdrBtn = document.getElementById('btn-post-header-main');
+  if(hdrBtn){ hdrBtn.disabled = false; hdrBtn.textContent = 'Post Daily Header'; }
   restoreHeader(dailyHeader);
-  showToast('Header saved locally — sheet sync failed. Tap Retry.', true);
+  _flSetHeaderConfirmed(false);
+  _flScheduleHeaderRetry();
+  showToast('Header saved locally — not in the sheet yet. Retrying in the background.', true);
 }
 
-function retryHeaderPost(){
-  if(!dailyHeader) return;
-  var btn = document.querySelector('#header-sync-error button');
-  if(btn){ btn.textContent='Retrying...'; btn.disabled=true; }
-  fetch(GOOGLE_SCRIPT_URL,{
-    method:'POST',
-    headers:{'Content-Type':'text/plain'},
-    redirect:'follow',
-    body:JSON.stringify(Object.assign({},dailyHeader,{action:'saveEntry',entryId:dailyHeader.id,type:'header',desc:'HEADER'}))
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(resp){
-    if(resp.success){
-      dailyHeader.sheetSynced = true;
-      if(currentProjectKey && dailyHeaders[currentProjectKey]){
-        dailyHeaders[currentProjectKey].sheetSynced = true;
-        localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
-      }
-      var banner = document.getElementById('header-sync-error');
-      if(banner) banner.remove();
-      showToast('Header synced to sheet ✓', false);
-    } else {
-      if(btn){ btn.textContent='Retry'; btn.disabled=false; }
-      showToast('Retry failed. Check connection.', true);
-    }
-  })
-  .catch(function(){
-    if(btn){ btn.textContent='Retry'; btn.disabled=false; }
-    showToast('Retry failed. Check connection.', true);
-  });
-}
+// Kept as an alias: older inline handlers may still reference it.
+function retryHeaderPost(){ return flRepostHeader(false); }
 
 function restoreHeader(h){
   // Restore narrative from sheet data
@@ -1773,6 +1981,7 @@ function restoreHeader(h){
   var efs=document.getElementById('entries-form-section');if(efs)efs.style.display='block';
   var nsEl=document.getElementById('narrative-section');if(nsEl)nsEl.style.display='block';
   var buEl=document.getElementById('batch-upload-section');if(buEl)buEl.style.display='block';
+  _flRenderHeaderBadge();
 
   // Build summary
   const equipStr=(h.equipment&&h.equipment.length?h.equipment.map(e=>e.name+(e.count?' ('+e.count+')':'')).join(', '):'');
@@ -1947,13 +2156,18 @@ function saveEditHeader(){
   currentProjectKey = projectKey;
   localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
   localStorage.setItem('balar_v5_current_project', currentProjectKey);
-  // Sync to Sheets
-  if(GOOGLE_SCRIPT_URL){
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:JSON.stringify(Object.assign({},dailyHeader,{action:'updateEntry',entryId:dailyHeader.id,originalProject:dailyHeader.project,originalDesc:'HEADER',originalTime:'',photoBase64:''}))}).catch(function(e){console.warn('Header save failed:',e);});
-  }
   closeEditHeaderModal();
   restoreHeader(dailyHeader);
-  showToast('Header updated',false);
+  // Sync to Sheets via upsert: updates the row if present, creates it if the
+  // header never landed. The old path fired updateEntry and toasted success
+  // unconditionally, so an edit against a missing row silently did nothing.
+  if(GOOGLE_SCRIPT_URL){
+    flRepostHeader(true).then(function(ok){
+      showToast(ok ? 'Header updated ✓' : 'Header updated locally — not yet in the sheet. Retrying.', !ok);
+    });
+  } else {
+    showToast('Header updated locally',false);
+  }
 }
 
 // ── SUBMIT WORK ENTRY ────────────────────────────────────
@@ -2370,7 +2584,10 @@ function startNewProjectHeader(){
   p2_approvedPdfLink='';
   p2_applyLockUI();
   // Reset header form for new project
+  _flCancelHeaderRetry();
   dailyHeader = null;
+  var _hb = document.getElementById('header-sync-error'); if(_hb) _hb.remove();
+  var _hs = document.getElementById('fl-header-sync-state'); if(_hs) _hs.innerHTML='';
   document.getElementById('header-form-view').style.display = 'block';
   document.getElementById('header-posted-view').style.display = 'none';
   document.getElementById('conditions-section').style.display = 'none';
@@ -2410,9 +2627,12 @@ function openReportModal(){
   var unsynced=entries.filter(function(e){
     return (e.synced===false||e.synced==='syncing')&&e.date===checkDate&&(!activeProject||e.project===activeProject);
   });
-  // Block if header hasn't confirmed sheet sync
-  if(dailyHeader && dailyHeader.sheetSynced===false){
-    alert('The Daily Header has not confirmed saving to the sheet. Please tap Retry on the header sync error before generating.');
+  // Block unless the header is positively confirmed in the sheet. This must be
+  // !== true, not === false: a header restored from localStorage carries the
+  // flag as undefined, which the old check let straight through.
+  if(dailyHeader && dailyHeader.headerConfirmed !== true){
+    alert('The Daily Header for this project and date has not been confirmed in the sheet, so a report cannot be generated yet.\n\nTap "Re-post" on the Daily Header card to push it now, then try again.');
+    flRepostHeader(true);
     return;
   }
   if(unsynced.length>0){

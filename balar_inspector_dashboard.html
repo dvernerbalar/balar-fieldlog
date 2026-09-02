@@ -152,6 +152,29 @@ var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzboPnRIKSebUQEPo
 var allReports = [];
 var currentTab = 'active';
 
+// Resilient GET: timeout + retry-with-backoff for the flaky Apps Script serving layer.
+function dashFetchJson(url, attempts, timeoutMs, backoffMs) {
+  attempts = attempts || 6; timeoutMs = timeoutMs || 12000; backoffMs = backoffMs || 1500;
+  function once() {
+    return new Promise(function(resolve, reject) {
+      var ctrl = new AbortController();
+      var timer = setTimeout(function() { ctrl.abort(); }, timeoutMs);
+      fetch(url, { signal: ctrl.signal }).then(function(r) {
+        clearTimeout(timer);
+        if (!r.ok) { reject(new Error('HTTP ' + r.status)); return; }
+        r.json().then(resolve, function() { reject(new Error('bad-json')); });
+      }).catch(function(e) { clearTimeout(timer); reject(e); });
+    });
+  }
+  function tryN(n) {
+    return once().catch(function(err) {
+      if (n >= attempts) throw err;
+      return new Promise(function(r) { setTimeout(r, backoffMs * n); }).then(function() { return tryN(n + 1); });
+    });
+  }
+  return tryN(1);
+}
+
 function fetchAndOpenPdf(btn) {
   var projectNum  = btn.dataset.num    || '';
   var projectName = btn.dataset.name   || '';
@@ -190,8 +213,7 @@ function loadDashboard() {
   document.getElementById('table-sub').textContent = 'Loading...';
   document.getElementById('error-container').innerHTML = '';
 
-  fetch(APPS_SCRIPT_URL + '?action=getInspectorDashboard')
-    .then(function(r) { return r.json(); })
+  dashFetchJson(APPS_SCRIPT_URL + '?action=getInspectorDashboard')
     .then(function(data) {
       allReports = data.reports || [];
 
@@ -214,9 +236,9 @@ function loadDashboard() {
       renderDashboard();
     })
     .catch(function(err) {
-      document.getElementById('table-container').innerHTML = '<div class="loading">Failed to load. Check connection.</div>';
+      document.getElementById('table-container').innerHTML = '<div class="loading">Server is slow right now — your reports couldn’t load.</div>';
       document.getElementById('error-container').innerHTML =
-        '<div class="error-msg">&#9888; Could not connect to the FieldLog server. ' + err.toString() + '</div>';
+        '<div class="error-msg">&#9888; Couldn’t reach the FieldLog server after several tries (usually a temporary Google hiccup). <a href="#" onclick="loadDashboard();return false;" style="color:#922b21;font-weight:700;">Retry</a></div>';
     });
 }
 
