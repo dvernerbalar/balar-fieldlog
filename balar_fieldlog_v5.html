@@ -3341,15 +3341,21 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
         photosToShow.forEach(function(src,idx){
           var isDriveUrl = src.indexOf('http')===0;
           if(isDriveUrl){
-            // Convert Drive view URL to direct embed URL for img src
-            var embedSrc = src.replace('/view?usp=drivesdk','').replace('/view','')
-                             .replace('open?id=','uc?id=')
-                             .replace('https://drive.google.com/file/d/','https://drive.google.com/uc?id=')
-                             .replace('/view?usp=sharing','');
-            // If it's a /file/d/ID/view style URL extract the ID
+            // Drive THUMBNAIL endpoint, not uc?export=view. The uc form embeds
+            // the 2000px archival image (which ballooned reports to 5-8MB) and
+            // no longer serves reliably as an <img> src — it was failing here all
+            // along, silently rescued by the base64 onerror fallback. w800 is 2x
+            // the 400px display box, so it stays crisp at print size.
+            var _id = '';
             var match = src.match(/\/file\/d\/([^\/]+)/);
-            if(match) embedSrc = 'https://drive.google.com/uc?export=view&id='+match[1];
-            photoHtml+='<img src="'+embedSrc+'" style="width:100%;max-width:400px;max-height:280px;object-fit:contain;border-radius:5px;border:1px solid #ddd;display:block;margin-bottom:4px;background:#f8f8f8;" onerror="this.src=\''+( e.photos&&e.photos[0]?e.photos[0]:'')+'\'">';
+            if(match){ _id = match[1]; }
+            else {
+              var m2 = src.match(/[?&]id=([^&]+)/);
+              if(m2) _id = m2[1];
+              else { var m3 = src.match(/[-\w]{25,}/); if(m3) _id = m3[0]; }
+            }
+            var embedSrc = _id ? ('https://drive.google.com/thumbnail?id='+_id+'&sz=w800') : src;
+            photoHtml+='<img src="'+embedSrc+'" style="width:100%;max-width:400px;max-height:280px;object-fit:contain;border-radius:5px;border:1px solid #ddd;display:block;margin-bottom:4px;background:#f8f8f8;" onerror="this.onerror=null;this.src=\''+( e.photos&&e.photos[0]?e.photos[0]:'')+'\'">';
             photoHtml+='<div style="margin-bottom:8px;"><a href="'+src+'" target="_blank" style="font-size:11px;color:#1565c0;">&#128279; View full resolution in Drive</a></div>';
           } else {
             // Fallback: base64 thumbnail
