@@ -1631,6 +1631,19 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
     // (b) the local original of any entry now coming back from the sheet — matched
     // by the REAL entry ID — so the same entry can't appear twice. Local UNSYNCED
     // entries aren't in the sheet yet, so they're left untouched.
+    // Keep whatever photo data this device already holds, keyed by entry id.
+    // The sheet copy replaces the local one below, and getEntries no longer
+    // sends base64 for rows that have a Drive link — so without this, an entry
+    // photographed on THIS phone would lose its local image on first sync and
+    // would then need a connection to show its own thumbnail.
+    var _localPhotos = {};
+    entries.forEach(function(e){
+      if(e.project === projectName && e.date === dateLocale && e.photos && e.photos.length){
+        var lid = String(e.id||'').replace(/\.0$/,'').trim();
+        if(lid) _localPhotos[lid] = e.photos[0];
+      }
+    });
+
     entries = entries.filter(function(e){
       if(e.project === projectName && e.date === dateLocale){
         if(e.fromSheets) return false;
@@ -1662,7 +1675,13 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
           station: se.station||'',
           desc: se.desc||'',
           notes: se.notes||'',
-          photos: se.photos||[],
+          // Sheet base64 if sent (rows with no Drive link), else this device's
+          // own local copy, else empty — Drive thumbnail fallback renders it.
+          photos: (se.photos && se.photos.length)
+                    ? se.photos
+                    : (_localPhotos[String(se.entryId||'').replace(/\.0$/,'').trim()]
+                        ? [_localPhotos[String(se.entryId||'').replace(/\.0$/,'').trim()]]
+                        : []),
           gpsLocation: se.gpsLocation||'',
           fromSheets: true,
           // Only flag Drive photo failed for today's entries — older ones can't be recovered
@@ -2011,8 +2030,11 @@ function _flSaveHeaderSection(label, columns, retryFn){
   }, 30000)
   .then(function(r){ return r.json(); })
   .then(function(d){
-    if(d && d.success) return true;
-    return flRepostHeader(true);   // targeted write missed the row — upsert + verify
+    // The backend now reads the written cells back. verified===false means the
+    // write did not stick, so fall through to the upsert repair rather than
+    // reporting a save that didn't happen.
+    if(d && d.success && d.verified !== false) return true;
+    return flRepostHeader(true);   // missed the row (or unverified) — upsert + verify
   })
   .then(function(ok){
     _flClearSectionWarn(label);          // removes the pending notice too
@@ -2691,7 +2713,8 @@ function renderEntries(){
     html+='</div>';
     if(displayWeather||displayTemp)html+='<div style="font-size:12px;color:#888;margin-bottom:6px;">'+displayWeather+(displayTemp?' · '+displayTemp+'°F':'')+'</div>';
     html+='<div style="font-size:14px;color:#333;line-height:1.5;margin-bottom:8px;">'+e.desc+'</div>';
-    if(e.photos&&e.photos.length)html+='<div style="margin-bottom:8px;"><img src="'+e.photos[0]+'" style="width:100%;max-width:300px;height:180px;object-fit:cover;border-radius:6px;border:1px solid #ddd;display:block;"></div>';
+    var _thumb=_flEntryThumb(e);
+    if(_thumb)html+='<div style="margin-bottom:8px;"><img src="'+_thumb+'" style="width:100%;max-width:300px;height:180px;object-fit:cover;border-radius:6px;border:1px solid #ddd;display:block;"></div>';
     if(e.notes)html+='<div style="font-size:13px;color:#777;margin-bottom:6px;">📝 '+e.notes+'</div>';
     if(e.gpsLocation)html+='<div style="font-size:12px;"><a href="'+e.gpsLocation+'" target="_blank" style="color:var(--red);">📍 View Location</a></div>';
     html+='</div>';
@@ -2735,9 +2758,10 @@ function editEntry(btn){
   if(e.date){const parts=e.date.split('/');if(parts.length===3)document.getElementById('edit-date').value=parts[2]+'-'+parts[0].padStart(2,'0')+'-'+parts[1].padStart(2,'0');}
   // Show existing photo if any
   var preview = document.getElementById('edit-photo-preview');
-  if(e.photos && e.photos.length > 0){
-    preview.innerHTML = '<img src="'+e.photos[0]+'" style="width:100%;max-width:200px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ddd;display:block;margin-bottom:4px;"><div style="font-size:11px;color:#888;">Current photo — select a new one to replace, or tap Remove Photo to delete</div>';
-    preview.dataset.photo = e.photos[0];
+  if(_flEntryThumb(e)){
+    var _pv=_flEntryThumb(e);
+    preview.innerHTML = '<img src="'+_pv+'" style="width:100%;max-width:200px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ddd;display:block;margin-bottom:4px;"><div style="font-size:11px;color:#888;">Current photo — select a new one to replace, or tap Remove Photo to delete</div>';
+    preview.dataset.photo = _pv;
   } else {
     preview.innerHTML = '';
     preview.dataset.photo = '';
@@ -2915,6 +2939,29 @@ function startNewProjectHeader(){
 // Immediate feedback on Generate Report. The click can run a field check, a
 // header refresh and a project fetch before the modal appears, and with nothing
 // changing on screen it reads as a dead button.
+// Preferred thumbnail source for an entry. getEntries omits the col-Q base64
+// whenever the row has a Drive link, so the normal path here is the Drive
+// thumbnail endpoint at sz=w400 — same effective resolution as the base64 it
+// replaces (which is capped near 400px to fit the cell limit), rendered into the
+// same fixed CSS box, so it looks the same on screen. Rows with no Drive link
+// still carry their base64, and a device's own local copy is preferred over
+// both so entries photographed on this phone still render with no signal.
+function _flEntryThumb(e){
+  if(e && e.photos && e.photos.length) return e.photos[0];
+  var link = '';
+  if(!e || !e.photoLinks) return '';
+  // Array-check first: a plain string also has .length, so the old order took
+  // the array branch and grabbed a single character.
+  if(Object.prototype.toString.call(e.photoLinks) === '[object Array]'){
+    link = e.photoLinks.length ? String(e.photoLinks[0]) : '';
+  } else {
+    link = String(e.photoLinks);
+  }
+  if(!link) return '';
+  var m = link.match(/[-\w]{25,}/);
+  return m ? ('https://drive.google.com/thumbnail?id=' + m[0] + '&sz=w400') : '';
+}
+
 function _flReportBtnBusy(on){
   var b = document.getElementById('btn-generate-report');
   if(!b) return;
