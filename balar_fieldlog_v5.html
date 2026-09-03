@@ -228,7 +228,7 @@ textarea{resize:vertical;min-height:90px;}
         </div>
         <div id="header-summary" style="font-size:13px;color:#333;line-height:1.8;"></div>
         <div id="fl-header-sync-state"></div>
-        <button class="btn-edit-header" id="btn-repost-header" onclick="flRepostHeader(false)" title="Push this header to the sheet again" style="width:100%;display:block;margin-top:14px;min-height:44px;">&#8635; Re-post Header to Sheet</button>
+        <button class="btn-edit-header" id="btn-reload-header" onclick="flReloadHeaderFromSheet(false)" title="Pull the latest header values from the sheet onto this device" style="width:100%;display:block;margin-top:14px;min-height:44px;">&#8635; Refresh Header from Sheet</button>
       </div>
     </div>
 
@@ -1737,7 +1737,22 @@ function _flSetHeaderConfirmed(val){
 // no row for this project/date, so entries would be orphaned. A header cached on
 // this device is by definition already confirmed, so normal offline work is
 // unaffected — this only bites on a first post that hasn't landed yet.
+// Re-post (push) and Reload (pull) are opposite operations, so they are never
+// shown together — the app picks by confirmation state. Unconfirmed means the
+// sheet has no row, so the useful action is to push. Confirmed means the row is
+// there, so the useful action is to pull the latest values onto this device.
+// A single combined button would have to guess, and guessing wrong overwrites
+// either a local edit or a sheet value.
+function _flApplyHeaderButtons(){
+  // Refresh only makes sense once the sheet actually has the row. While
+  // unconfirmed the manual push lives inside the red badge instead, so the card
+  // never shows two opposite actions at once.
+  var rl = document.getElementById('btn-reload-header');
+  if(rl) rl.style.display = _flHeaderIsConfirmed() ? 'block' : 'none';
+}
+
 function _flApplyEntryGate(){
+  _flApplyHeaderButtons();
   var ok = _flHeaderIsConfirmed();
   var ids = ['entries-form-section','batch-upload-section','narrative-section'];
   for(var i=0;i<ids.length;i++){
@@ -1762,7 +1777,8 @@ function _flRenderHeaderBadge(){
   if(!pv || pv.style.display === 'none') return;
   if(_flHeaderIsConfirmed()) return;
   var html = '<div id="header-sync-error" style="background:#fde8ea;border:1px solid #f5b7bc;border-radius:7px;padding:10px 14px;margin:12px 0 0 0;font-size:13px;color:#9b1c2e;line-height:1.5;">'+
-    '<span>&#9888;&#65039; This header is <b>not confirmed in the sheet</b>. Your entries are still saving. Retrying automatically &mdash; a report cannot be generated until it lands. Tap <b>Re-post Header to Sheet</b> below to push it now.</span>'+
+    '<span>&#9888;&#65039; This header has <b>not reached the sheet</b> yet. Retrying automatically &mdash; entries and reports stay locked until it lands.</span>'+
+    '<button id="fl-hdr-retry-btn" onclick="flRepostHeader(false)" style="display:block;width:100%;margin-top:10px;background:#9b1c2e;color:#fff;border:none;border-radius:6px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;min-height:44px;">Retry now</button>'+
     '</div>';
   if(host){ host.innerHTML = html; return; }
   var efs = document.getElementById('entries-form-section');
@@ -1780,7 +1796,7 @@ function _flRenderHeaderBadge(){
 // no-op, discarding any edits.)
 function flRepostHeader(silent){
   if(!dailyHeader || !GOOGLE_SCRIPT_URL) return Promise.resolve(false);
-  var mainBtn = document.getElementById('btn-repost-header');
+  var mainBtn = document.getElementById('fl-hdr-retry-btn');
   if(!silent && mainBtn){ mainBtn.textContent='Posting...'; mainBtn.disabled=true; }
   var payload = Object.assign({}, dailyHeader, {
     action:'upsertHeader', entryId: dailyHeader.id, type:'header', desc:'HEADER'
@@ -1800,8 +1816,8 @@ function flRepostHeader(silent){
     // that answered has no upsertHeader action (old deployment still serving).
     var staleBackend = !resp.mode;
     return _flCheckHeaderInSheet().then(function(present){
-      var mb = document.getElementById('btn-repost-header');
-      if(mb){ mb.innerHTML='&#8635; Re-post Header to Sheet'; mb.disabled=false; }
+      var mb = document.getElementById('fl-hdr-retry-btn');
+      if(mb){ mb.textContent='Retry now'; mb.disabled=false; }
       if(present === true){
         _flCancelHeaderRetry();
         _flSetHeaderConfirmed(true);
@@ -1826,8 +1842,8 @@ function flRepostHeader(silent){
   .catch(function(e){
     console.warn('Header upsert failed:', e);
     _flSetHeaderConfirmed(false);
-    var mb2 = document.getElementById('btn-repost-header');
-    if(mb2){ mb2.innerHTML='&#8635; Re-post Header to Sheet'; mb2.disabled=false; }
+    var mb2 = document.getElementById('fl-hdr-retry-btn');
+    if(mb2){ mb2.textContent='Retry now'; mb2.disabled=false; }
     if(!silent) showToast('Still cannot reach the sheet. Will keep retrying.', true);
     _flScheduleHeaderRetry();
     return false;
@@ -1980,6 +1996,75 @@ function _flPersistHeaderIfConfirmed(){
   return true;
 }
 
+
+// Pull the header for this project/date from the sheet and replace the local
+// copy. READ-ONLY — it never writes, so unlike a background repair it cannot
+// ping-pong between two devices working the same project: whoever saved last
+// wins and the other device simply catches up. Manual rather than automatic, so
+// it can't clobber local edits that haven't synced yet.
+function flReloadHeaderFromSheet(silent){
+  if(!dailyHeader || !GOOGLE_SCRIPT_URL) return Promise.resolve(false);
+  var d = dailyHeader.date, nm = dailyHeader.project, pn = dailyHeader.projectNumber || '';
+  if(!d || !nm) return Promise.resolve(false);
+  var btn = document.getElementById('btn-reload-header');
+  if(!silent && btn){ btn.disabled = true; btn.textContent = 'Reloading...'; }
+  var url = GOOGLE_SCRIPT_URL+'?action=getHeader&date='+encodeURIComponent(d)+
+            '&projectName='+encodeURIComponent(nm)+'&projectNumber='+encodeURIComponent(pn)+
+            '&_ts='+Date.now();
+  return _flFetch(url, {}, 25000)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var b = document.getElementById('btn-reload-header');
+      if(b){ b.disabled = false; b.innerHTML = '&#8681; Reload Header from Sheet'; }
+      if(!dailyHeader || dailyHeader.date !== d || dailyHeader.project !== nm) return false;
+      if(!(data && data.header)){
+        if(!silent) showToast('No header found in the sheet for this project and date.', true);
+        return false;
+      }
+      var h = data.header;
+      h.headerConfirmed = true;   // it came from the sheet
+      h.sheetSynced = true;
+      h.projectType = dailyHeader.projectType || h.projectType || '';
+      dailyHeader = h;
+      currentProjectKey = (h.projectNumber||'')+'||'+h.project+'||'+h.date;
+      dailyHeaders[currentProjectKey] = h;
+      try{
+        localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
+        localStorage.setItem('balar_v5_current_project', currentProjectKey);
+      }catch(e){}
+      restoreHeader(dailyHeader);
+      _flApplyEntryGate();
+      if(!silent) showToast('Header reloaded from sheet \u2713', false);
+      return true;
+    })
+    .catch(function(e){
+      console.warn('Header reload failed:', e);
+      var b2 = document.getElementById('btn-reload-header');
+      if(b2){ b2.disabled = false; b2.innerHTML = '&#8681; Reload Header from Sheet'; }
+      if(!silent) showToast('Could not reach the sheet. Try again in a moment.', true);
+      return false;
+    });
+}
+
+
+// Required header fields for a report. These are what the report renders; a blank
+// narrative silently drops the Daily Summary block from the PDF entirely, which
+// is why it is required. Checklist is deliberately NOT required.
+function _flMissingHeaderFields(){
+  var m = [];
+  if(!dailyHeader) return m;
+  if(!String(dailyHeader.dailyWeather||'').trim())      m.push('Weather');
+  if(!String(dailyHeader.dailyTemperature||'').trim())  m.push('Temperature');
+  if(!String(dailyHeader.contractorPrimary||'').trim()) m.push('Prime contractor');
+  if(!String(dailyHeader.dayType||'').trim())           m.push('Day type');
+  if(!(dailyHeader.equipment||[]).length)               m.push('Equipment (or "None on site today")');
+  if(!(dailyHeader.workforce||[]).length)               m.push('Workforce (or "None on site today")');
+  var nEl = document.getElementById('daily-narrative');
+  var narr = nEl && nEl.value.trim() ? nEl.value.trim() : String(dailyHeader.narrative||'').trim();
+  if(!narr) m.push('Daily Summary / Narrative');
+  return m;
+}
+
 function postDailyHeader(){
   if(p2_checkLock()) return;
   const errDiv=document.getElementById('header-error');
@@ -2106,6 +2191,7 @@ function restoreHeader(h){
   var buEl=document.getElementById('batch-upload-section');if(buEl)buEl.style.display='block';
   _flRenderHeaderBadge();
   _flApplyEntryGate();   // unconfirmed header => sections revealed but not usable
+  _flApplyHeaderButtons();
 
   // Build summary
   const equipStr=(h.equipment&&h.equipment.length?h.equipment.map(e=>e.name+(e.count?' ('+e.count+')':'')).join(', '):'');
@@ -2762,19 +2848,18 @@ function openReportModal(){
   // silently drops the Daily Summary block from the PDF entirely, which is why
   // it is required rather than optional. Checklist is deliberately NOT required.
   if(dailyHeader){
-    var _missing = [];
-    if(!String(dailyHeader.dailyWeather||'').trim())      _missing.push('Weather');
-    if(!String(dailyHeader.dailyTemperature||'').trim())  _missing.push('Temperature');
-    if(!String(dailyHeader.contractorPrimary||'').trim()) _missing.push('Prime contractor');
-    if(!String(dailyHeader.dayType||'').trim())           _missing.push('Day type');
-    if(!(dailyHeader.equipment||[]).length)               _missing.push('Equipment (or "None on site today")');
-    if(!(dailyHeader.workforce||[]).length)               _missing.push('Workforce (or "None on site today")');
-    var _nEl = document.getElementById('daily-narrative');
-    var _narr = _nEl ? _nEl.value.trim() : String(dailyHeader.narrative||'').trim();
-    if(!_narr) _missing.push('Daily Summary / Narrative');
-    if(_missing.length){
-      alert('The report is missing required header information:\n\n\u2022 ' + _missing.join('\n\u2022 ') +
-            '\n\nFill these in on the Daily Header before generating.');
+    if(_flMissingHeaderFields().length){
+      // Might just be a stale local copy — the values may have been entered on
+      // another device. Refresh from the sheet before telling anyone to re-type.
+      flReloadHeaderFromSheet(true).then(function(){
+        var m = _flMissingHeaderFields();
+        if(m.length){
+          alert('The report is missing required header information:\n\n\u2022 ' + m.join('\n\u2022 ') +
+                '\n\nFill these in on the Daily Header before generating.');
+        } else {
+          openReportModal();   // stale cache healed — carry on
+        }
+      });
       return;
     }
   }
@@ -2814,10 +2899,27 @@ async function loadReportProjects(){
   const projSel=document.getElementById('report-project');
   projSel.innerHTML='<option value="">Loading...</option>';
   document.getElementById('btn-generate').disabled=true;
+  _flClearReportProjWarn();
   try{
-    const url=GOOGLE_SCRIPT_URL+'?action=getProjects&date='+encodeURIComponent(dateLocale)+'&inspector='+encodeURIComponent(inspector)+'&_ts='+Date.now();
-    const data=await(await _flFetch(url,{},30000)).json();
-    const projects=data.projects||[];
+    // Retry with backoff: a cold Apps Script instance regularly loses the first
+    // attempt, and this single-attempt call was the one place that still had no
+    // retry — so a cold start surfaced as "could not load projects" with no way
+    // forward except cancelling out of the modal entirely.
+    var data = null;
+    for(var _a=1; _a<=3; _a++){
+      try{
+        const url=GOOGLE_SCRIPT_URL+'?action=getProjects&date='+encodeURIComponent(dateLocale)+'&inspector='+encodeURIComponent(inspector)+'&_ts='+Date.now();
+        data = await(await _flFetch(url,{},25000)).json();
+        break;
+      }catch(_e){
+        if(_a === 3) throw _e;
+        // Retries stay silent — a cold Apps Script instance loses the first
+        // attempt most times, and surfacing that as a countdown just makes
+        // normal behaviour look broken. On real failure the panel below says so.
+        await new Promise(function(r){ setTimeout(r, 700 * _a); });
+      }
+    }
+    const projects=(data&&data.projects)||[];
     if(projects.length===0){projSel.innerHTML='<option value="">No entries found for this date</option>';return;}
     projSel.innerHTML='<option value="">Select project...</option>';
     projects.forEach(p=>{
@@ -2829,10 +2931,34 @@ async function loadReportProjects(){
     if(projects.length===1){projSel.selectedIndex=1;document.getElementById('btn-generate').disabled=false;}
   }catch(err){
     // Distinguish "server didn't answer" from "you have no projects" — the old
-    // message read like the latter for both.
+    // message read like the latter for both. Re-picking the same date does NOT
+    // re-fire this, so an explicit Retry button is the only usable way back.
     console.warn('loadReportProjects failed:', err);
-    projSel.innerHTML='<option value="">Server did not respond \u2014 pick the date again to retry</option>';
+    projSel.innerHTML='<option value="">Server did not respond</option>';
+    _flShowReportProjWarn();
   }
+}
+
+function _flClearReportProjWarn(){
+  var w = document.getElementById('fl-reportproj-warn');
+  if(w) w.remove();
+}
+
+function _flShowReportProjWarn(){
+  _flClearReportProjWarn();
+  var sel = document.getElementById('report-project');
+  if(!sel || !sel.parentNode) return;
+  var d = document.createElement('div');
+  d.id = 'fl-reportproj-warn';
+  d.style.cssText = 'background:#fde8ea;border:1px solid #f5b7bc;border-radius:7px;padding:10px 14px;margin:8px 0;font-size:13px;color:#9b1c2e;line-height:1.5;';
+  d.innerHTML = '&#9888;&#65039; Could not reach the server to load your projects. This is usually temporary.'+
+    '<button id="fl-reportproj-retry" style="display:block;width:100%;margin-top:8px;background:#9b1c2e;color:#fff;border:none;border-radius:6px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;min-height:44px;">Retry</button>';
+  sel.parentNode.insertBefore(d, sel.nextSibling);
+  var b = document.getElementById('fl-reportproj-retry');
+  if(b) b.addEventListener('click', function(){
+    b.textContent='Retrying...'; b.disabled=true;
+    loadReportProjects();
+  });
 }
 
 async function generateReport(){
