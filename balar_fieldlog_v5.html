@@ -228,7 +228,7 @@ textarea{resize:vertical;min-height:90px;}
         </div>
         <div id="header-summary" style="font-size:13px;color:#333;line-height:1.8;"></div>
         <div id="fl-header-sync-state"></div>
-        <button class="btn-edit-header" id="btn-reload-header" onclick="flReloadHeaderFromSheet(false)" title="Pull the latest header values from the sheet onto this device" style="width:100%;display:block;margin-top:14px;min-height:44px;">&#8635; Refresh Header from Sheet</button>
+        <button class="btn-edit-header" id="btn-reload-header" onclick="flReloadHeaderFromSheet(false)" title="Pull the latest header values from the sheet onto this device" style="width:100%;display:block;margin-top:14px;min-height:44px;">&#8635; Reload Header from Sheet</button>
       </div>
     </div>
 
@@ -1752,11 +1752,11 @@ function _flSetHeaderConfirmed(val){
 // A single combined button would have to guess, and guessing wrong overwrites
 // either a local edit or a sheet value.
 function _flApplyHeaderButtons(){
-  // Refresh only makes sense once the sheet actually has the row. While
-  // unconfirmed the manual push lives inside the red badge instead, so the card
-  // never shows two opposite actions at once.
+  // Reload is always available on the posted card. It is read-only, and it is
+  // the one action that can recover an unconfirmed header in place — hiding it
+  // while unconfirmed meant the only fix was backing out to the header form.
   var rl = document.getElementById('btn-reload-header');
-  if(rl) rl.style.display = _flHeaderIsConfirmed() ? 'block' : 'none';
+  if(rl) rl.style.display = 'block';
 }
 
 function _flApplyEntryGate(){
@@ -1844,7 +1844,14 @@ function flRepostHeader(silent){
     // whole mechanism exists to catch. A missing `mode` also means the backend
     // that answered has no upsertHeader action (old deployment still serving).
     var staleBackend = !resp.mode;
-    return _flCheckHeaderInSheet().then(function(present){
+    // If the backend read the row back for us, that IS the verification — no
+    // second round trip. The old client-side getHeader check is a full-tab scan
+    // and was timing out on rows that had already landed. Falls back to it when
+    // `verified` is absent (older deployment).
+    var serverVerified = (resp.verified === true) ? Promise.resolve(true)
+                       : (resp.verified === false) ? Promise.resolve(false)
+                       : _flCheckHeaderInSheet();
+    return serverVerified.then(function(present){
       _flHeaderPostInFlight = false;
       var mb = document.getElementById('fl-hdr-retry-btn');
       if(mb){ mb.textContent='Retry now'; mb.disabled=false; }
@@ -1855,9 +1862,10 @@ function flRepostHeader(silent){
         return true;
       }
       if(present === null){
-        // Couldn't verify. Don't claim success, don't demote.
-        if(!silent) showToast('Sent, but could not confirm it in the sheet yet.', true);
-        _flScheduleHeaderRetry();
+        // The write was accepted but we could not read the row back. That is NOT
+        // the same as a failed write — most often the sheet is just slow. Say so,
+        // rather than claiming the header never landed.
+        if(!silent) showToast('Header unconfirmed, please try again.', true);
         return false;
       }
       // Server said OK, sheet says the row is not there.
@@ -2054,7 +2062,7 @@ function flReloadHeaderFromSheet(silent){
     .then(function(r){ return r.json(); })
     .then(function(data){
       var b = document.getElementById('btn-reload-header');
-      if(b){ b.disabled = false; b.innerHTML = '&#8681; Reload Header from Sheet'; }
+      if(b){ b.disabled = false; b.innerHTML = '&#8635; Reload Header from Sheet'; }
       if(!dailyHeader || dailyHeader.date !== d || dailyHeader.project !== nm) return false;
       if(!(data && data.header)){
         if(!silent) showToast('No header found in the sheet for this project and date.', true);
@@ -2091,7 +2099,7 @@ function flReloadHeaderFromSheet(silent){
     .catch(function(e){
       console.warn('Header reload failed:', e);
       var b2 = document.getElementById('btn-reload-header');
-      if(b2){ b2.disabled = false; b2.innerHTML = '&#8681; Reload Header from Sheet'; }
+      if(b2){ b2.disabled = false; b2.innerHTML = '&#8635; Reload Header from Sheet'; }
       if(!silent) showToast('Could not reach the sheet. Try again in a moment.', true);
       return false;
     });
@@ -2904,7 +2912,26 @@ function startNewProjectHeader(){
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
+// Immediate feedback on Generate Report. The click can run a field check, a
+// header refresh and a project fetch before the modal appears, and with nothing
+// changing on screen it reads as a dead button.
+function _flReportBtnBusy(on){
+  var b = document.getElementById('btn-generate-report');
+  if(!b) return;
+  if(on){
+    b.dataset.label = b.innerHTML;
+    b.disabled = true;
+    b.style.pointerEvents = 'none';
+    b.innerHTML = '\u23F3 Working\u2026';
+  } else {
+    b.disabled = false;
+    b.style.pointerEvents = '';
+    if(b.dataset.label) b.innerHTML = b.dataset.label;
+  }
+}
+
 function openReportModal(){
+  _flReportBtnBusy(true);
   // Check for unsynced entries
   var checkDate = dailyHeader ? dailyHeader.date : new Date().toLocaleDateString('en-US');
   var activeProject=dailyHeader?dailyHeader.project:null;
@@ -2915,8 +2942,8 @@ function openReportModal(){
   // !== true, not === false: a header restored from localStorage carries the
   // flag as undefined, which the old check let straight through.
   if(dailyHeader && dailyHeader.headerConfirmed !== true){
-    alert('The Daily Header for this project and date has not been confirmed in the sheet, so a report cannot be generated yet.\n\nTap "Re-post" on the Daily Header card to push it now, then try again.');
-    flRepostHeader(true);
+    _flReportBtnBusy(false);
+    alert('Cannot confirm this Daily Header has saved.\n\nTap Reload Header from Sheet, then try again.');
     return;
   }
   // Required header fields. These are what the report renders; a blank narrative
@@ -2928,6 +2955,7 @@ function openReportModal(){
       // another device. Refresh from the sheet before telling anyone to re-type.
       flReloadHeaderFromSheet(true).then(function(){
         var m = _flMissingHeaderFields();
+        _flReportBtnBusy(false);
         if(m.length){
           alert('The report is missing required header information:\n\n\u2022 ' + m.join('\n\u2022 ') +
                 '\n\nFill these in on the Daily Header before generating.');
@@ -2939,6 +2967,7 @@ function openReportModal(){
     }
   }
   if(unsynced.length>0){
+    _flReportBtnBusy(false);
     alert(unsynced.length+' entr'+(unsynced.length===1?'y':'ies')+' have not synced to the server. Please retry all unsynced entries before generating the report.');
     return;
   }
@@ -2961,6 +2990,7 @@ function openReportModal(){
   document.getElementById('report-project').innerHTML='<option value="">Loading...</option>';
   document.getElementById('modal-error').style.display='none';
   document.getElementById('report-modal').classList.add('open');
+  _flReportBtnBusy(false);
   loadReportProjects();
 }
 function closeReportModal(){document.getElementById('report-modal').classList.remove('open');}
