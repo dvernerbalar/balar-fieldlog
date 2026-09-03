@@ -983,10 +983,7 @@ function saveConditions(){
   dailyHeader.dailyWeather = weather;
   dailyHeader.dailyTemperature = temp;
   // Save to localStorage
-  if(currentProjectKey){
-    dailyHeaders[currentProjectKey] = dailyHeader;
-    localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
-  }
+  _flPersistHeaderIfConfirmed();
   // Sync to Sheets
   _flSaveHeaderSection('Conditions',
     {'8':dailyHeader.dailyWeather||'','9':dailyHeader.dailyTemperature||''},
@@ -1013,10 +1010,7 @@ function saveChecklist(){
   dailyHeader.checks = checks;
   dailyHeader.checklistSaved = true;
   dailyHeader.allChecklistItems = CHECKLIST_ITEMS.slice();
-  if(currentProjectKey){
-    dailyHeaders[currentProjectKey] = dailyHeader;
-    localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
-  }
+  _flPersistHeaderIfConfirmed();
   _flSaveHeaderSection('Checklist',
     {'13':(dailyHeader.checks||[]).join(', '),'28':dailyHeader.allChecklistItems||[]},
     function(){ saveChecklist(); });
@@ -1056,10 +1050,7 @@ function saveResources(){
   document.getElementById('resources-error').style.display='none';
   dailyHeader.equipment = equipmentItems.slice();
   dailyHeader.workforce = workforceItems.slice();
-  if(currentProjectKey){
-    dailyHeaders[currentProjectKey] = dailyHeader;
-    localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
-  }
+  _flPersistHeaderIfConfirmed();
   _flSaveHeaderSection('Equipment & workforce',
     {'20':dailyHeader.equipment||[],'21':dailyHeader.workforce||[]},
     function(){ saveResources(); });
@@ -1974,6 +1965,21 @@ function _flSaveHeaderSection(label, columns, retryFn){
   });
 }
 
+
+// The cache may ONLY hold headers the sheet has confirmed — that invariant is
+// what lets "a cached header exists" mean "it landed". The section saves used to
+// write the cache unconditionally, so filling in weather against an unconfirmed
+// header created a cache entry for a row that does not exist, and the next load
+// would treat it as confirmed and unlock entries. Local edits are still kept in
+// the in-memory dailyHeader and get pushed by the section save's upsert fallback.
+function _flPersistHeaderIfConfirmed(){
+  if(!currentProjectKey || !dailyHeader) return false;
+  if(dailyHeader.headerConfirmed !== true) return false;
+  dailyHeaders[currentProjectKey] = dailyHeader;
+  try{ localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders)); }catch(e){}
+  return true;
+}
+
 function postDailyHeader(){
   if(p2_checkLock()) return;
   const errDiv=document.getElementById('header-error');
@@ -2269,11 +2275,10 @@ function saveEditHeader(){
   dailyHeader.dayType=document.getElementById('edit-header-daytype').value;
   dailyHeader.equipment=editEquipmentItems.slice();
   dailyHeader.workforce=editWorkforceItems.slice();
-  const projectKey = dailyHeader.projectNumber + '||' + dailyHeader.project + '||' + dailyHeader.date;
-  dailyHeaders[projectKey] = dailyHeader;
-  currentProjectKey = projectKey;
-  localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
-  localStorage.setItem('balar_v5_current_project', currentProjectKey);
+  // Edits can change the date/project, so recompute the key — but only persist
+  // if the header is confirmed. flRepostHeader below confirms and caches it.
+  currentProjectKey = dailyHeader.projectNumber + '||' + dailyHeader.project + '||' + dailyHeader.date;
+  _flPersistHeaderIfConfirmed();
   closeEditHeaderModal();
   restoreHeader(dailyHeader);
   // Sync to Sheets via upsert: updates the row if present, creates it if the
