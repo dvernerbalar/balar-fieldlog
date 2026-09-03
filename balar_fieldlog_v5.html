@@ -436,7 +436,7 @@ textarea{resize:vertical;min-height:90px;}
             <div class="card header-card">
               <div style="font-size:13px;color:#555;margin-bottom:10px;">Provide an overall summary of work performed today. This will appear at the top of the generated report.</div>
               <textarea id="daily-narrative" rows="5" placeholder="Enter daily summary narrative..." style="width:100%;font-size:14px;padding:10px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;resize:vertical;font-family:'Barlow',sans-serif;line-height:1.5;box-sizing:border-box;"></textarea>
-              <button class="btn-post-header" onclick="saveNarrative()" style="margin-top:10px;background:#1b2d42;">&#128190; Save Narrative</button>
+              <button class="btn-post-header" id="btn-save-narrative" onclick="saveNarrative()" style="margin-top:10px;background:#1b2d42;">&#128190; Save Narrative</button>
             </div>
           </div>
           <div id="narrative-posted-view" style="display:none;">
@@ -871,7 +871,9 @@ function saveNarrative(){
     _flSaveHeaderSection('Narrative', {'27':dailyHeader.narrative||''},
       function(){ saveNarrative(); })
     .then(function(){
-      if(saveBtn){ saveBtn.disabled=false; saveBtn.innerHTML='&#128190; Save Narrative'; }
+      if(saveBtn && p2_currentReportStatus!=='pending' && p2_currentReportStatus!=='approved'){
+        saveBtn.disabled=false; saveBtn.innerHTML='&#128190; Save Narrative';
+      }
     });
   } else {
     showToast('Narrative saved',false);
@@ -1687,6 +1689,11 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
 // generation is.
 var _flHeaderRetryTimer = null;
 var _flHeaderRetryDelay = 0;
+// True while a header post/verify round trip is running. The failure badge is
+// suppressed during that window: it used to render the moment the card was
+// drawn, so inspectors saw "not reached the sheet — Retry now" before the very
+// first attempt had even returned.
+var _flHeaderPostInFlight = false;
 
 // fetch with a hard timeout. A hung request (no response, no rejection) is what
 // left the Post Daily Header button stuck on "Checking..." with no way back.
@@ -1718,6 +1725,7 @@ function _flSetHeaderConfirmed(val){
   dailyHeader.headerConfirmed = val;
   dailyHeader.sheetSynced = val;  // legacy flag kept in step
   var k = currentProjectKey || _flHeaderKey(dailyHeader);
+  if(val === true){ try{ _flClearHeaderPostError(); }catch(e){} }
   if(val === true && k){
     // Confirmed by the sheet — THIS is the only path that writes the cache, so a
     // cached header always means one that landed. Entries unlock off this.
@@ -1761,8 +1769,10 @@ function _flApplyEntryGate(){
     el.style.opacity = ok ? '' : '0.45';
     el.style.pointerEvents = ok ? '' : 'none';
   }
-  var g = document.getElementById('btn-generate-report');
-  if(g && !ok){ g.disabled = true; g.style.opacity='0.4'; g.style.pointerEvents='none'; }
+  // Generate Report is deliberately NOT disabled for an unconfirmed header.
+  // A dead button explains nothing; openReportModal runs the checks on click and
+  // says exactly what is missing. Only p2_applyLockUI greys it out, for a report
+  // that is already pending or approved.
 }
 
 // Rebuilt from the persisted flag on every load, so it can never vanish the way
@@ -1776,8 +1786,14 @@ function _flRenderHeaderBadge(){
   if(!dailyHeader) return;
   if(!pv || pv.style.display === 'none') return;
   if(_flHeaderIsConfirmed()) return;
+  if(_flHeaderPostInFlight){
+    // Still trying — show progress, not a failure.
+    if(host) host.innerHTML = '<div style="background:#eef2f7;border:1px solid #d3dce6;border-radius:7px;'+
+      'padding:10px 14px;margin:12px 0 0 0;font-size:13px;color:#31465e;">&#8987; Saving header to the sheet\u2026</div>';
+    return;
+  }
   var html = '<div id="header-sync-error" style="background:#fde8ea;border:1px solid #f5b7bc;border-radius:7px;padding:10px 14px;margin:12px 0 0 0;font-size:13px;color:#9b1c2e;line-height:1.5;">'+
-    '<span>&#9888;&#65039; This header has <b>not reached the sheet</b> yet. Retrying automatically &mdash; entries and reports stay locked until it lands.</span>'+
+    '<span>&#9888;&#65039; This header has <b>not reached the sheet</b>. Entries and reports stay locked until it lands.</span>'+
     '<button id="fl-hdr-retry-btn" onclick="flRepostHeader(false)" style="display:block;width:100%;margin-top:10px;background:#9b1c2e;color:#fff;border:none;border-radius:6px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;min-height:44px;">Retry now</button>'+
     '</div>';
   if(host){ host.innerHTML = html; return; }
@@ -1798,15 +1814,28 @@ function flRepostHeader(silent){
   if(!dailyHeader || !GOOGLE_SCRIPT_URL) return Promise.resolve(false);
   var mainBtn = document.getElementById('fl-hdr-retry-btn');
   if(!silent && mainBtn){ mainBtn.textContent='Posting...'; mainBtn.disabled=true; }
+  _flHeaderPostInFlight = true;
+  _flRenderHeaderBadge();
   var payload = Object.assign({}, dailyHeader, {
     action:'upsertHeader', entryId: dailyHeader.id, type:'header', desc:'HEADER'
   });
   var narrEl = document.getElementById('daily-narrative');
   if(narrEl) payload.narrative = narrEl.value;
-  return _flFetch(GOOGLE_SCRIPT_URL, {
-    method:'POST', headers:{'Content-Type':'text/plain'}, redirect:'follow',
-    body: JSON.stringify(payload)
-  }, 30000)
+  // Try hard up front rather than scheduling background attempts: 3 tries with
+  // backoff, so a cold Apps Script instance losing the first call is invisible.
+  // Retrying this POST is safe because upsertHeader matches on number+name+date
+  // and updates in place — a duplicate delivery cannot create a second row.
+  // (submitReport is NOT idempotent and is never retried. Different rule.)
+  function _attempt(n){
+    return _flFetch(GOOGLE_SCRIPT_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain'}, redirect:'follow',
+      body: JSON.stringify(payload)
+    }, 30000).catch(function(err){
+      if(n >= 3) throw err;
+      return new Promise(function(r){ setTimeout(r, 800 * n); }).then(function(){ return _attempt(n+1); });
+    });
+  }
+  return _attempt(1)
   .then(function(r){ return r.json(); })
   .then(function(resp){
     if(!(resp && resp.success)) throw new Error((resp && resp.error) || 'upsert failed');
@@ -1816,6 +1845,7 @@ function flRepostHeader(silent){
     // that answered has no upsertHeader action (old deployment still serving).
     var staleBackend = !resp.mode;
     return _flCheckHeaderInSheet().then(function(present){
+      _flHeaderPostInFlight = false;
       var mb = document.getElementById('fl-hdr-retry-btn');
       if(mb){ mb.textContent='Retry now'; mb.disabled=false; }
       if(present === true){
@@ -1841,28 +1871,22 @@ function flRepostHeader(silent){
   })
   .catch(function(e){
     console.warn('Header upsert failed:', e);
+    _flHeaderPostInFlight = false;
     _flSetHeaderConfirmed(false);
     var mb2 = document.getElementById('fl-hdr-retry-btn');
     if(mb2){ mb2.textContent='Retry now'; mb2.disabled=false; }
-    if(!silent) showToast('Still cannot reach the sheet. Will keep retrying.', true);
+    if(!silent) showToast('Could not reach the sheet. Tap Post Daily Header to try again.', true);
     _flScheduleHeaderRetry();
     return false;
   });
 }
 
-function _flScheduleHeaderRetry(){
-  if(_flHeaderRetryTimer) return;
-  _flHeaderRetryDelay = _flHeaderRetryDelay ? Math.min(_flHeaderRetryDelay * 2, 300000) : 15000;
-  _flHeaderRetryTimer = setTimeout(function(){
-    _flHeaderRetryTimer = null;
-    if(dailyHeader && !_flHeaderIsConfirmed()) flRepostHeader(true);
-  }, _flHeaderRetryDelay);
-}
-
-function _flCancelHeaderRetry(){
-  if(_flHeaderRetryTimer){ clearTimeout(_flHeaderRetryTimer); _flHeaderRetryTimer = null; }
-  _flHeaderRetryDelay = 0;
-}
+// Background retry removed deliberately. The post now tries 3 times with backoff
+// up front, and the inspector stays on the header form until it lands — so a
+// silent timer re-posting minutes later has nothing left to fix and only makes
+// the app harder to reason about. Kept as no-ops so call sites stay harmless.
+function _flScheduleHeaderRetry(){ /* no background retry by design */ }
+function _flCancelHeaderRetry(){ /* no background retry by design */ }
 
 // Ask the sheet whether this header row actually exists.
 // Resolves true (row present), false (definitively absent), or null (couldn't
@@ -1877,7 +1901,13 @@ function _flCheckHeaderInSheet(){
   var url = GOOGLE_SCRIPT_URL+'?action=getHeader&date='+encodeURIComponent(d)+
             '&projectName='+encodeURIComponent(nm)+'&projectNumber='+encodeURIComponent(pn)+
             '&_ts='+Date.now();
-  return _flFetch(url, {}, 20000)
+  function _vAttempt(n){
+    return _flFetch(url + '&_r=' + n, {}, 20000).catch(function(err){
+      if(n >= 3) throw err;
+      return new Promise(function(r){ setTimeout(r, 700 * n); }).then(function(){ return _vAttempt(n+1); });
+    });
+  }
+  return _vAttempt(1)
     .then(function(r){ return r.json(); })
     .then(function(data){
       if(!dailyHeader || dailyHeader.date !== d || dailyHeader.project !== nm) return null;
@@ -1911,12 +1941,6 @@ function _flArmPostHeaderWatchdog(){
   }, 25000);
 }
 
-window.addEventListener('online', function(){
-  if(dailyHeader && !_flHeaderIsConfirmed()){
-    _flCancelHeaderRetry();
-    flRepostHeader(true);
-  }
-});
 
 
 // ── SECTION SAVE VERIFICATION ────────────────────────────
@@ -1940,6 +1964,16 @@ function _flClearSectionWarn(label){
   if(el) el.remove();
 }
 
+function _flShowSectionPending(label){
+  var anchor = document.getElementById(_FL_SECTION_ANCHOR[label] || '');
+  if(!anchor || !anchor.parentNode) return;
+  var d = document.createElement('div');
+  d.id = _flSectionWarnId(label);
+  d.style.cssText = 'background:#eef2f7;border:1px solid #d3dce6;border-radius:7px;padding:10px 14px;margin:8px 0;font-size:13px;color:#31465e;';
+  d.innerHTML = '&#8987; Saving ' + label.toLowerCase() + ' to the sheet\u2026';
+  anchor.parentNode.insertBefore(d, anchor);
+}
+
 function _flShowSectionWarn(label, retryFn){
   _flClearSectionWarn(label);
   var anchor = document.getElementById(_FL_SECTION_ANCHOR[label] || '');
@@ -1959,7 +1993,10 @@ function _flShowSectionWarn(label, retryFn){
 
 function _flSaveHeaderSection(label, columns, retryFn){
   if(!GOOGLE_SCRIPT_URL || !dailyHeader || !dailyHeader.id) return Promise.resolve(true);
+  // Clear any previous warning for THIS section and show progress. The retry
+  // panel must never appear before the attempt has actually finished.
   _flClearSectionWarn(label);
+  _flShowSectionPending(label);
   return _flFetch(GOOGLE_SCRIPT_URL, {
     method:'POST', headers:{'Content-Type':'text/plain'}, redirect:'follow',
     body: JSON.stringify({action:'updateHeaderColumns', entryId:dailyHeader.id, columns:columns})
@@ -1970,12 +2007,14 @@ function _flSaveHeaderSection(label, columns, retryFn){
     return flRepostHeader(true);   // targeted write missed the row — upsert + verify
   })
   .then(function(ok){
+    _flClearSectionWarn(label);          // removes the pending notice too
     if(ok) showToast(label + ' saved \u2713', false);
     else _flShowSectionWarn(label, retryFn);
     return ok;
   })
   .catch(function(e){
     console.warn(label + ' save failed:', e);
+    _flClearSectionWarn(label);
     _flShowSectionWarn(label, retryFn);
     return false;
   });
@@ -2026,6 +2065,12 @@ function flReloadHeaderFromSheet(silent){
       h.sheetSynced = true;
       h.projectType = dailyHeader.projectType || h.projectType || '';
       dailyHeader = h;
+      // getHeader returns the approval columns too. Pulling them in is the whole
+      // point of a refresh on a second device — otherwise the header updates but
+      // the "submitted / approved" banner and the entry lock never appear.
+      p2_currentReportStatus      = h.report_status      || '';
+      p2_currentApprovedBy        = h.approved_by         || '';
+      p2_currentApprovedTimestamp = h.approved_timestamp  || '';
       currentProjectKey = (h.projectNumber||'')+'||'+h.project+'||'+h.date;
       dailyHeaders[currentProjectKey] = h;
       try{
@@ -2034,7 +2079,13 @@ function flReloadHeaderFromSheet(silent){
       }catch(e){}
       restoreHeader(dailyHeader);
       _flApplyEntryGate();
-      if(!silent) showToast('Header reloaded from sheet \u2713', false);
+      try{ p2_applyLockUI(); }catch(e){}
+      try{ p2_refreshStatusBanner(); }catch(e){}
+      if(!silent){
+        showToast(p2_currentReportStatus
+          ? 'Header refreshed \u2014 report is ' + p2_currentReportStatus
+          : 'Header refreshed from sheet \u2713', false);
+      }
       return true;
     })
     .catch(function(e){
@@ -2113,7 +2164,13 @@ function postDailyHeader(){
   currentProjectKey = projectKey;
 
   var hdrBtn = document.getElementById('btn-post-header-main');
-  if(hdrBtn){ hdrBtn.disabled=true; hdrBtn.textContent='Posting...'; }
+  if(hdrBtn){
+    // Not pressable while the round trip runs, but deliberately NOT dimmed —
+    // greying it out reads as "unavailable" when it is simply busy.
+    hdrBtn.disabled=true;
+    hdrBtn.style.pointerEvents='none';
+    hdrBtn.textContent='Posting header\u2026';
+  }
 
   if(GOOGLE_SCRIPT_URL){
     // Posts via upsertHeader, NOT the saveEntry append path. upsertHeader matches
@@ -2125,9 +2182,11 @@ function postDailyHeader(){
     // the client can be wrong without corrupting the sheet.
     // flRepostHeader also verifies the row against the sheet before confirming,
     // so a success ack alone never flips headerConfirmed.
-    restoreHeader(dailyHeader);
+    _flClearHeaderPostError();
     flRepostHeader(true).then(function(ok){
       if(ok){
+        // Only now leave the form — the row is confirmed in the sheet.
+        restoreHeader(dailyHeader);
         showToast('Daily header posted ✓', false);
       } else {
         _showHeaderSyncError();
@@ -2140,17 +2199,33 @@ function postDailyHeader(){
   }
 }
 
+function _flClearHeaderPostError(){
+  var e = document.getElementById('fl-hdrpost-error');
+  if(e) e.remove();
+}
+
 function _showHeaderSyncError(){
-  // The header did NOT land. Per design, the inspector keeps working (entries
-  // save on their own rows and reconcile by project+date when the header
-  // arrives), but the unconfirmed state is recorded durably, a persistent badge
-  // is shown, and a background retry runs until it lands.
+  // The header did NOT land, so the inspector stays on the header form. Drawing
+  // the posted card here was what produced a green "Daily Header Posted" card
+  // sitting over a header the sheet had never seen.
   var hdrBtn = document.getElementById('btn-post-header-main');
-  if(hdrBtn){ hdrBtn.disabled = false; hdrBtn.textContent = 'Post Daily Header'; }
-  restoreHeader(dailyHeader);
+  if(hdrBtn){
+    hdrBtn.disabled = false;
+    hdrBtn.style.opacity=''; hdrBtn.style.cursor=''; hdrBtn.style.pointerEvents='';
+    hdrBtn.innerHTML = '&#128203; Post Daily Header';
+  }
   _flSetHeaderConfirmed(false);
   _flScheduleHeaderRetry();
-  showToast('Header saved locally — not in the sheet yet. Retrying in the background.', true);
+  _flClearHeaderPostError();
+  var host = document.getElementById('header-form-view');
+  if(host){
+    var d = document.createElement('div');
+    d.id = 'fl-hdrpost-error';
+    d.style.cssText = 'background:#fde8ea;border:1px solid #f5b7bc;border-radius:7px;padding:12px 14px;margin:10px 0;font-size:13px;color:#9b1c2e;line-height:1.5;';
+    d.innerHTML = '&#9888;&#65039; <b>The header did not reach the sheet.</b> Tap <b>Post Daily Header</b> to try again.';
+    host.insertBefore(d, host.firstChild);
+  }
+  showToast('Header did not reach the sheet. Try again.', true);
 }
 
 // Kept as an alias: older inline handlers may still reference it.
@@ -2987,14 +3062,32 @@ async function generateReport(){
     // (or a second inspector) may have submitted since this one last fetched.
     // Without this, a second submit overwrites AC/AF/AH with a new token, files a
     // duplicate PDF, re-emails the engineer, and invalidates the first review link.
+    // The fetch above already carries the authoritative status, so rather than
+    // telling the inspector to go press something, apply it: lock the UI and
+    // raise the normal status banner right here. The message then only has to
+    // say what happened.
+    // NOTE: 'rejected' deliberately does NOT block — a rejected report is meant
+    // to be corrected and resubmitted.
     if(p2_currentReportStatus === 'pending' || p2_currentReportStatus === 'approved'){
+      try{ p2_applyLockUI(); }catch(e){}
+      try{ p2_refreshStatusBanner(); }catch(e){}
       var _who  = p2_currentApprovedBy || '';
       var _when = p2_currentApprovedTimestamp || '';
-      showModalError('A report for this project and date has already been ' +
-        p2_currentReportStatus + (_who ? ' by ' + _who : '') + (_when ? ' on ' + _when : '') +
-        '. It cannot be generated again. Use "Refresh Status" on the Daily Header to see the current state.');
+      var _on   = _when ? ' on ' + _when : '';
+      showModalError(p2_currentReportStatus === 'approved'
+        ? 'Report for this project and date has already been generated and is approved' +
+          (_who ? ' by ' + _who : '') + _on + '.'
+        : 'Report for this project and date has already been generated' + _on +
+          ' and is pending engineer approval.');
       btn.disabled=false; btn.textContent='Generate Report';
       return;
+    }
+    // Rejected does NOT block — the report is meant to be corrected and
+    // resubmitted. But the engineer's comment isn't carried in getEntries, so
+    // point at the two places it does appear.
+    if(p2_currentReportStatus === 'rejected'){
+      try{ p2_refreshStatusBanner(); }catch(e){}
+      showToast('This report was rejected \u2014 check your email or the Inspector Dashboard for the engineer\u2019s comments before resubmitting.', true);
     }
     if(allRows.length===0){
       showModalError('No entries found.');
@@ -3560,6 +3653,18 @@ function p2_applyLockUI(){
   if(npv) npv.style.display=L?'block':'none';
   var narrativeTA=document.getElementById('daily-narrative');
   if(narrativeTA){narrativeTA.disabled=P;narrativeTA.style.opacity=P?'0.7':'1';}
+  // The textarea was disabled on pending but its Save button was not, leaving a
+  // live button over a field nobody can type in. (On approved the whole form
+  // view is hidden, so the button went with it — pending was the gap.)
+  // Batch photo upload is deliberately left ACTIVE: an inspector may still need
+  // to add site photos that weren't part of the report.
+  var nsb=document.getElementById('btn-save-narrative');
+  if(nsb){
+    nsb.disabled=anyLock;
+    nsb.style.opacity=anyLock?'0.4':'';
+    nsb.style.cursor=anyLock?'not-allowed':'';
+    nsb.style.pointerEvents=anyLock?'none':'';
+  }
   var gb=document.getElementById('btn-generate-report'),vb=document.getElementById('btn-view-approved');
   if(L){if(gb)gb.style.display='none';if(vb)vb.style.display=p2_approvedPdfLink?'block':'none';}
   else if(P){if(gb){gb.disabled=true;gb.style.opacity='0.4';gb.style.pointerEvents='none';gb.style.display='';}if(vb)vb.style.display='none';}
