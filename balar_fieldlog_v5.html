@@ -1684,6 +1684,10 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
                         : []),
           gpsLocation: se.gpsLocation||'',
           fromSheets: true,
+          // Carry the Drive links through. These were read from the response but
+          // never copied onto the local entry, so _flEntryThumb had nothing to
+          // build a thumbnail URL from once getEntries stopped sending base64.
+          photoLinks: se.photoLinks || [],
           // Only flag Drive photo failed for today's entries — older ones can't be recovered
           drivePhotoFailed: (se.photoCount>0 && (!se.photoLinks||se.photoLinks.length===0) && se.date===new Date().toLocaleDateString('en-US'))
         });
