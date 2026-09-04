@@ -1861,6 +1861,7 @@ function flRepostHeader(silent){
   return _attempt(1)
   .then(function(r){ return r.json(); })
   .then(function(resp){
+    if(_flHandleReportLocked(resp)){ _flHeaderPostInFlight = false; return false; }
     if(!(resp && resp.success)) throw new Error((resp && resp.error) || 'upsert failed');
     // A success response is NOT proof the row landed. Confirm against the sheet
     // before flipping the flag — trusting the ack is the exact failure this
@@ -2022,6 +2023,22 @@ function _flShowSectionWarn(label, retryFn){
   });
 }
 
+// The server refuses writes to a submitted/approved report and returns
+// {reportLocked:true,...}. That response is the second device learning the
+// report was submitted elsewhere — apply the lock and say so, rather than
+// letting the save fail silently or offer a pointless Retry.
+function _flHandleReportLocked(d){
+  if(!d || !d.reportLocked) return false;
+  p2_currentReportStatus      = d.status || 'pending';
+  p2_currentApprovedBy        = d.by     || '';
+  p2_currentApprovedTimestamp = d.at     || '';
+  try{ p2_applyLockUI(); }catch(e){}
+  try{ p2_refreshStatusBanner(); }catch(e){}
+  showToast('This report was already ' + (d.status||'submitted') +
+            (d.by ? ' by ' + d.by : '') + ' \u2014 your change was not saved.', true);
+  return true;
+}
+
 function _flSaveHeaderSection(label, columns, retryFn){
   if(!GOOGLE_SCRIPT_URL || !dailyHeader || !dailyHeader.id) return Promise.resolve(true);
   // Clear any previous warning for THIS section and show progress. The retry
@@ -2034,14 +2051,17 @@ function _flSaveHeaderSection(label, columns, retryFn){
   }, 30000)
   .then(function(r){ return r.json(); })
   .then(function(d){
-    // The backend now reads the written cells back. verified===false means the
-    // write did not stick, so fall through to the upsert repair rather than
-    // reporting a save that didn't happen.
+    // Report already submitted elsewhere — not a failure to retry, a state to adopt.
+    if(_flHandleReportLocked(d)) return 'locked';
+    // The backend reads the written cells back. verified===false means the write
+    // did not stick, so fall through to the upsert repair rather than reporting
+    // a save that didn't happen.
     if(d && d.success && d.verified !== false) return true;
     return flRepostHeader(true);   // missed the row (or unverified) — upsert + verify
   })
   .then(function(ok){
     _flClearSectionWarn(label);          // removes the pending notice too
+    if(ok === 'locked') return false;    // banner already shown; no retry offered
     if(ok) showToast(label + ' saved \u2713', false);
     else _flShowSectionWarn(label, retryFn);
     return ok;
