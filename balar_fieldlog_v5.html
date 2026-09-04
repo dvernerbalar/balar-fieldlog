@@ -1844,21 +1844,64 @@ function flRepostHeader(silent){
   });
   var narrEl = document.getElementById('daily-narrative');
   if(narrEl) payload.narrative = narrEl.value;
-  // Try hard up front rather than scheduling background attempts: 3 tries with
-  // backoff, so a cold Apps Script instance losing the first call is invisible.
-  // Retrying this POST is safe because upsertHeader matches on number+name+date
-  // and updates in place — a duplicate delivery cannot create a second row.
-  // (submitReport is NOT idempotent and is never retried. Different rule.)
-  function _attempt(n){
+  // ONE post, then ASK — never re-POST on timeout.
+  //
+  // upsertHeader takes a script lock. Re-posting after a timeout sends a second
+  // execution that blocks on the lock the first one still holds, then a third
+  // behind that — so every retry made the stall LONGER, not shorter. Observed
+  // 2026-09-04: three executions queued, all reported failure, while the row had
+  // landed on the first one within a second.
+  //
+  // getHeader is a GET: no lock, never queues. So when the POST doesn't answer,
+  // the right move is to ask whether the row landed, not to write again. Only a
+  // definitive "not there" earns a second POST.
+  var _postAttempts = 0;
+  function _postOnce(){
+    _postAttempts++;
     return _flFetch(GOOGLE_SCRIPT_URL, {
       method:'POST', headers:{'Content-Type':'text/plain'}, redirect:'follow',
       body: JSON.stringify(payload)
-    }, 30000).catch(function(err){
-      if(n >= 3) throw err;
-      return new Promise(function(r){ setTimeout(r, 800 * n); }).then(function(){ return _attempt(n+1); });
-    });
+    }, 45000);
   }
-  return _attempt(1)
+
+  var _confirmedResp = { json: function(){
+    return Promise.resolve({success:true, verified:true, mode:'read-confirmed'});
+  }};
+
+  // HEDGED CONFIRM. The row typically lands in a second or two; it's the
+  // RESPONSE that can crawl. So while the POST is still in flight, ask the
+  // lock-free read path whether the row is there yet — and if it is, stop
+  // waiting. Only a POSITIVE answer is acted on: an "absent" here is meaningless
+  // because the write may simply not have happened yet, and acting on it would
+  // report failure for a post that was about to succeed.
+  var _settled = false;
+  var _hedge = new Promise(function(resolve){
+    setTimeout(function(){
+      // Don't bother if the POST already answered — the hedge exists only to
+      // rescue a slow response, not to add a second call to a fast one.
+      if(_settled || !dailyHeader) return;
+      _flCheckHeaderInSheet(1).then(function(present){
+        if(!_settled && present === true) resolve(_confirmedResp);
+        // false / null: say nothing, let the POST decide.
+      }).catch(function(){ /* ignore */ });
+    }, 8000);
+  });
+
+  var _post = _postOnce().then(function(r){ _settled = true; return r; })
+  .catch(function(err){
+    // POST gave up. Now a negative IS meaningful, so ask properly.
+    console.warn('Header POST did not answer; checking whether it landed.', err);
+    return _flCheckHeaderInSheet().then(function(present){
+      if(present === true) return _confirmedResp;
+      // Absent, or couldn't tell — do NOT write again automatically. A POST that
+      // timed out client-side may still be running server-side; posting again
+      // would queue behind its lock and recreate the pile-up this design exists
+      // to avoid. The inspector gets an honest error and a Retry they control.
+      throw err;
+    });
+  });
+
+  return Promise.race([_post, _hedge])
   .then(function(r){ return r.json(); })
   .then(function(resp){
     if(_flHandleReportLocked(resp)){ _flHeaderPostInFlight = false; return false; }
@@ -1924,8 +1967,13 @@ function _flCancelHeaderRetry(){ /* no background retry by design */ }
 // Resolves true (row present), false (definitively absent), or null (couldn't
 // tell — network failure). null is NOT the same as false: demoting on an
 // unreachable server would flag every offline inspector as broken.
-function _flCheckHeaderInSheet(){
+// maxTries defaults to 2. This is a tiny read — one header row — so it should
+// answer fast or not at all. Three 20s attempts stacked behind a 45s POST meant
+// nearly two minutes before an inspector saw anything; the point of the check is
+// a quick answer, not persistence.
+function _flCheckHeaderInSheet(maxTries){
   if(!dailyHeader || !GOOGLE_SCRIPT_URL) return Promise.resolve(null);
+  var tries = maxTries || 2;
   var d  = dailyHeader.date;
   var nm = dailyHeader.project;
   var pn = dailyHeader.projectNumber || '';
@@ -1934,9 +1982,9 @@ function _flCheckHeaderInSheet(){
             '&projectName='+encodeURIComponent(nm)+'&projectNumber='+encodeURIComponent(pn)+
             '&_ts='+Date.now();
   function _vAttempt(n){
-    return _flFetch(url + '&_r=' + n, {}, 20000).catch(function(err){
-      if(n >= 3) throw err;
-      return new Promise(function(r){ setTimeout(r, 700 * n); }).then(function(){ return _vAttempt(n+1); });
+    return _flFetch(url + '&_r=' + n, {}, 12000).catch(function(err){
+      if(n >= tries) throw err;
+      return new Promise(function(r){ setTimeout(r, 500); }).then(function(){ return _vAttempt(n+1); });
     });
   }
   return _vAttempt(1)
