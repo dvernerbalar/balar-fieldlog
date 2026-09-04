@@ -2040,19 +2040,45 @@ function _flHandleReportLocked(d){
 }
 
 function _flSaveHeaderSection(label, columns, retryFn){
-  if(!GOOGLE_SCRIPT_URL || !dailyHeader || !dailyHeader.id) return Promise.resolve(true);
+  // Never report success for a save that was not attempted. Returning true here
+  // produced a "saved ✓" toast with nothing written — the exact false-success
+  // pattern this whole mechanism exists to prevent.
+  if(!GOOGLE_SCRIPT_URL){
+    showToast(label + ' saved on this device only (no server configured).', true);
+    return Promise.resolve(false);
+  }
+  if(!dailyHeader || !dailyHeader.id){
+    console.warn('_flSaveHeaderSection: no dailyHeader.id', dailyHeader);
+    _flShowSectionWarn(label, retryFn);
+    showToast('Cannot save ' + label.toLowerCase() + ' — no Daily Header is loaded. Post the Daily Header first.', true);
+    return Promise.resolve(false);
+  }
   // Clear any previous warning for THIS section and show progress. The retry
   // panel must never appear before the attempt has actually finished.
   _flClearSectionWarn(label);
   _flShowSectionPending(label);
   return _flFetch(GOOGLE_SCRIPT_URL, {
     method:'POST', headers:{'Content-Type':'text/plain'}, redirect:'follow',
-    body: JSON.stringify({action:'updateHeaderColumns', entryId:dailyHeader.id, columns:columns})
+    // Send the 3 keys with every section save. The backend used to locate the
+    // row by entryId alone, which let a stale id write into a different report's
+    // row. It now refuses unless number + name + date match too.
+    body: JSON.stringify({
+      action:'updateHeaderColumns',
+      entryId: dailyHeader.id,
+      date: dailyHeader.date,
+      projectNumber: dailyHeader.projectNumber,
+      project: dailyHeader.project,
+      columns: columns
+    })
   }, 30000)
   .then(function(r){ return r.json(); })
   .then(function(d){
     // Report already submitted elsewhere — not a failure to retry, a state to adopt.
     if(_flHandleReportLocked(d)) return 'locked';
+    // The entry ID points at a different report's row. Repairing via upsert is
+    // correct here: it matches on number+name+date and will find (or create) the
+    // right row, rather than chasing the bad id.
+    if(d && d.keyMismatch){ console.warn('updateHeaderColumns key mismatch:', d.error); }
     // The backend reads the written cells back. verified===false means the write
     // did not stick, so fall through to the upsert repair rather than reporting
     // a save that didn't happen.
