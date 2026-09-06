@@ -133,6 +133,12 @@
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: #fafbfc; }
 
+  th.sortable { cursor: pointer; user-select: none; -webkit-user-select: none; white-space: nowrap; }
+  th.sortable:hover { background: #eef1f5; color: var(--navy); }
+  th.sortable.sorted { color: var(--navy); }
+  .sort-arrow { font-size: 9px; margin-left: 3px; opacity: .85; }
+  .sort-arrow.dim { opacity: .25; }
+
   .pill {
     display: inline-block;
     padding: 3px 10px;
@@ -232,7 +238,7 @@
       <div class="table-hdr-title">Pending Reports</div>
       <div class="table-hdr-sub" id="table-sub">Loading...</div>
     </div>
-    <div id="table-container"><div class="table-scroll" id="table-scroll-wrap">
+    <div id="table-container">
       <div class="loading">&#9203; Loading pending reports...</div>
     </div>
   </div>
@@ -246,6 +252,106 @@ var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzboPnRIKSebUQEPo
 var REVIEW_URL = 'https://dvernerbalar.github.io/balar-fieldlog/balar_report_review.html';
 
 var allReports = [];
+
+// ── Sorting ───────────────────────────────────────────────────────────────
+// Default: report date ascending (oldest report first).
+var sortKey = 'reportDate';
+var sortDir = 1;   // 1 = ascending, -1 = descending
+
+// Direction a column starts in the first time it is clicked.
+var SORT_DEFAULT_DIR = {
+  projectNumber: 1,   // 10001 -> 26001
+  projectName:   1,   // A -> Z
+  reportDate:    1,   // oldest -> newest
+  inspector:     1,
+  engineer:      1,
+  daysPending:  -1    // longest waiting first
+};
+
+// M/D/YYYY compares unreliably through new Date(str) — parse the parts explicitly.
+// Returns midnight-local ms, or null if unparseable. Time-of-day is discarded.
+function flDateMs(v) {
+  if (v === null || v === undefined) return null;
+  var s = String(v).trim();
+  if (!s) return null;
+  var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);            // 9/4/2026[, 10:09:13 AM]
+  if (m) return new Date(+m[3], +m[1] - 1, +m[2]).getTime();
+  var iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);            // 2026-09-04...
+  if (iso) return new Date(+iso[1], +iso[2] - 1, +iso[3]).getTime();
+  var d = new Date(s);                                          // "Thu Sep 04 2026 ..." fallback
+  if (isNaN(d)) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+function flNum(v) {
+  if (v === null || v === undefined || v === '') return null;
+  var n = Number(v);
+  return isNaN(n) ? null : n;
+}
+
+// Nulls always sort last, whichever direction the column is in.
+function cmpVal(a, b, dir) {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return (a < b ? -1 : a > b ? 1 : 0) * dir;
+}
+
+// Project numbers are not guaranteed numeric — numeric compare when both are,
+// otherwise a numeric-aware string compare.
+function cmpProjNum(a, b) {
+  a = String(a === null || a === undefined ? '' : a).trim();
+  b = String(b === null || b === undefined ? '' : b).trim();
+  if (/^\d+$/.test(a) && /^\d+$/.test(b)) return parseInt(a, 10) - parseInt(b, 10);
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function cmpStr(a, b) {
+  return String(a === null || a === undefined ? '' : a)
+    .localeCompare(String(b === null || b === undefined ? '' : b), undefined, { sensitivity: 'base' });
+}
+
+function flCompareBy(key, dir, a, b) {
+  if (key === 'projectNumber') return cmpProjNum(a.projectNumber, b.projectNumber) * dir;
+  if (key === 'projectName')   return cmpStr(a.projectName, b.projectName) * dir;
+  if (key === 'inspector')     return cmpStr(a.inspector, b.inspector) * dir;
+  if (key === 'engineer')      return cmpStr(a.engineer, b.engineer) * dir;
+  if (key === 'reportDate')    return cmpVal(flDateMs(a.reportDate), flDateMs(b.reportDate), dir);
+  if (key === 'daysPending')   return cmpVal(flNum(a.daysPending), flNum(b.daysPending), dir);
+  return 0;
+}
+
+function flSortReports(list) {
+  return list.sort(function(a, b) {
+    var r = flCompareBy(sortKey, sortDir, a, b);
+    if (r !== 0) return r;
+    r = cmpProjNum(a.projectNumber, b.projectNumber);          // stable tiebreaks
+    if (r !== 0) return r;
+    return cmpVal(flDateMs(a.reportDate), flDateMs(b.reportDate), 1);
+  });
+}
+
+function thSort(key, label) {
+  var arrow = sortKey === key
+    ? '<span class="sort-arrow">' + (sortDir === 1 ? '&#9650;' : '&#9660;') + '</span>'
+    : '<span class="sort-arrow dim">&#8645;</span>';
+  return '<th class="sortable' + (sortKey === key ? ' sorted' : '') + '" data-sort="' + key +
+         '" title="Click to sort">' + label + ' ' + arrow + '</th>';
+}
+
+// Data attributes + addEventListener — inline onclick handlers have repeatedly
+// broken on quoting in this codebase.
+function wireSortHeaders() {
+  var ths = document.querySelectorAll('th.sortable');
+  Array.prototype.forEach.call(ths, function(th) {
+    th.addEventListener('click', function() {
+      var k = th.getAttribute('data-sort');
+      if (sortKey === k) { sortDir = -sortDir; }
+      else { sortKey = k; sortDir = SORT_DEFAULT_DIR[k] || 1; }
+      filterReports();
+    });
+  });
+}
 
 // Resilient GET: timeout + retry-with-backoff for the flaky Apps Script serving layer.
 function dashFetchJson(url, attempts, timeoutMs, backoffMs) {
@@ -328,10 +434,9 @@ function filterReports() {
     return;
   }
 
-  // Sort by days pending descending
-  filtered.sort(function(a, b) {
-    return (b.daysPending || 0) - (a.daysPending || 0);
-  });
+  // Sort by whichever column header is active (default: report date, oldest first).
+  // slice() so sorting never reorders allReports itself.
+  filtered = flSortReports(filtered.slice());
 
   var rows = filtered.map(function(r) {
     var days = r.daysPending !== null ? r.daysPending + ' day' + (r.daysPending === 1 ? '' : 's') : '—';
@@ -353,9 +458,16 @@ function filterReports() {
   document.getElementById('table-container').innerHTML =
     '<div class="table-scroll"><table>' +
     '<thead><tr>' +
-    '<th>Project #</th><th>Project / Client</th><th>Report Date</th>' +
-    '<th>Inspector</th><th>Engineer</th><th>Pending</th><th></th>' +
+    thSort('projectNumber', 'Project #') +
+    thSort('projectName',   'Project / Client') +
+    thSort('reportDate',    'Report Date') +
+    thSort('inspector',     'Inspector') +
+    thSort('engineer',      'Engineer') +
+    thSort('daysPending',   'Pending') +
+    '<th></th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+
+  wireSortHeaders();
 }
 
 // Load on page open

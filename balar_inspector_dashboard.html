@@ -78,6 +78,12 @@
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: #fafbfc; }
 
+  th.sortable { cursor: pointer; user-select: none; -webkit-user-select: none; white-space: nowrap; }
+  th.sortable:hover { background: #eef1f5; color: var(--navy); }
+  th.sortable.sorted { color: var(--navy); }
+  .sort-arrow { font-size: 9px; margin-left: 3px; opacity: .85; }
+  .sort-arrow.dim { opacity: .25; }
+
   .status-pill {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; letter-spacing: .5px;
@@ -151,6 +157,119 @@
 var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzboPnRIKSebUQEPoKYILSt8Zj8WbJJ0AYa7fU2Vl4n7Jx1_vvCnjdWk_2K1pE5uQOH/exec';
 var allReports = [];
 var currentTab = 'active';
+
+// ── Sorting ───────────────────────────────────────────────────────────────
+// Each tab keeps its own sort. Active defaults to rejected-first (those need
+// action) with oldest report date inside each group; Approved defaults to the
+// most recently approved at the top.
+var sortState = {
+  active:   { key: 'status',       dir: 1  },
+  approved: { key: 'approvedDate', dir: -1 }
+};
+
+var SORT_DEFAULT_DIR = {
+  projectNumber: 1,
+  projectName:   1,
+  reportDate:    1,   // oldest -> newest
+  inspector:     1,
+  engineer:      1,
+  approvedBy:    1,
+  status:        1,   // rejected -> pending
+  approvedDate: -1    // most recently approved first
+};
+
+// M/D/YYYY compares unreliably through new Date(str) — parse the parts explicitly.
+// Returns midnight-local ms, or null if unparseable. Time-of-day is discarded, so
+// col AE ("9/4/2026, 10:09:13 AM") sorts and displays as a date only.
+function flDateMs(v) {
+  if (v === null || v === undefined) return null;
+  var s = String(v).trim();
+  if (!s) return null;
+  var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return new Date(+m[3], +m[1] - 1, +m[2]).getTime();
+  var iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return new Date(+iso[1], +iso[2] - 1, +iso[3]).getTime();
+  var d = new Date(s);
+  if (isNaN(d)) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+// Date only — never the time — regardless of how col AE was written.
+function flDateText(v) {
+  var ms = flDateMs(v);
+  if (ms === null) return '';
+  var d = new Date(ms);
+  return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+}
+
+function cmpVal(a, b, dir) {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return (a < b ? -1 : a > b ? 1 : 0) * dir;
+}
+
+function cmpProjNum(a, b) {
+  a = String(a === null || a === undefined ? '' : a).trim();
+  b = String(b === null || b === undefined ? '' : b).trim();
+  if (/^\d+$/.test(a) && /^\d+$/.test(b)) return parseInt(a, 10) - parseInt(b, 10);
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function cmpStr(a, b) {
+  return String(a === null || a === undefined ? '' : a)
+    .localeCompare(String(b === null || b === undefined ? '' : b), undefined, { sensitivity: 'base' });
+}
+
+function statusRank(r) { return r.status === 'rejected' ? 0 : (r.status === 'pending' ? 1 : 2); }
+function approverOf(r) { return r.approvedBy || r.engineer || ''; }
+
+function flCompareBy(key, dir, a, b) {
+  if (key === 'projectNumber') return cmpProjNum(a.projectNumber, b.projectNumber) * dir;
+  if (key === 'projectName')   return cmpStr(a.projectName, b.projectName) * dir;
+  if (key === 'inspector')     return cmpStr(a.inspector, b.inspector) * dir;
+  if (key === 'engineer')      return cmpStr(a.engineer, b.engineer) * dir;
+  if (key === 'approvedBy')    return cmpStr(approverOf(a), approverOf(b)) * dir;
+  if (key === 'status')        return (statusRank(a) - statusRank(b)) * dir;
+  if (key === 'reportDate')    return cmpVal(flDateMs(a.reportDate), flDateMs(b.reportDate), dir);
+  if (key === 'approvedDate')  return cmpVal(flDateMs(a.approvedTimestamp), flDateMs(b.approvedTimestamp), dir);
+  return 0;
+}
+
+function flSortReports(list) {
+  var st = sortState[currentTab];
+  return list.sort(function(a, b) {
+    var r = flCompareBy(st.key, st.dir, a, b);
+    if (r !== 0) return r;
+    r = cmpVal(flDateMs(a.reportDate), flDateMs(b.reportDate), 1);   // stable tiebreaks
+    if (r !== 0) return r;
+    return cmpProjNum(a.projectNumber, b.projectNumber);
+  });
+}
+
+function thSort(key, label) {
+  var st = sortState[currentTab];
+  var arrow = st.key === key
+    ? '<span class="sort-arrow">' + (st.dir === 1 ? '&#9650;' : '&#9660;') + '</span>'
+    : '<span class="sort-arrow dim">&#8645;</span>';
+  return '<th class="sortable' + (st.key === key ? ' sorted' : '') + '" data-sort="' + key +
+         '" title="Click to sort">' + label + ' ' + arrow + '</th>';
+}
+
+// Data attributes + addEventListener — inline onclick handlers have repeatedly
+// broken on quoting in this codebase.
+function wireSortHeaders() {
+  var ths = document.querySelectorAll('th.sortable');
+  Array.prototype.forEach.call(ths, function(th) {
+    th.addEventListener('click', function() {
+      var k = th.getAttribute('data-sort');
+      var st = sortState[currentTab];
+      if (st.key === k) { st.dir = -st.dir; }
+      else { st.key = k; st.dir = SORT_DEFAULT_DIR[k] || 1; }
+      renderDashboard();
+    });
+  });
+}
 
 // Resilient GET: timeout + retry-with-backoff for the flaky Apps Script serving layer.
 function dashFetchJson(url, attempts, timeoutMs, backoffMs) {
@@ -303,20 +422,9 @@ function renderDashboard() {
     return;
   }
 
-  // Sort
-  if (currentTab === 'active') {
-    // Rejected first, then pending
-    filtered.sort(function(a, b) {
-      if (a.status === 'rejected' && b.status !== 'rejected') return -1;
-      if (b.status === 'rejected' && a.status !== 'rejected') return 1;
-      return 0;
-    });
-  } else {
-    // Approved — newest report date first
-    filtered.sort(function(a, b) {
-      return new Date(b.reportDate) - new Date(a.reportDate);
-    });
-  }
+  // Sort by whichever column header is active for this tab.
+  // slice() so sorting never reorders allReports itself.
+  filtered = flSortReports(filtered.slice());
 
   var rows = '';
   if (currentTab === 'active') {
@@ -342,25 +450,47 @@ function renderDashboard() {
 
     document.getElementById('table-container').innerHTML =
       '<div class="table-scroll"><table>' +
-      '<thead><tr><th>Project #</th><th>Project Name</th><th>Report Date</th><th>Inspector</th><th>Engineer</th><th>Status</th><th></th></tr></thead>' +
+      '<thead><tr>' +
+      thSort('projectNumber', 'Project #') +
+      thSort('projectName',   'Project Name') +
+      thSort('reportDate',    'Report Date') +
+      thSort('inspector',     'Inspector') +
+      thSort('engineer',      'Engineer') +
+      thSort('status',        'Status') +
+      '<th></th>' +
+      '</tr></thead>' +
       '<tbody>' + rows + '</tbody></table></div>';
+
+    wireSortHeaders();
   } else {
     rows = filtered.map(function(r) {
+      // Approval date only — col AE is a full toLocaleString(), the time is dropped.
+      var appDate = flDateText(r.approvedTimestamp);
       return '<tr>' +
         '<td><strong>' + r.projectNumber + '</strong><br><span style="font-size:12px;color:var(--muted);">' + r.client + '</span></td>' +
         '<td>' + r.projectName + '</td>' +
         '<td>' + r.reportDate + '</td>' +
         '<td>' + r.inspector + '</td>' +
-        '<td>' + r.engineer + '</td>' +
-        '<td><span class="status-pill pill-approved">&#10003; Approved</span></td>' +
+        '<td>' + approverOf(r) + '</td>' +
+        '<td><span class="status-pill pill-approved">&#10003; Approved' + (appDate ? ' ' + appDate : '') + '</span></td>' +
         '<td><button onclick="fetchAndOpenPdf(this)" data-date="' + r.reportDate + '" data-num="' + r.projectNumber + '" data-name="' + r.projectName.replace(/"/g,'&quot;') + '" data-client="' + r.client.replace(/"/g,'&quot;') + '" data-status="approved" style="background:#0d1b2a;color:#fff;border:none;padding:5px 12px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">View PDF</button></td>' +
         '</tr>';
     }).join('');
 
     document.getElementById('table-container').innerHTML =
       '<div class="table-scroll"><table>' +
-      '<thead><tr><th>Project #</th><th>Project Name</th><th>Report Date</th><th>Inspector</th><th>Approved By</th><th>Status</th><th></th></tr></thead>' +
+      '<thead><tr>' +
+      thSort('projectNumber', 'Project #') +
+      thSort('projectName',   'Project Name') +
+      thSort('reportDate',    'Report Date') +
+      thSort('inspector',     'Inspector') +
+      thSort('approvedBy',    'Approved By') +
+      thSort('approvedDate',  'Approved') +
+      '<th></th>' +
+      '</tr></thead>' +
       '<tbody>' + rows + '</tbody></table></div>';
+
+    wireSortHeaders();
   }
 }
 
