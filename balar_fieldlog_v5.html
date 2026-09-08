@@ -993,15 +993,20 @@ function saveConditions(){
   // Save to localStorage
   _flPersistHeaderIfConfirmed();
   // Sync to Sheets
+  // Condense the card ONLY once the sheet has accepted the write. It used to
+  // switch to the posted view immediately, so the card read as saved while the
+  // request was still in flight — and stayed reading "saved" even when the save
+  // then failed. The pending notice above the card shows progress meanwhile.
   _flSaveHeaderSection('Conditions',
     {'8':dailyHeader.dailyWeather||'','9':dailyHeader.dailyTemperature||''},
-    function(){ saveConditions(); });
-  // Show posted view
-  document.getElementById('conditions-form-view').style.display='none';
-  document.getElementById('conditions-posted-view').style.display='block';
-  document.getElementById('conditions-summary').textContent = weather + ' · ' + temp + '°F';
-  // Update header summary
-  restoreHeader(dailyHeader);
+    function(){ saveConditions(); })
+  .then(function(ok){
+    if(ok !== true) return;   // failure keeps the form open with its Retry panel
+    document.getElementById('conditions-form-view').style.display='none';
+    document.getElementById('conditions-posted-view').style.display='block';
+    document.getElementById('conditions-summary').textContent = weather + ' · ' + temp + '°F';
+    restoreHeader(dailyHeader);
+  });
 }
 
 function editConditions(){
@@ -1018,16 +1023,19 @@ function saveChecklist(){
   dailyHeader.checklistSaved = true;
   dailyHeader.allChecklistItems = CHECKLIST_ITEMS.slice();
   _flPersistHeaderIfConfirmed();
+  // Condense only once the sheet confirms — see saveConditions.
   _flSaveHeaderSection('Checklist',
     {'13':(dailyHeader.checks||[]).join(', '),'28':dailyHeader.allChecklistItems||[]},
-    function(){ saveChecklist(); });
-  // Show condensed view
-  var checked = checks.length > 0 ? checks.join(', ') : 'No items checked';
-  var summaryEl = document.getElementById('checklist-summary');
-  if(summaryEl) summaryEl.textContent = checked;
-  document.getElementById('checklist-form-view').style.display = 'none';
-  document.getElementById('checklist-posted-view').style.display = 'block';
-  restoreHeader(dailyHeader);
+    function(){ saveChecklist(); })
+  .then(function(ok){
+    if(ok !== true) return;
+    var checked = checks.length > 0 ? checks.join(', ') : 'No items checked';
+    var summaryEl = document.getElementById('checklist-summary');
+    if(summaryEl) summaryEl.textContent = checked;
+    document.getElementById('checklist-form-view').style.display = 'none';
+    document.getElementById('checklist-posted-view').style.display = 'block';
+    restoreHeader(dailyHeader);
+  });
 }
 
 function editChecklist(){
@@ -1057,17 +1065,20 @@ function saveResources(){
   dailyHeader.equipment = equipmentItems.slice();
   dailyHeader.workforce = workforceItems.slice();
   _flPersistHeaderIfConfirmed();
+  // Condense only once the sheet confirms — see saveConditions.
   _flSaveHeaderSection('Equipment & workforce',
     {'20':dailyHeader.equipment||[],'21':dailyHeader.workforce||[]},
-    function(){ saveResources(); });
-  // Show condensed view
-  var eqSum = dailyHeader.equipment.map(function(e){return e.name+(e.count>0?' ('+e.count+')':'');}).join(', ')||'None';
-  var wfSum = dailyHeader.workforce.map(function(w){return w.classification+(w.count>0?' ('+w.count+')':'');}).join(', ')||'None';
-  var resSummaryEl = document.getElementById('resources-summary');
-  if(resSummaryEl) resSummaryEl.innerHTML = '<strong>Equipment:</strong> '+eqSum+'<br><strong>Workforce:</strong> '+wfSum;
-  document.getElementById('resources-form-view').style.display = 'none';
-  document.getElementById('resources-posted-view').style.display = 'block';
-  restoreHeader(dailyHeader);
+    function(){ saveResources(); })
+  .then(function(ok){
+    if(ok !== true) return;
+    var eqSum = dailyHeader.equipment.map(function(e){return e.name+(e.count>0?' ('+e.count+')':'');}).join(', ')||'None';
+    var wfSum = dailyHeader.workforce.map(function(w){return w.classification+(w.count>0?' ('+w.count+')':'');}).join(', ')||'None';
+    var resSummaryEl = document.getElementById('resources-summary');
+    if(resSummaryEl) resSummaryEl.innerHTML = '<strong>Equipment:</strong> '+eqSum+'<br><strong>Workforce:</strong> '+wfSum;
+    document.getElementById('resources-form-view').style.display = 'none';
+    document.getElementById('resources-posted-view').style.display = 'block';
+    restoreHeader(dailyHeader);
+  });
 }
 
 function editResources(){
@@ -1517,6 +1528,7 @@ async function checkForExistingHeader(projectName, dateVal, projectNumber){
     }
     _flRenderHeaderBadge();
     _flApplyEntryGate();
+    _flClearAllSectionWarns();   // a different project/date's warnings don't apply here
     showToast('Header restored from today', false);
     // Sync any new entries from Sheets not in local cache
     var dp = dateLocale;
@@ -2077,6 +2089,13 @@ var _FL_SECTION_ANCHOR = {
   'Narrative':  'narrative-posted-view'
 };
 
+// Clear every section's "not saved" panel. After a reload the values on screen
+// came FROM the sheet, so by definition nothing is unsaved — a panel left over
+// from an earlier failed save would sit above correct data contradicting it.
+function _flClearAllSectionWarns(){
+  for(var _lbl in _FL_SECTION_ANCHOR){ _flClearSectionWarn(_lbl); }
+}
+
 function _flSectionWarnId(label){ return 'fl-secwarn-' + label.replace(/[^a-z]/gi,''); }
 
 function _flClearSectionWarn(label){
@@ -2247,6 +2266,7 @@ function flReloadHeaderFromSheet(silent){
       }catch(e){}
       restoreHeader(dailyHeader);
       _flApplyEntryGate();
+      _flClearAllSectionWarns();   // values came from the sheet — nothing is unsaved
       try{ p2_applyLockUI(); }catch(e){}
       try{ p2_refreshStatusBanner(); }catch(e){}
       if(!silent){
@@ -3072,6 +3092,7 @@ function startNewProjectHeader(){
   p2_applyLockUI();
   // Reset header form for new project
   _flCancelHeaderRetry();
+  _flClearAllSectionWarns();
   dailyHeader = null;
   var _hb = document.getElementById('header-sync-error'); if(_hb) _hb.remove();
   var _hs = document.getElementById('fl-header-sync-state'); if(_hs) _hs.innerHTML='';
