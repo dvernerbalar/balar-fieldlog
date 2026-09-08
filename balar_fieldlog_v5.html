@@ -857,6 +857,13 @@ function saveNarrative(){
   if(!dailyHeader) return;
   var narrativeEl=document.getElementById('daily-narrative');
   if(!narrativeEl) return;
+  // Saving an empty narrative wrote emptiness to the sheet and reported success.
+  // The report requires a narrative (a blank one silently drops the Daily Summary
+  // block from the PDF), so there is nothing useful an empty save can do.
+  if(!narrativeEl.value.trim()){
+    showToast('Enter a daily summary before saving.', true);
+    return;
+  }
   // Show saving state on button
   var saveBtn=document.querySelector('button[onclick="saveNarrative()"]');
   if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent='Saving...'; }
@@ -876,7 +883,6 @@ function saveNarrative(){
       }
     });
   } else {
-    showToast('Narrative saved',false);
     if(saveBtn){ saveBtn.disabled=false; saveBtn.innerHTML='&#128190; Save Narrative'; }
   }
 }
@@ -996,7 +1002,6 @@ function saveConditions(){
   document.getElementById('conditions-summary').textContent = weather + ' · ' + temp + '°F';
   // Update header summary
   restoreHeader(dailyHeader);
-  showToast('Conditions saved ✓', false);
 }
 
 function editConditions(){
@@ -1023,7 +1028,6 @@ function saveChecklist(){
   document.getElementById('checklist-form-view').style.display = 'none';
   document.getElementById('checklist-posted-view').style.display = 'block';
   restoreHeader(dailyHeader);
-  showToast('Checklist saved ✓', false);
 }
 
 function editChecklist(){
@@ -1833,7 +1837,12 @@ function _flRenderHeaderBadge(){
 // repairs a header that never landed AND applies edits to one that did.
 // (A plain saveEntry re-post would hit the doPost dedup guard and silently
 // no-op, discarding any edits.)
-function flRepostHeader(silent){
+// opts.create marks this as a NEW header post (postDailyHeader). The backend
+// then refuses to overwrite an existing row for the same project/date and hands
+// back whatever is already there, so a second device can't quietly replace
+// another inspector's header. Edits, section-save fallbacks and manual repair
+// leave it off and keep the normal update behaviour.
+function flRepostHeader(silent, opts){
   if(!dailyHeader || !GOOGLE_SCRIPT_URL) return Promise.resolve(false);
   var mainBtn = document.getElementById('fl-hdr-retry-btn');
   if(!silent && mainBtn){ mainBtn.textContent='Posting...'; mainBtn.disabled=true; }
@@ -1842,6 +1851,7 @@ function flRepostHeader(silent){
   var payload = Object.assign({}, dailyHeader, {
     action:'upsertHeader', entryId: dailyHeader.id, type:'header', desc:'HEADER'
   });
+  if(opts && opts.create) payload.mode = 'create';
   var narrEl = document.getElementById('daily-narrative');
   if(narrEl) payload.narrative = narrEl.value;
   // ONE post, then ASK — never re-POST on timeout.
@@ -1905,6 +1915,36 @@ function flRepostHeader(silent){
   .then(function(r){ return r.json(); })
   .then(function(resp){
     if(_flHandleReportLocked(resp)){ _flHeaderPostInFlight = false; return false; }
+    // Someone already posted this project/date. Nothing was written. Load THEIR
+    // header so the inspector lands exactly where they would have if the
+    // pre-check had found it — posted card, real values, entries unlocked.
+    if(resp && resp.headerExists && resp.header){
+      _flHeaderPostInFlight = false;
+      var h = resp.header;
+      h.headerConfirmed = true;      // it demonstrably exists in the sheet
+      h.sheetSynced = true;
+      h.projectType = (dailyHeader && dailyHeader.projectType) || h.projectType || '';
+      dailyHeader = h;
+      currentProjectKey = (h.projectNumber||'')+'||'+h.project+'||'+h.date;
+      dailyHeaders[currentProjectKey] = h;
+      try{
+        localStorage.setItem('balar_v5_headers', JSON.stringify(dailyHeaders));
+        localStorage.setItem('balar_v5_current_project', currentProjectKey);
+      }catch(e){}
+      p2_currentReportStatus      = h.report_status      || '';
+      p2_currentApprovedBy        = h.approved_by         || '';
+      p2_currentApprovedTimestamp = h.approved_timestamp  || '';
+      _flClearHeaderPostError();
+      restoreHeader(dailyHeader);
+      _flRenderHeaderBadge();
+      _flApplyEntryGate();
+      try{ p2_applyLockUI(); }catch(e){}
+      try{ p2_refreshStatusBanner(); }catch(e){}
+      showToast(resp.postedBy
+        ? 'Existing header loaded (' + resp.postedBy + ')'
+        : 'Existing header loaded', false);
+      return 'existing';
+    }
     if(!(resp && resp.success)) throw new Error((resp && resp.error) || 'upsert failed');
     // A success response is NOT proof the row landed. Confirm against the sheet
     // before flipping the flag — trusting the ack is the exact failure this
@@ -2311,7 +2351,12 @@ function postDailyHeader(){
     // flRepostHeader also verifies the row against the sheet before confirming,
     // so a success ack alone never flips headerConfirmed.
     _flClearHeaderPostError();
-    flRepostHeader(true).then(function(ok){
+    // create:true — the server refuses to overwrite an existing header for this
+    // project/date and returns that one instead, which flRepostHeader loads.
+    flRepostHeader(true, {create:true}).then(function(ok){
+      if(ok === 'existing'){
+        return;   // already loaded and announced; nothing further to do
+      }
       if(ok){
         // Only now leave the form — the row is confirmed in the sheet.
         restoreHeader(dailyHeader);
@@ -2383,6 +2428,34 @@ function restoreHeader(h){
   var hasNoneWf = workforceItems.some(function(w){return w.classification==='None';});
   if(eqNoneCb) eqNoneCb.checked = hasNoneEq;
   if(wfNoneCb) wfNoneCb.checked = hasNoneWf;
+
+  // Put the sheet's values back on screen. The in-memory arrays were restored
+  // above but nothing redrew the inputs, so after a reload weather, temperature,
+  // the equipment/workforce lists and the checklist all looked empty even when
+  // the sheet held values — leaving the inspector to guess what was recorded.
+  // All local DOM work, no network.
+  try{
+    var _wEl = document.getElementById('weather');
+    if(_wEl && h.dailyWeather) _wEl.value = h.dailyWeather;
+    var _tEl = document.getElementById('temperature');
+    if(_tEl && h.dailyTemperature) _tEl.value = h.dailyTemperature;
+
+    renderEquipmentList('equipment-list', equipmentItems);
+    renderWorkforceList('workforce-list', workforceItems);
+
+    // Checklist: mark the items the sheet says were checked.
+    var _checks = h.checks || [];
+    if(typeof _checks === 'string') _checks = _checks.split(', ').filter(Boolean);
+    var _grid = document.getElementById('checklist-grid');
+    if(_grid && _checks.length){
+      var _cells = _grid.querySelectorAll('.check-item');
+      for(var _ci=0; _ci<_cells.length; _ci++){
+        var _lbl = _cells[_ci].querySelector('.check-label');
+        var _txt = _lbl ? _lbl.textContent.trim() : '';
+        if(_checks.indexOf(_txt) >= 0) _cells[_ci].classList.add('checked');
+      }
+    }
+  }catch(_re){ console.warn('restoreHeader: could not repopulate fields', _re); }
   // Show posted view
   document.getElementById('header-form-view').style.display='none';
   document.getElementById('header-posted-view').style.display='block';
@@ -3060,6 +3133,42 @@ function _flEntryThumb(e){
   return m ? ('https://drive.google.com/thumbnail?id=' + m[0] + '&sz=w400') : '';
 }
 
+// Compare the four EDITABLE header sections on screen against what the sheet
+// actually holds. The report is rendered from the sheet row, so an unsaved edit
+// would print differently than the record — or not print at all.
+// Only flags when the screen has a value that DIFFERS; a blank field or a
+// freshly reloaded header is not drift.
+function _flSheetDrift(headerRec){
+  var out = [];
+  function norm(v){ return String(v==null?'':v).trim(); }
+  function listKey(l){
+    if(typeof l === 'string'){ try{ l = JSON.parse(l); }catch(e){ l = []; } }
+    if(!l || !l.length) return '';
+    return l.map(function(x){ return norm(x && x.name) + ':' + norm(x && x.count); })
+            .sort().join('|');
+  }
+
+  var wEl = document.getElementById('weather');
+  var tEl = document.getElementById('temperature');
+  var sW = norm(wEl && wEl.value), sT = norm(tEl && tEl.value);
+  var hW = norm(headerRec.dailyWeather), hT = norm(headerRec.dailyTemperature);
+  if((sW && hW && sW !== hW) || (sT && hT && sT !== hT)) out.push('Daily Conditions');
+
+  var sEq = listKey(typeof equipmentItems !== 'undefined' ? equipmentItems : []);
+  var hEq = listKey(headerRec.equipment);
+  if(sEq && hEq && sEq !== hEq) out.push('Equipment');
+
+  var sWf = listKey(typeof workforceItems !== 'undefined' ? workforceItems : []);
+  var hWf = listKey(headerRec.workforce);
+  if(sWf && hWf && sWf !== hWf) out.push('Workforce');
+
+  var nEl = document.getElementById('daily-narrative');
+  var sN = norm(nEl && nEl.value), hN = norm(headerRec.narrative);
+  if(sN && hN && sN !== hN) out.push('Daily Summary');
+
+  return out;
+}
+
 function _flReportBtnBusy(on){
   var b = document.getElementById('btn-generate-report');
   if(!b) return;
@@ -3147,9 +3256,46 @@ async function loadReportProjects(){
   const dateLocale=new Date(y,mo-1,d).toLocaleDateString('en-US');
   const inspector=dailyHeader?dailyHeader.inspector:'';
   const projSel=document.getElementById('report-project');
-  projSel.innerHTML='<option value="">Loading...</option>';
   document.getElementById('btn-generate').disabled=true;
   _flClearReportProjWarn();
+
+  // Prepopulate from headers this device has already confirmed for that date.
+  // The common case by far is generating a report for the project the inspector
+  // is standing on — that project is in dailyHeaders with everything the list
+  // needs, so it can be selectable before any request goes out. A different date
+  // has nothing cached and falls through to the server as usual.
+  var _local = [];
+  var _localKeys = {};
+  for(var _hk in dailyHeaders){
+    var _h = dailyHeaders[_hk];
+    if(!_h || _h.date !== dateLocale) continue;
+    if(inspector && _h.inspector && _h.inspector !== inspector) continue;
+    var _k = (_h.projectNumber||'')+'||'+(_h.project||'');
+    if(_localKeys[_k]) continue;
+    _localKeys[_k] = true;
+    _local.push({ number:_h.projectNumber||'', name:_h.project||'', client:_h.client||'' });
+  }
+  function _fillProjectOptions(list, keepValue){
+    projSel.innerHTML='<option value="">Select project...</option>';
+    list.forEach(function(p){
+      var o=document.createElement('option');
+      o.value=JSON.stringify(p);
+      o.textContent=(p.number?p.number+' \u2014 ':'')+p.name;
+      projSel.appendChild(o);
+    });
+    if(keepValue){
+      for(var i=0;i<projSel.options.length;i++){
+        if(projSel.options[i].value===keepValue){ projSel.selectedIndex=i; break; }
+      }
+    }
+    if(!projSel.value && list.length===1) projSel.selectedIndex=1;
+    document.getElementById('btn-generate').disabled = !projSel.value;
+  }
+  if(_local.length){
+    _fillProjectOptions(_local);
+  } else {
+    projSel.innerHTML='<option value="">Loading...</option>';
+  }
   try{
     // Retry with backoff: a cold Apps Script instance regularly loses the first
     // attempt, and this single-attempt call was the one place that still had no
@@ -3170,22 +3316,26 @@ async function loadReportProjects(){
       }
     }
     const projects=(data&&data.projects)||[];
-    if(projects.length===0){projSel.innerHTML='<option value="">No entries found for this date</option>';return;}
-    projSel.innerHTML='<option value="">Select project...</option>';
-    projects.forEach(p=>{
-      const o=document.createElement('option');
-      o.value=JSON.stringify(p);
-      o.textContent=(p.number?p.number+' — ':'')+p.name;
-      projSel.appendChild(o);
-    });
-    if(projects.length===1){projSel.selectedIndex=1;document.getElementById('btn-generate').disabled=false;}
+    if(projects.length===0){
+      // Server found nothing. If a local header says otherwise, keep the local
+      // list rather than blanking a project the inspector is actively working.
+      if(!_local.length) projSel.innerHTML='<option value="">No entries found for this date</option>';
+      return;
+    }
+    _fillProjectOptions(projects, projSel.value);
   }catch(err){
     // Distinguish "server didn't answer" from "you have no projects" — the old
     // message read like the latter for both. Re-picking the same date does NOT
     // re-fire this, so an explicit Retry button is the only usable way back.
     console.warn('loadReportProjects failed:', err);
-    projSel.innerHTML='<option value="">Server did not respond</option>';
-    _flShowReportProjWarn();
+    // Don't wipe a usable local list just because the server didn't answer —
+    // the inspector can still generate for the project they're on.
+    if(_local.length){
+      console.warn('Keeping locally-known projects for ' + dateLocale);
+    } else {
+      projSel.innerHTML='<option value="">Server did not respond</option>';
+      _flShowReportProjWarn();
+    }
   }
 }
 
@@ -3278,23 +3428,39 @@ async function generateReport(){
     p2_currentReportStatus      = headerRec.report_status      || '';
     p2_currentApprovedBy        = headerRec.approved_by        || '';
     p2_currentApprovedTimestamp = headerRec.approved_timestamp || '';
-    // Validate — use sheet header row, fall back to local dailyHeader
+    // Validate against the SHEET ROW ONLY — no fallback to the local cache.
+    // The report is rendered from headerRec (the sheet), so validating against a
+    // cached copy could pass on values the report will not contain: a section
+    // save that never landed would leave the cache complete and the sheet short,
+    // and the PDF would silently omit those fields.
     var sheetEq = headerRec.equipment;
     var sheetWf = headerRec.workforce;
     if(typeof sheetEq==='string'){try{sheetEq=JSON.parse(sheetEq);}catch(e){sheetEq=[];}}
     if(typeof sheetWf==='string'){try{sheetWf=JSON.parse(sheetWf);}catch(e){sheetWf=[];}}
-    var localEq = dailyHeader ? (dailyHeader.equipment||[]) : [];
-    var localWf = dailyHeader ? (dailyHeader.workforce||[]) : [];
-    var eqList = (sheetEq&&sheetEq.length>0) ? sheetEq : localEq;
-    var wfList = (sheetWf&&sheetWf.length>0) ? sheetWf : localWf;
     var missingFields=[];
-    var weatherOk = (headerRec.dailyWeather&&headerRec.dailyTemperature) ||
-                    (dailyHeader&&dailyHeader.dailyWeather&&dailyHeader.dailyTemperature);
-    if(!weatherOk)missingFields.push('Daily Conditions (Weather & Temp)');
-    if(!eqList||eqList.length===0)missingFields.push('Equipment on Site');
-    if(!wfList||wfList.length===0)missingFields.push('Workforce on Site');
+    if(!headerRec.dailyWeather||!headerRec.dailyTemperature) missingFields.push('Daily Conditions (Weather & Temp)');
+    if(!String(headerRec.contractorPrimary||'').trim()) missingFields.push('Prime Contractor');
+    if(!String(headerRec.dayType||'').trim()) missingFields.push('Day Type');
+    if(!sheetEq||sheetEq.length===0) missingFields.push('Equipment on Site');
+    if(!sheetWf||sheetWf.length===0) missingFields.push('Workforce on Site');
+    var eqList = sheetEq, wfList = sheetWf;
+    // Narrative: the report renders it from the on-screen textarea, but the PDF
+    // has to match what the sheet holds, and a blank narrative silently drops the
+    // Daily Summary block. Require it in the SHEET, and warn if the textarea has
+    // unsaved edits that would not match the record.
+    if(!String(headerRec.narrative||'').trim()) missingFields.push('Daily Summary / Narrative');
     if(missingFields.length>0){
-      showModalError('Please complete before generating: '+missingFields.join(', ')+'. Tap Cancel and use Edit Header.');
+      showModalError('These are not saved to the sheet yet: '+missingFields.join(', ')+
+                     '. Tap Cancel, re-save that section, then generate.');
+      btn.disabled=false;btn.textContent='Generate / Review Report';
+      return;
+    }
+    // Anything on screen that differs from the sheet would not appear in the
+    // report, which renders from the sheet row. Catch it before generating.
+    var _drift = _flSheetDrift(headerRec);
+    if(_drift.length){
+      showModalError('These have unsaved changes on this device: ' + _drift.join(', ') +
+                     '. Tap Cancel, save that section, then generate.');
       btn.disabled=false;btn.textContent='Generate / Review Report';
       return;
     }
@@ -3333,11 +3499,13 @@ function showModalError(msg){const e=document.getElementById('modal-error');e.te
 
 function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
   const dateStr=new Date(dateLocale).toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  // Use project dropdown data as primary source — these don't change day to day
-  // Fall back to header row only if project data is missing
-  const engineer=proj.engineer||headerRow.projectEngineer||'';
+  // Prefer the HEADER ROW for engineer and contractor — that is what was true on
+  // the date the work was done. The old order preferred the Projects tab, so a
+  // project that later changed engineers would silently reprint old reports with
+  // the new name. getProjects no longer sends these at all (one less sheet read).
+  const engineer=headerRow.projectEngineer||proj.engineer||'';
   const client=proj.client||headerRow.client||'';
-  const contractor=proj.contractor||headerRow.contractorPrimary||'';
+  const contractor=headerRow.contractorPrimary||proj.contractor||'';
   const inspectors=[...new Set([headerRow.inspector,...workEntries.map(e=>e.inspector)].filter(Boolean))];
   const dailyWeatherStr=headerRow.dailyWeather?(headerRow.dailyWeather+(headerRow.dailyTemperature?' · '+headerRow.dailyTemperature+'°F':'')):'';
   var equipment=headerRow.equipment||[];if(typeof equipment==="string"){try{equipment=JSON.parse(equipment);}catch(e){equipment=[];}}
