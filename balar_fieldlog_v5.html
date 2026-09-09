@@ -425,6 +425,7 @@ textarea{resize:vertical;min-height:90px;}
       <div style="margin-top:32px;">
         <div class="entries-header">
           <div class="section-label" style="margin-bottom:0;flex:1;">Today's Entries</div>
+          <button id="btn-refresh-entries" onclick="flRefreshEntries()" title="Pull entries logged on other devices" style="background:transparent;border:1px solid #1b2d42;color:#1b2d42;border-radius:6px;padding:4px 10px;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;margin-right:8px;min-height:32px;">&#8635; Refresh</button>
           <span class="entry-count" id="entry-count">0</span>
         </div>
 
@@ -1914,16 +1915,23 @@ function flRepostHeader(silent, opts){
   // because the write may simply not have happened yet, and acting on it would
   // report failure for a post that was about to succeed.
   var _settled = false;
+  // Hedge LADDER at 8s / 16s / 25s. A single check at 8s was only a snapshot:
+  // a row that landed at 10s stayed unconfirmed until the POST answered or timed
+  // out. Each probe is cheap (one narrow read, no lock) and stops as soon as one
+  // comes back positive or the POST settles. A negative NEVER means failure —
+  // only "not yet" — so an extra probe can't produce a false error, it can only
+  // cost one small request. Past ~25s more probes stop earning their place.
   var _hedge = new Promise(function(resolve){
-    setTimeout(function(){
-      // Don't bother if the POST already answered — the hedge exists only to
-      // rescue a slow response, not to add a second call to a fast one.
-      if(_settled || !dailyHeader) return;
-      _flCheckHeaderInSheet(1).then(function(present){
-        if(!_settled && present === true) resolve(_confirmedResp);
-        // false / null: say nothing, let the POST decide.
-      }).catch(function(){ /* ignore */ });
-    }, 8000);
+    [8000, 16000, 25000].forEach(function(delay){
+      setTimeout(function(){
+        if(_settled || !dailyHeader) return;
+        _flCheckHeaderInSheet(1).then(function(present){
+          // Mark settled here too, or the later probes keep firing after the
+          // hedge has already won the race.
+          if(!_settled && present === true){ _settled = true; resolve(_confirmedResp); }
+        }).catch(function(){ /* ignore */ });
+      }, delay);
+    });
   });
 
   var _post = _postOnce().then(function(r){ _settled = true; return r; })
@@ -2756,7 +2764,47 @@ function submitEntry(){
       photoOriginal:hiRes||smallPhoto,
       entryId:entry.id
     });
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
+    // Same shape as the header post: one POST, a hedged lock-free check at 8s
+    // while it is still in flight, and on timeout ASK whether the row landed
+    // rather than assuming it didn't. An entry with a photo uploads to Drive
+    // inside the same execution, so it is the slowest call in the app — a bare
+    // fetch with no timeout would eventually abort and report failure on rows
+    // that had saved fine. Only a POSITIVE check result is acted on.
+    var _entrySettled = false;
+    var _entryOk = { json: function(){
+      return Promise.resolve({success:true, verified:true, hasPhoto:!!(hiRes||smallPhoto), driveSaved:true, mode:'read-confirmed'});
+    }};
+    function _entryExists(){
+      var u = GOOGLE_SCRIPT_URL+'?action=entryExists&entryId='+encodeURIComponent(entry.id)+'&_ts='+Date.now();
+      return _flFetch(u, {}, 12000).then(function(r){ return r.json(); })
+        .then(function(d){ return !!(d && d.exists); })
+        .catch(function(){ return null; });
+    }
+    // Hedge ladder at 8s / 16s / 25s — see the header post for the reasoning.
+    // An entry with a photo is the slowest call in the app, so the window where
+    // the row has landed but the response hasn't arrived is widest here.
+    var _entryHedge = new Promise(function(resolve){
+      [8000, 16000, 25000].forEach(function(delay){
+        setTimeout(function(){
+          if(_entrySettled) return;
+          _entryExists().then(function(present){
+            if(!_entrySettled && present === true){ _entrySettled = true; resolve(_entryOk); }
+          }).catch(function(){});
+        }, delay);
+      });
+    });
+    var _entryPost = _flFetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:JSON.stringify(entryData)}, 60000)
+      .then(function(r){ _entrySettled = true; return r; })
+      .catch(function(err){
+        console.warn('Entry POST did not answer; checking whether it landed.', err);
+        return _entryExists().then(function(present){
+          if(present === true) return _entryOk;
+          throw err;   // absent or unknown — do NOT re-post; the dedup guard makes
+                       // a user-driven retry safe, but a silent one is not helpful
+        });
+      });
+
+    Promise.race([_entryPost, _entryHedge])
     .then(function(r){ return r.json(); })
     .then(function(resp){
       var idx=entries.findIndex(function(e){return String(e.id)===String(entry.id);});
@@ -3217,6 +3265,39 @@ function _flSheetDrift(headerRec){
   if(sN && hN && sN !== hN) out.push('Daily Summary');
 
   return out;
+}
+
+// Pull entries from the sheet on demand. Entries are otherwise only fetched when
+// a project/date is first selected, so work logged on ANOTHER device never
+// appeared — the report showed it (it does its own live getEntries) while the
+// app did not. Deliberately NOT folded into Reload Header: that call reads a
+// single row and is quick, whereas this one scans the tab and carries photo
+// data, so combining them would make a header refresh slow for no reason.
+function flRefreshEntries(){
+  if(!dailyHeader || !GOOGLE_SCRIPT_URL) return;
+  var b = document.getElementById('btn-refresh-entries');
+  if(b){ b.disabled = true; b.innerHTML = 'Refreshing\u2026'; }
+  var before = entries.filter(function(e){
+    return e.project === dailyHeader.project && e.date === dailyHeader.date;
+  }).length;
+  syncEntriesFromSheets(dailyHeader.project, dailyHeader.projectNumber, dailyHeader.date)
+    .then(function(){
+      var after = entries.filter(function(e){
+        return e.project === dailyHeader.project && e.date === dailyHeader.date;
+      }).length;
+      var added = after - before;
+      showToast(added > 0
+        ? added + ' new entr' + (added === 1 ? 'y' : 'ies') + ' loaded'
+        : 'Entries are up to date', false);
+    })
+    .catch(function(err){
+      console.warn('flRefreshEntries failed:', err);
+      showToast('Could not reach the sheet. Try again in a moment.', true);
+    })
+    .then(function(){
+      var b2 = document.getElementById('btn-refresh-entries');
+      if(b2){ b2.disabled = false; b2.innerHTML = '&#8635; Refresh'; }
+    });
 }
 
 function _flReportBtnBusy(on){
