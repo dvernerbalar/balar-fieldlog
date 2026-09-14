@@ -1172,9 +1172,12 @@ async function toggleSameAsLast(type){
   if(GOOGLE_SCRIPT_URL){
     try{
       var url = GOOGLE_SCRIPT_URL+'?action=getLastHeader&projectName='+encodeURIComponent(projectKey)+'&projectNumber='+encodeURIComponent(dailyHeader&&dailyHeader.projectNumber?dailyHeader.projectNumber:'')+'&excludeDate='+encodeURIComponent(today);
-      var resp = await fetch(url);
+      // Timeout + status check, same reasoning as elsewhere. Failure here falls
+      // back to the local cache below, which is a safe degradation.
+      var resp = await _flFetch(url, {}, 30000);
+      if(!resp.ok) throw new Error('HTTP ' + resp.status);
       var data = await resp.json();
-      if(data.header) lastHeader = data.header;
+      if(data && data.header) lastHeader = data.header;
     }catch(e){}
   }
   // Fallback to local cache if Sheets fetch failed
@@ -1573,7 +1576,14 @@ async function checkForExistingHeader(projectName, dateVal, projectNumber){
     // above the Worker budget. This still fails closed on 'unknown'.
     var url = GOOGLE_SCRIPT_URL+'?action=getHeader&date='+encodeURIComponent(dateLocale)+'&projectName='+encodeURIComponent(projectName)+'&projectNumber='+encodeURIComponent(projectNumber||'')+'&_ts='+Date.now();
     var resp = await _flFetch(url, {}, 30000);
+    // fetch does NOT reject on an HTTP error status. Without this check a 502 or
+    // 504 from the Worker resolved normally, its body parsed (or didn't) into an
+    // object with no `header` key, and this returned 'none' — so a proxy error
+    // was read as "no header exists" and the app offered Post Daily Header for a
+    // project/date that already had one. Fail closed instead.
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
+    if(!data || typeof data !== 'object') throw new Error('bad-json');
     if(data.header){
       var h = data.header;
       // It came back FROM the sheet, so it demonstrably landed.
@@ -1640,9 +1650,16 @@ function _flClearHeaderCheckFailed(){
 async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
   if(!GOOGLE_SCRIPT_URL) return;
   try{
-    var url = GOOGLE_SCRIPT_URL+'?action=getEntries&date='+encodeURIComponent(dateLocale)+'&projectNumber='+encodeURIComponent(projectNumber||'')+'&projectName='+encodeURIComponent(projectName);
-    var resp = await fetch(url);
+    var url = GOOGLE_SCRIPT_URL+'?action=getEntries&date='+encodeURIComponent(dateLocale)+'&projectNumber='+encodeURIComponent(projectNumber||'')+'&projectName='+encodeURIComponent(projectName)+'&_ts='+Date.now();
+    // Timeout + status check. This was a bare fetch: no abort, and fetch does not
+    // reject on an HTTP error, so a 502 from the Worker whose body happened to
+    // parse would fall straight through and blank report_status below — clearing
+    // a lock on the strength of a proxy error. Throw instead; the caller keeps
+    // whatever it already had.
+    var resp = await _flFetch(url, {}, 30000);
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
+    if(!data || typeof data !== 'object') throw new Error('bad-json');
     p2_currentReportStatus=data.report_status||'';
     p2_currentApprovedBy=data.approved_by||'';
     p2_currentApprovedTimestamp=data.approved_timestamp||'';
