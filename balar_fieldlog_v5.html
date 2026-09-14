@@ -680,7 +680,12 @@ async function loadDropdownData(){
   }
   try{
     // Retry through a bad serving window; cache the good copy for offline fallback.
-    const data = await flFetchJson(GOOGLE_SCRIPT_URL+'?action=getDropdowns', 4, 12000, 1500);
+    // ONE attempt at 30s. The Worker's total GET budget is 24s, so a 12s client
+    // timeout could never let it finish — every attempt was cancelled mid-retry
+    // (Cloudflare logged outcome:"canceled" at ~12s), nothing completed, nothing
+    // was cached, and four doomed tries later the app fell back to its saved list.
+    // Client timeout MUST stay above the Worker budget. Retries live at the edge.
+    const data = await flFetchJson(GOOGLE_SCRIPT_URL+'?action=getDropdowns', 1, 30000, 0);
     try{ localStorage.setItem(FL_DROPDOWN_CACHE_KEY, JSON.stringify(data)); }catch(e){}
     applyData(data, false);
   }catch(err){
@@ -1562,21 +1567,13 @@ async function checkForExistingHeader(projectName, dateVal, projectNumber){
     // _ts defeats the browser HTTP cache. Without it Safari can serve a stale
     // getHeader response from when the row still existed, which would mark the
     // header confirmed without the sheet ever being consulted.
-    // Retry rather than one long timeout: a cold Apps Script instance commonly
-    // loses the first attempt and wins the second, so the typical case stays
-    // fast and only a genuinely dead backend runs the full duration.
-    var data = null;
-    for(var _a=1; _a<=3; _a++){
-      try{
-        var url = GOOGLE_SCRIPT_URL+'?action=getHeader&date='+encodeURIComponent(dateLocale)+'&projectName='+encodeURIComponent(projectName)+'&projectNumber='+encodeURIComponent(projectNumber||'')+'&_ts='+Date.now();
-        var resp = await _flFetch(url, {}, 20000);
-        data = await resp.json();
-        break;
-      }catch(_e){
-        if(_a === 3) throw _e;
-        await new Promise(function(r){ setTimeout(r, 600 * _a); });
-      }
-    }
+    // ONE attempt at 30s. The Worker retries internally inside its 24s budget,
+    // so a client timeout BELOW that can never let it finish — the request is
+    // cancelled mid-retry and nothing completes. Client timeout must always sit
+    // above the Worker budget. This still fails closed on 'unknown'.
+    var url = GOOGLE_SCRIPT_URL+'?action=getHeader&date='+encodeURIComponent(dateLocale)+'&projectName='+encodeURIComponent(projectName)+'&projectNumber='+encodeURIComponent(projectNumber||'')+'&_ts='+Date.now();
+    var resp = await _flFetch(url, {}, 30000);
+    var data = await resp.json();
     if(data.header){
       var h = data.header;
       // It came back FROM the sheet, so it demonstrably landed.
@@ -2050,7 +2047,9 @@ function _flCancelHeaderRetry(){ /* no background retry by design */ }
 // a quick answer, not persistence.
 function _flCheckHeaderInSheet(maxTries){
   if(!dailyHeader || !GOOGLE_SCRIPT_URL) return Promise.resolve(null);
-  var tries = maxTries || 2;
+  // Default one attempt at 30s. The hedge rungs pass 1 explicitly; this default
+  // covers the post-timeout confirm. Worker budget 24s < client 30s.
+  var tries = maxTries || 1;
   var d  = dailyHeader.date;
   var nm = dailyHeader.project;
   var pn = dailyHeader.projectNumber || '';
@@ -2059,7 +2058,7 @@ function _flCheckHeaderInSheet(maxTries){
             '&projectName='+encodeURIComponent(nm)+'&projectNumber='+encodeURIComponent(pn)+
             '&_ts='+Date.now();
   function _vAttempt(n){
-    return _flFetch(url + '&_r=' + n, {}, 12000).catch(function(err){
+    return _flFetch(url + '&_r=' + n, {}, 30000).catch(function(err){
       if(n >= tries) throw err;
       return new Promise(function(r){ setTimeout(r, 500); }).then(function(){ return _vAttempt(n+1); });
     });
@@ -2274,7 +2273,10 @@ function flReloadHeaderFromSheet(silent){
   var url = GOOGLE_SCRIPT_URL+'?action=getHeader&date='+encodeURIComponent(d)+
             '&projectName='+encodeURIComponent(nm)+'&projectNumber='+encodeURIComponent(pn)+
             '&_ts='+Date.now();
-  return _flFetch(url, {}, 25000)
+  // 30s, not 25 — the Worker's total GET budget is 24s, and 1s of margin does not
+  // cover the client-to-edge leg. Every client GET timeout sits above the Worker
+  // budget; the only deliberate exception is the entryExists probe (see below).
+  return _flFetch(url, {}, 30000)
     .then(function(r){ return r.json(); })
     .then(function(data){
       var b = document.getElementById('btn-reload-header');
@@ -2776,6 +2778,11 @@ function submitEntry(){
     }};
     function _entryExists(){
       var u = GOOGLE_SCRIPT_URL+'?action=entryExists&entryId='+encodeURIComponent(entry.id)+'&_ts='+Date.now();
+      // Deliberately SHORT (12s) and deliberately below the Worker's 24s budget:
+      // a retrying Worker can outlast this probe, which is harmless by design —
+      // a null result means "not yet", never a false error, and the next ladder
+      // rung or the POST settles it. Raising it would make the rungs bunch up
+      // and defeat the point of several cheap looks.
       return _flFetch(u, {}, 12000).then(function(r){ return r.json(); })
         .then(function(d){ return !!(d && d.exists); })
         .catch(function(){ return null; });
@@ -3432,20 +3439,11 @@ async function loadReportProjects(){
     // attempt, and this single-attempt call was the one place that still had no
     // retry — so a cold start surfaced as "could not load projects" with no way
     // forward except cancelling out of the modal entirely.
-    var data = null;
-    for(var _a=1; _a<=3; _a++){
-      try{
-        const url=GOOGLE_SCRIPT_URL+'?action=getProjects&date='+encodeURIComponent(dateLocale)+'&inspector='+encodeURIComponent(inspector)+'&_ts='+Date.now();
-        data = await(await _flFetch(url,{},25000)).json();
-        break;
-      }catch(_e){
-        if(_a === 3) throw _e;
-        // Retries stay silent — a cold Apps Script instance loses the first
-        // attempt most times, and surfacing that as a countdown just makes
-        // normal behaviour look broken. On real failure the panel below says so.
-        await new Promise(function(r){ setTimeout(r, 700 * _a); });
-      }
-    }
+    // ONE attempt at 30s — the Worker retries internally within its 24s budget,
+    // so a second attempt from the phone just re-crosses the cell link for
+    // nothing. The Retry button below covers a genuine failure.
+    const url=GOOGLE_SCRIPT_URL+'?action=getProjects&date='+encodeURIComponent(dateLocale)+'&inspector='+encodeURIComponent(inspector)+'&_ts='+Date.now();
+    const data = await(await _flFetch(url,{},30000)).json();
     const projects=(data&&data.projects)||[];
     if(projects.length===0){
       // Server found nothing. If a local header says otherwise, keep the local
