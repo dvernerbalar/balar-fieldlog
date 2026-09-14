@@ -797,7 +797,18 @@ function onProjectSelectChange(){
     var phb2=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
     if(phb2){phb2.disabled=true;phb2.textContent='Checking...';_flArmPostHeaderWatchdog();}
     _flClearHeaderCheckFailed();
-    checkForExistingHeader(sel.dataset.name,dateVal,sel.dataset.number||'').then(function(outcome){
+    // Capture what was selected when the check STARTED. A check can take 10s+,
+    // and switching project or date meanwhile would otherwise let the late
+    // response apply to whatever is on screen now — a slow check on project A
+    // stamping "Cannot verify header" over a project B that verified fine.
+    var _reqName = sel.dataset.name, _reqDate = dateVal, _reqNum = sel.dataset.number||'';
+    checkForExistingHeader(_reqName,_reqDate,_reqNum).then(function(outcome){
+      var _nameNow = document.getElementById('project-name');
+      var _dateNow = document.getElementById('entry-date');
+      if((_nameNow && _nameNow.value.trim() !== _reqName) ||
+         (_dateNow && _dateNow.value !== _reqDate)){
+        return;   // selection moved on — this answer is about a different report
+      }
       // FAIL CLOSED: never offer Post when we couldn't read the sheet.
       if(outcome === 'unknown'){
         _flShowHeaderCheckFailed(function(){ onProjectSelectChange(); });
@@ -938,7 +949,16 @@ function onDateChange(){
     var phb=document.querySelector('.btn-post-header[onclick="postDailyHeader()"]');
     if(phb){phb.disabled=true;phb.textContent='Checking...';_flArmPostHeaderWatchdog();}
     _flClearHeaderCheckFailed();
-    checkForExistingHeader(proj,dateVal,pnum2).then(function(outcome){
+    var _rqProj = proj, _rqDate = dateVal, _rqNum = pnum2;
+    checkForExistingHeader(_rqProj,_rqDate,_rqNum).then(function(outcome){
+      // Same staleness guard as onProjectSelectChange — ignore an answer that
+      // arrives after the user has moved to a different project or date.
+      var _nNow = document.getElementById('project-name');
+      var _dNow = document.getElementById('entry-date');
+      if((_nNow && _nNow.value.trim() !== _rqProj) ||
+         (_dNow && _dNow.value !== _rqDate)){
+        return;
+      }
       // FAIL CLOSED: never offer Post when we couldn't read the sheet.
       if(outcome === 'unknown'){
         _flShowHeaderCheckFailed(function(){ onDateChange(); });
@@ -2099,8 +2119,17 @@ function _flVerifyHeaderAgainstSheet(){
 }
 
 // Belt-and-suspenders for the stuck "Checking..." button.
+// Only the MOST RECENT check's watchdog may act. Each check armed a fresh 25s
+// timer and none were cancelled, so they accumulated: select project A, then B
+// five seconds later, and at 25s A's watchdog fires into B's in-flight check,
+// sees "Checking", and hands back the Post button before B has been verified —
+// offering Post on an unverified header, which is what the fail-closed work
+// exists to prevent. The token makes every older timer a no-op.
+var _flWatchdogToken = 0;
 function _flArmPostHeaderWatchdog(){
+  var myToken = ++_flWatchdogToken;
   setTimeout(function(){
+    if(myToken !== _flWatchdogToken) return;   // a newer check superseded this one
     // Must not re-enable the button while the header check is in its blocked
     // state, or the watchdog would hand back the very Post button that the
     // fail-closed path deliberately withheld.
@@ -2941,8 +2970,45 @@ function retryEntry(id, btn){
   if(btn){btn.disabled=true;btn.textContent='Syncing...';}
   renderEntries();
   var entryData=Object.assign({},entry,{photos:[],photoBase64:entry.photos.length>0?entry.photos[0]:'',photoOriginal:entry.photoOriginals&&entry.photoOriginals.length>0?entry.photoOriginals[0]:'',entryId:entry.id});
-  fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(entryData)})
-  .then(function(r){return r.json();})
+
+  // ASK BEFORE WRITING. The dedup guard stops a duplicate row, but a blind
+  // re-post still re-uploads the photo to Drive — the slowest part of the
+  // operation — for a row that is usually already there. One narrow col-R read
+  // answers it first. The check also reports the PHOTO state, because the row
+  // landing does not prove the upload did: a failed Drive upload still appends
+  // the row with an empty col P.
+  function _retryCheck(){
+    var u = GOOGLE_SCRIPT_URL+'?action=entryExists&entryId='+encodeURIComponent(entry.id)+'&_ts='+Date.now();
+    return _flFetch(u, {}, 12000)
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(d){ return (d && typeof d === 'object') ? d : null; })
+      .catch(function(){ return null; });   // unreachable — fall through to the post
+  }
+
+  _retryCheck().then(function(chk){
+    if(chk && chk.exists){
+      // Row is already in the sheet. Mark it synced without re-posting, and flag
+      // the photo separately if it claims one but has no Drive link — that has
+      // its own Retry Photo button and does not need the whole entry resent.
+      var i2=entries.findIndex(function(e){return String(e.id)===String(id);});
+      if(i2>=0){
+        entries[i2].synced=true;
+        entries[i2].drivePhotoFailed = (chk.photoCount>0 && !chk.hasDriveLink);
+        if(!entries[i2].drivePhotoFailed) entries[i2].photoOriginals=[];
+      }
+      saveEntriesWithPhotos();
+      renderEntries();
+      showToast(entries[i2>=0?i2:0] && entries[i2>=0?i2:0].drivePhotoFailed
+        ? 'Entry was already saved \u2014 photo still needs retrying'
+        : 'Entry already saved \u2713', false);
+      return;
+    }
+    return _retryPost();
+  });
+
+  function _retryPost(){
+  return _flFetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:JSON.stringify(entryData)}, 60000)
+  .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
   .then(function(){
     var idx=entries.findIndex(function(e){return String(e.id)===String(id);});
     if(idx>=0){entries[idx].synced=true;entries[idx].photoOriginals=[];}
@@ -2966,6 +3032,7 @@ function retryEntry(id, btn){
     renderEntries();
     showToast('Retry failed. Check connection.',true);
   });
+  }
 }
 
 function renderEntries(){
