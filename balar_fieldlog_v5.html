@@ -715,6 +715,24 @@ flApplyDateMax();
 function showForm(){ document.getElementById('form-body').style.display='block'; }
 
 // ── PROJECT DROPDOWNS ────────────────────────────────────
+// ── Short project labels (DISPLAY ONLY, added 2026-09-30) ─────────────
+// For the multi-project programs under 26001-26003 the dropdowns show
+// "SLR - Domestic Water Main" instead of the full name.  Only the visible
+// text changes: option values, payloads, dailyHeader.project, the report and
+// every lookup keep the FULL name.  The backend refuses a write that carries
+// the short label (see _flShortLabelLeak in Code.gs).
+var PROJECT_NAME_PREFIXES={
+  '26001':{prefix:'State Line Road',abbr:'SLR'},
+  '26002':{prefix:'Resilient Technology Park',abbr:'RTP'},
+  '26003':{prefix:'LA Hwy 3',abbr:'LA3'}
+};
+function shortProjectName(number,name){
+  var full=String(name||'');
+  var r=PROJECT_NAME_PREFIXES[String(number==null?'':number).trim().replace(/\.0+$/,'')];
+  if(!r||full.toLowerCase().indexOf(r.prefix.toLowerCase())!==0) return full;
+  var rest=full.slice(r.prefix.length).replace(/^[\s\-\u2013\u2014:,]+/,'').replace(/\s*\([^()]*\)\s*$/,'');
+  return rest?r.abbr+' - '+rest:full;
+}
 function getClientDisplayName(fullName){
   var prefixes=['City of ','Town of ','Village of ','Parish of '];
   for(var i=0;i<prefixes.length;i++){
@@ -768,7 +786,7 @@ function onClientChange(){
     o.dataset.engineer=p.engineer||'';
     o.dataset.contractor=p.contractor||'';
     o.dataset.projectType=p.projectType||'';
-    o.textContent=(p.number?p.number+' — ':'')+p.name;
+    o.textContent=(p.number?p.number+' — ':'')+shortProjectName(p.number,p.name);   // display only; value stays full
     projSel.appendChild(o);
   });
   projSel.disabled=false;
@@ -2584,7 +2602,7 @@ function restoreHeader(h){
   var workDisplay = (h.workforce&&h.workforce.length>0)?workStr:'<span style="'+needsStyle+'">⚠ Needs Input</span>';
   var checkDisplay = (h.checks&&h.checks.length>0)?checkStr:'<span style="color:#888;">None checked</span>';
   document.getElementById('header-summary').innerHTML=
-    '<strong>'+h.projectNumber+' — '+h.project+'</strong><br>'+
+    '<strong>'+h.projectNumber+' — '+shortProjectName(h.projectNumber,h.project)+'</strong><br>'+
     'Client: '+h.client+' &nbsp;|&nbsp; Engineer: '+h.projectEngineer+'<br>'+
     'Contractor: '+h.contractorPrimary+' &nbsp;|&nbsp; Inspector: '+h.inspector+'<br>'+
     'Date: '+h.date+' &nbsp;|&nbsp; '+h.dayType+'<br>'+
@@ -3198,7 +3216,7 @@ function openSwitchProject(){
       var bg = isCurrent ? '#f0f8f0' : '#f8fafc';
       var border = isCurrent ? '#a5d6a7' : '#e0e5ea';
       html += "<div style='display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:"+bg+";border:1px solid "+border+";border-radius:7px;margin-bottom:8px;'>";
-      html += "<div><div style='font-size:14px;font-weight:600;color:#222;'>"+h.projectNumber+" — "+h.project+"</div>";
+      html += "<div><div style='font-size:14px;font-weight:600;color:#222;'>"+h.projectNumber+" — "+shortProjectName(h.projectNumber,h.project)+"</div>";
       html += "<div style='font-size:12px;color:#888;'>"+h.inspector+" &nbsp;·&nbsp; "+h.dayType+"</div></div>";
       if(isCurrent){
         html += "<span style='font-size:11px;font-weight:700;color:#1e7e34;'>ACTIVE</span>";
@@ -3238,7 +3256,7 @@ function switchToProject(key){
   p2_approvedPdfLink='';
   restoreHeader(dailyHeader);
   p2_applyLockUI();
-  showToast('Switched to '+dailyHeader.project, false);
+  showToast('Switched to '+shortProjectName(dailyHeader.projectNumber,dailyHeader.project), false);
 }
 
 function startNewProjectHeader(){
@@ -3502,7 +3520,7 @@ async function loadReportProjects(){
     list.forEach(function(p){
       var o=document.createElement('option');
       o.value=JSON.stringify(p);
-      o.textContent=(p.number?p.number+' \u2014 ':'')+p.name;
+      o.textContent=(p.number?p.number+' \u2014 ':'')+shortProjectName(p.number,p.name);   // display only; value stays full
       projSel.appendChild(o);
     });
     if(keepValue){
@@ -4293,10 +4311,20 @@ function p2_confirmAndSubmit() {
   }
   p2_closeSignModal();
   p2_showProgress('Generating PDF and uploading\u2026 This may take a moment.');
+  // submitReport renders a PDF and writes two Drive files inside a single
+  // execution, so it is slow by nature. It is also NOT idempotent: a second
+  // submit files a duplicate PDF and mints a new token, invalidating the review
+  // link already in the engineer's inbox. So one attempt only, with a generous
+  // ceiling (the Worker allows 150s for POSTs), and on timeout we say plainly
+  // that we could not confirm — we never resend.
+  var _p2ctrl  = new AbortController();
+  var _p2timed = false;
+  var _p2timer = setTimeout(function(){ _p2timed = true; _p2ctrl.abort(); }, 150000);
   fetch(P2_APPS_SCRIPT_URL, {
     method: 'POST',
     redirect: 'follow',
     headers: { 'Content-Type': 'text/plain' },
+    signal: _p2ctrl.signal,
     body: JSON.stringify({
       action:        'submitReport',
       projectId:     p2_currentProjectId,
@@ -4308,7 +4336,7 @@ function p2_confirmAndSubmit() {
       docHtml:       p2_docHtml
     })
   })
-  .then(function(res) { return res.json(); })
+  .then(function(res) { clearTimeout(_p2timer); return res.json(); })
   .then(function(response) {
     p2_hideProgress();
     if (response.status === 'success') {
@@ -4318,13 +4346,36 @@ function p2_confirmAndSubmit() {
       closeReportOverlay();
       p2_applyLockUI();
       alert('\u2705 Report submitted for engineer review.\n\nThe engineer has been notified by email.');
+    } else if (response.alreadySubmitted) {
+      // The server's duplicate-submit guard refused: another device, or another
+      // inspector, already submitted this project/date. Same principle as
+      // _flHandleReportLocked — this is a state to ADOPT, not an error to retry.
+      // Nothing was written, so there is no duplicate PDF and the original
+      // review link is still valid.
+      p2_currentReportStatus      = response.reportStatus || 'pending';
+      p2_currentApprovedBy        = response.by || '';
+      p2_currentApprovedTimestamp = response.at || '';
+      try { p2_refreshStatusBanner(); } catch(e){}
+      try { p2_applyLockUI(); } catch(e){}
+      closeReportOverlay();
+      alert('\u2139\uFE0F ' + (response.message || 'A report for this project and date has already been submitted.') +
+            '\n\nNothing was submitted again \u2014 the engineer\u2019s original review link is still valid.');
     } else {
       alert('\u274C Submission failed: ' + (response.message || 'Unknown error'));
     }
   })
   .catch(function(err) {
+    clearTimeout(_p2timer);
     p2_hideProgress();
-    alert('\u274C Network error: ' + err.toString());
+    if (_p2timed) {
+      // Slow is not the same as failed. The PDF may well be filed and the
+      // engineer already emailed; resubmitting would duplicate it and kill the
+      // link they were sent. Make the inspector check before acting.
+      alert('\u23F3 The server did not answer in time, so we can\u2019t tell whether the report was submitted \u2014 it may well have been.\n\n' +
+            'Do NOT submit again yet. Tap \u21BB Refresh Status, or open the Inspector Dashboard, and only resubmit if it still shows as not submitted.');
+    } else {
+      alert('\u274C Network error: ' + err.toString());
+    }
   });
 }
 
