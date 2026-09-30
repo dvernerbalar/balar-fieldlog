@@ -3728,6 +3728,31 @@ async function generateReport(){
 
 function showModalError(msg){const e=document.getElementById('modal-error');e.textContent=msg;e.style.display='block';}
 
+// Report header layout for project names and contractors (display only;
+// the stored name, filenames and folders are untouched).
+//   Project:  "State Line Road - Domestic Water Main (SHV150-WM-8)" renders as
+//             State Line Road / Domestic Water Main / (SHV150-WM-8) on three
+//             lines.  The program line only splits off for the mapped
+//             26001-26003 prefixes; a trailing reference in parentheses always
+//             gets its own line and never breaks internally.
+//   Contractor: "Haskell Company/Wicker Construction" breaks after the "/".
+function _flReportProjectHtml(number,name){
+  var full=String(name||'').trim();
+  var lines=[], rest=full, ref='';
+  var m=rest.match(/^(.*?)\s*(\([^()]*\))\s*$/);
+  if(m && m[1]){ rest=m[1]; ref=m[2]; }
+  var r=PROJECT_NAME_PREFIXES[String(number==null?'':number).trim().replace(/\.0+$/,'')];
+  if(r && rest.toLowerCase().indexOf(r.prefix.toLowerCase())===0){
+    var after=rest.slice(r.prefix.length).replace(/^[\s\-\u2013\u2014:,]+/,'');
+    if(after){ lines.push(rest.slice(0,r.prefix.length)); rest=after; }
+  }
+  lines.push(rest);
+  if(ref) lines.push('<span style="white-space:nowrap;">'+ref+'</span>');
+  return lines.join('<br>');
+}
+function _flReportContractorHtml(s){
+  return String(s||'').split(/\s*\/\s*/).filter(function(x){return x;}).join('/<br>');
+}
 function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
   const dateStr=new Date(dateLocale).toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   // Prefer the HEADER ROW for engineer and contractor — that is what was true on
@@ -3748,9 +3773,9 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
 
   var _leftItems = [
     ['Client', client],
-    ['Project', proj.name || ''],
+    ['Project', _flReportProjectHtml(proj.number, proj.name || '')],
     ['Project Number', proj.number || ''],
-    ['Prime Contractor', contractor || ''],
+    ['Prime Contractor', _flReportContractorHtml(contractor || '')],
     ['Report Contributors', inspectors.join(', ')]
   ].filter(function(it){ return it[1]; });
   var _rightItems = [
