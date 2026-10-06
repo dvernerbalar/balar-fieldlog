@@ -272,9 +272,11 @@ function wireSortHeaders() {
   });
 }
 
-// Resilient GET: timeout + retry-with-backoff for the flaky Apps Script serving layer.
+// GET with a timeout. The Cloudflare Worker owns retries (24s total GET budget),
+// so the client makes ONE attempt and must wait longer than that budget.
+// Invariant: Worker GET budget (24s) < client timeout (30s).
 function dashFetchJson(url, attempts, timeoutMs, backoffMs) {
-  attempts = attempts || 6; timeoutMs = timeoutMs || 12000; backoffMs = backoffMs || 1500;
+  attempts = attempts || 1; timeoutMs = timeoutMs || 30000; backoffMs = backoffMs || 1500;
   function once() {
     return new Promise(function(resolve, reject) {
       var ctrl = new AbortController();
@@ -309,8 +311,7 @@ function fetchAndOpenPdf(btn) {
     '&projectName=' + encodeURIComponent(projectName) +
     '&client=' + encodeURIComponent(client) +
     '&reportDate=' + encodeURIComponent(reportDate);
-  fetch(url)
-    .then(function(r) { return r.json(); })
+  dashFetchJson(url)
     .then(function(data) {
       btn.textContent = 'View PDF';
       btn.disabled = false;
@@ -358,7 +359,7 @@ function loadDashboard() {
     .catch(function(err) {
       document.getElementById('table-container').innerHTML = '<div class="loading">Server is slow right now — your reports couldn’t load.</div>';
       document.getElementById('error-container').innerHTML =
-        '<div class="error-msg">&#9888; Couldn’t reach the FieldLog server after several tries (usually a temporary Google hiccup). <a href="#" onclick="loadDashboard();return false;" style="color:#922b21;font-weight:700;">Retry</a></div>';
+        '<div class="error-msg">&#9888; Couldn’t reach the FieldLog server (usually a temporary Google hiccup). <a href="#" onclick="loadDashboard();return false;" style="color:#922b21;font-weight:700;">Retry</a></div>';
     });
 }
 
