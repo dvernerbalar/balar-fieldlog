@@ -522,13 +522,12 @@ textarea{resize:vertical;min-height:90px;}
     <div class="form-row" style="margin-top:10px;">
       <label>Photo</label>
       <div id="edit-photo-preview" style="margin-bottom:8px;"></div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input type="file" id="edit-photo-input" accept=".jpg,.jpeg,.png,.gif,.heic,.webp,.JPG,.JPEG,.PNG" style="font-size:13px;flex:1;" onchange="handleEditPhoto(this)">
-        <button onclick="removeEditPhoto()" style="background:none;border:1px solid #ddd;border-radius:6px;padding:6px 12px;font-size:12px;color:#999;cursor:pointer;white-space:nowrap;">Remove Photo</button>
-      </div>
+      <input type="file" id="edit-photo-input" accept=".jpg,.jpeg,.png,.gif,.heic,.webp,.JPG,.JPEG,.PNG" style="font-size:13px;width:100%;max-width:100%;box-sizing:border-box;" onchange="handleEditPhoto(this)">
     </div>
-    <div style="margin-top:16px;">
-      <button id="edit-delete-btn" onclick="askDeleteEntry()" style="background:none;border:1px solid #e0b4b4;border-radius:6px;padding:6px 12px;font-size:13px;color:#c62828;cursor:pointer;">&#128465; Delete Entry</button>
+    <!-- Remove Photo sits beside Delete Entry; on a phone it used to wrap off the right edge next to the file picker. -->
+    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button onclick="removeEditPhoto()" style="background:none;border:1px solid #ddd;border-radius:6px;padding:6px 12px;font-size:13px;color:#666;cursor:pointer;white-space:nowrap;">Remove Photo</button>
+      <button id="edit-delete-btn" onclick="askDeleteEntry()" style="background:none;border:1px solid #e0b4b4;border-radius:6px;padding:6px 12px;font-size:13px;color:#c62828;cursor:pointer;white-space:nowrap;">&#128465; Delete Entry</button>
     </div>
     <div id="edit-delete-confirm" style="display:none;margin-top:10px;padding:12px;border:1px solid #f5c2c0;background:#fdecea;border-radius:8px;">
       <div style="font-size:14px;color:#b3261e;font-weight:600;margin-bottom:4px;">Delete this entry?</div>
@@ -540,7 +539,7 @@ textarea{resize:vertical;min-height:90px;}
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeEditEntryModal()">Cancel</button>
-      <button class="btn-primary" onclick="saveEditEntry()">Save Changes</button>
+      <button class="btn-primary" id="edit-save-btn" onclick="saveEditEntry()">Save Changes</button>
     </div>
   </div>
 </div>
@@ -1696,8 +1695,16 @@ function _flClearHeaderCheckFailed(){
   if(old) old.remove();
 }
 
+// Returns true when the sheet answered and the list was reconciled, false when
+// it could not be reached (callers that toast must not claim "up to date" then).
+// Drive link(s) as one comparable string (photoLinks may be a string or array).
+function _flLinkKey(v){
+  if(!v) return '';
+  return (Array.isArray(v) ? v.join('\n') : String(v)).trim();
+}
+
 async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
-  if(!GOOGLE_SCRIPT_URL) return;
+  if(!GOOGLE_SCRIPT_URL) return false;
   try{
     var url = GOOGLE_SCRIPT_URL+'?action=getEntries&date='+encodeURIComponent(dateLocale)+'&projectNumber='+encodeURIComponent(projectNumber||'')+'&projectName='+encodeURIComponent(projectName)+'&_ts='+Date.now();
     // Timeout + status check. This was a bare fetch: no abort, and fetch does not
@@ -1716,7 +1723,15 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
     _photoFolderUrl=data.photo_folder_url||'';
     p2_applyLockUI();
     var sheetEntries = (data.entries||[]).filter(function(e){ return e.entryType !== 'header'; });
-    if(sheetEntries.length === 0) return;
+    // The header row coming back proves the lookup found THIS report.  Only then
+    // is "not in the sheet" trusted enough to remove entries from this device.
+    // Also skipped on pending/approved reports: entries can't be deleted then,
+    // and the nightly archive moves an approved report's entry rows to another
+    // tab (header stays), so "missing" there does not mean deleted.
+    var _rs = String(data.report_status||'').toLowerCase();
+    var _sheetHasHeader = (data.entries||[]).some(function(e){ return e.entryType === 'header'; });
+    var _purgeMissing = _sheetHasHeader && _rs !== 'approved' && _rs !== 'pending';
+    if(sheetEntries.length === 0 && !_sheetHasHeader) return true;
 
     // Build the set of entry IDs coming back from the sheet (the authoritative copy).
     var _incomingIds = {};
@@ -1737,7 +1752,9 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
     entries.forEach(function(e){
       if(e.project === projectName && e.date === dateLocale && e.photos && e.photos.length){
         var lid = String(e.id||'').replace(/\.0$/,'').trim();
-        if(lid) _localPhotos[lid] = e.photos[0];
+        // Remember which Drive link this local photo belongs to, so a photo
+        // replaced or removed on ANOTHER device isn't masked by the old one here.
+        if(lid) _localPhotos[lid] = { photo: e.photos[0], link: _flLinkKey(e.photoLinks) };
       }
     });
 
@@ -1746,6 +1763,11 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
         if(e.fromSheets) return false;
         var eid = String(e.id||'').replace(/\.0$/,'').trim();
         if(eid && _incomingIds[eid]) return false;
+        // (c) An entry this device already confirmed in the sheet (synced:true)
+        // that is no longer there was deleted, from this or another device.
+        // Before 2026-10-09 it stayed on screen forever.  Unsynced entries
+        // (not in the sheet yet) and older entries with no flag are kept.
+        if(_purgeMissing && e.synced === true) return false;
       }
       return true;
     });
@@ -1776,9 +1798,17 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
           // own local copy, else empty — Drive thumbnail fallback renders it.
           photos: (se.photos && se.photos.length)
                     ? se.photos
-                    : (_localPhotos[String(se.entryId||'').replace(/\.0$/,'').trim()]
-                        ? [_localPhotos[String(se.entryId||'').replace(/\.0$/,'').trim()]]
-                        : []),
+                    : (function(){
+                        // Use this device's copy only if the sheet still has the
+                        // SAME photo: it says there is one, and its Drive link
+                        // matches (or this device never had the link yet, as with
+                        // an entry just made here).  Otherwise the sheet's photo
+                        // (or no photo) wins, via the Drive thumbnail.
+                        var lp = _localPhotos[String(se.entryId||'').replace(/\.0$/,'').trim()];
+                        if(!lp || !(Number(se.photoCount) > 0)) return [];
+                        var sl = _flLinkKey(se.photoLinks);
+                        return (!lp.link || lp.link === sl) ? [lp.photo] : [];
+                      })(),
           gpsLocation: se.gpsLocation||'',
           fromSheets: true,
           // Carry the Drive links through. These were read from the response but
@@ -1794,8 +1824,10 @@ async function syncEntriesFromSheets(projectName, projectNumber, dateLocale){
     try{ localStorage.setItem('balar_v5_entries', JSON.stringify(entries)); }catch(e){}
     renderEntries();
     if(sheetEntries.length > 0) showToast(sheetEntries.length+' entries loaded from Sheets', false);
+    return true;
   } catch(err){
     console.warn('Entry sync failed:', err);
+    return false;
   }
 }
 
@@ -2892,6 +2924,7 @@ function submitEntry(){
       var idx=entries.findIndex(function(e){return String(e.id)===String(entry.id);});
       if(idx>=0){
         entries[idx].synced=true;
+        if(resp.photoLink) entries[idx].photoLinks=resp.photoLink;   // see _flLinkKey / refresh
         // If photo was included but Drive upload failed, flag it
         if(resp.hasPhoto && !resp.driveSaved){
           entries[idx].drivePhotoFailed=true;
@@ -3160,6 +3193,7 @@ function editEntry(btn){
   _editPhotoAction = 'keep';
   _editPhotoLarge = '';
   _resetDeleteConfirm();
+  _setEditSaving(_editSaveInFlight);   // a save still in flight keeps the button disabled
   document.getElementById('edit-entry-modal').classList.add('open');
 }
 function closeEditEntryModal(){document.getElementById('edit-entry-modal').classList.remove('open');}
@@ -3236,7 +3270,17 @@ function confirmDeleteEntry(){
       showToast('Could not reach the sheet. Nothing was deleted. Try again when you have signal.', true);
     });
 }
+// Save button state while an edit is in flight.  The modal stays open with
+// "Saving..." until the sheet answers, the same way the header section cards
+// only condense after a confirmed save (no optimistic "updated" toast).
+function _setEditSaving(on, label){
+  var b=document.getElementById('edit-save-btn');
+  if(b){ b.disabled=!!on; b.textContent=on?(label||'Saving…'):'Save Changes'; b.style.opacity=on?'0.7':''; }
+  var d=document.getElementById('edit-delete-btn'); if(d) d.disabled=!!on;
+}
+var _editSaveInFlight=false;
 function saveEditEntry(){
+  if(_editSaveInFlight) return;
   const id=document.getElementById('edit-entry-id').value;
   const idx=entries.findIndex(en=>String(en.id)===String(id));
   if(idx===-1)return;
@@ -3256,7 +3300,9 @@ function saveEditEntry(){
                     : (entries[idx].photos||[]);
   var photoLarge = photoAction==='replace' ? (_editPhotoLarge||newPhoto) : '';
 
-  entries[idx]=Object.assign({},entries[idx],{
+  // The edited entry.  Applied to this device only after the sheet confirms,
+  // so a failed save leaves the phone and the sheet in agreement.
+  var edited=Object.assign({},entries[idx],{
     desc:document.getElementById('edit-desc').value.trim(),
     station:document.getElementById('edit-station').value.trim(),
     notes:document.getElementById('edit-notes').value.trim(),
@@ -3265,54 +3311,56 @@ function saveEditEntry(){
     time:document.getElementById('edit-time').value,date:newDate,
     photos:updatedPhotos,
   });
-  if(photoAction==='remove'){ entries[idx].photoLinks=''; entries[idx].photoCount=0; }
-  if(photoAction==='replace'){ entries[idx].photoCount=1; }
-  try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(e){}
-  if(GOOGLE_SCRIPT_URL){
-    var _editId=document.getElementById('edit-entry-id').value;
-    var _payload=Object.assign({},entries[idx],{
-      action:'updateEntry',
-      entryId:_editId,
-      originalProject:document.getElementById('edit-original-project').value,
-      originalDesc:document.getElementById('edit-original-desc').value,
-      originalTime:document.getElementById('edit-original-time').value,
-      photos:[], photoOriginals:[],   // photo travels only in the fields below
-      photoAction:photoAction,
-      photoBase64:photoAction==='replace'?newPhoto:'',
-      photoOriginal:photoLarge
+  if(photoAction==='remove'){ edited.photoLinks=''; edited.photoCount=0; }
+  if(photoAction==='replace'){ edited.photoCount=1; }
+
+  var _payload=Object.assign({},edited,{
+    action:'updateEntry',
+    entryId:id,
+    originalProject:document.getElementById('edit-original-project').value,
+    originalDesc:document.getElementById('edit-original-desc').value,
+    originalTime:document.getElementById('edit-original-time').value,
+    photos:[], photoOriginals:[],   // photo travels only in the fields below
+    photoAction:photoAction,
+    photoBase64:photoAction==='replace'?newPhoto:'',
+    photoOriginal:photoLarge
+  });
+
+  _editSaveInFlight=true;
+  _setEditSaving(true, photoAction==='replace'?'Uploading photo…':'Saving…');
+  function _done(){ _editSaveInFlight=false; _setEditSaving(false); }
+
+  // 90s when a replaced photo uploads to Drive inside this request, else 45s.
+  // updateEntry overwrites the same row, so a manual retry after a timeout is
+  // safe (a retried photo at worst leaves one extra unused file in Drive).
+  _flFetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:JSON.stringify(_payload)},photoAction==='replace'?90000:45000)
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      _done();
+      if(_flHandleReportLocked(res)){ closeEditEntryModal(); return; }
+      if(!res || !res.success){
+        console.warn('Edit sync failed:',res);
+        showToast('Edit not saved: '+((res&&res.error)||'unknown error')+'.  Tap Save Changes to try again.', true);
+        return;   // modal stays open with the inspector's changes
+      }
+      if(res.photoAction==='replace' && res.photoLink) edited.photoLinks=res.photoLink;
+      var i2=entries.findIndex(function(x){return String(x.id)===String(id);});
+      if(i2>=0){ entries[i2]=edited; saveEntriesWithPhotos(); }
+      closeEditEntryModal(); renderEntries();
+      // photoAction echoed back means the server has the 2026-10-09 change.
+      if(res.photoAction==='replace' && !res.photoLink){
+        showToast(res.photoSaved
+          ? 'Entry updated, but the new photo did not reach Drive.  The report will use the sheet copy.'
+          : 'Entry updated, but the new photo was not saved.  Open the entry and pick it again.', true);
+      } else {
+        showToast(photoAction==='replace'?'Entry and new photo saved ✓':'Entry updated ✓',false);
+      }
+    })
+    .catch(function(err){
+      _done();
+      console.warn(err);
+      showToast('Could not confirm the edit reached the sheet.  Tap Save Changes to try again.', true);
     });
-    // 90s: a replaced photo uploads to Drive inside this request.
-    _flFetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:JSON.stringify(_payload)},90000)
-      .then(function(r){ return r.json(); })
-      .then(function(res){
-        if(_flHandleReportLocked(res)) return;
-        if(!res || !res.success){
-          console.warn('Edit sync failed:',res);
-          showToast('Edit did not reach the sheet: '+((res&&res.error)||'unknown error')+'.  Open the entry and save again.', true);
-          return;
-        }
-        // photoAction echoed back means the server has the 2026-10-09 change.
-        if(res.photoAction==='replace'){
-          if(res.photoLink){
-            var i2=entries.findIndex(function(x){return String(x.id)===String(_editId);});
-            if(i2>=0){ entries[i2].photoLinks=res.photoLink; saveEntriesWithPhotos(); }
-            showToast('New photo saved \u2713',false);
-          } else if(res.photoSaved){
-            showToast('Entry updated, but the new photo did not reach Drive.  The report will use the sheet copy.', true);
-          } else {
-            showToast('Entry updated, but the new photo was not saved.  Open the entry and pick it again.', true);
-          }
-        }
-      })
-      .catch(function(err){
-        console.warn(err);
-        showToast(photoAction==='replace'
-          ? 'Could not confirm the new photo was saved.  Check the entry after the next refresh.'
-          : 'Could not confirm the edit reached the sheet.  Check the entry after the next refresh.', true);
-      });
-  }
-  closeEditEntryModal();renderEntries();
-  showToast(photoAction==='replace'?'Entry updated, uploading photo\u2026':'Entry updated',false);
 }
 
 // ── REPORT MODAL ─────────────────────────────────────────
@@ -3504,18 +3552,30 @@ function flRefreshEntries(){
   if(!dailyHeader || !GOOGLE_SCRIPT_URL) return;
   var b = document.getElementById('btn-refresh-entries');
   if(b){ b.disabled = true; b.innerHTML = 'Refreshing\u2026'; }
-  var before = entries.filter(function(e){
-    return e.project === dailyHeader.project && e.date === dailyHeader.date;
-  }).length;
+  function _ids(){
+    var o = {};
+    entries.forEach(function(e){
+      if(e.project === dailyHeader.project && e.date === dailyHeader.date)
+        o[String(e.id||'').replace(/\.0$/,'').trim()] = true;
+    });
+    return o;
+  }
+  var before = _ids();
   syncEntriesFromSheets(dailyHeader.project, dailyHeader.projectNumber, dailyHeader.date)
-    .then(function(){
-      var after = entries.filter(function(e){
-        return e.project === dailyHeader.project && e.date === dailyHeader.date;
-      }).length;
-      var added = after - before;
-      showToast(added > 0
-        ? added + ' new entr' + (added === 1 ? 'y' : 'ies') + ' loaded'
-        : 'Entries are up to date', false);
+    .then(function(ok){
+      // syncEntriesFromSheets catches its own errors, so a failed fetch used to
+      // fall through to "Entries are up to date".  It now reports false.
+      if(ok === false){
+        showToast('Could not reach the sheet. Nothing was refreshed. Try again in a moment.', true);
+        return;
+      }
+      var after = _ids(), added = 0, removed = 0, k;
+      for(k in after)  if(!before[k]) added++;
+      for(k in before) if(!after[k])  removed++;
+      var parts = [];
+      if(added)   parts.push(added + ' new entr' + (added === 1 ? 'y' : 'ies') + ' loaded');
+      if(removed) parts.push(removed + ' deleted entr' + (removed === 1 ? 'y' : 'ies') + ' removed');
+      showToast(parts.length ? parts.join(', ') : 'Entries are up to date', false);
     })
     .catch(function(err){
       console.warn('flRefreshEntries failed:', err);
