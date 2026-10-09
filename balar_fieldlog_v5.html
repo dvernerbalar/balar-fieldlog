@@ -527,6 +527,17 @@ textarea{resize:vertical;min-height:90px;}
         <button onclick="removeEditPhoto()" style="background:none;border:1px solid #ddd;border-radius:6px;padding:6px 12px;font-size:12px;color:#999;cursor:pointer;white-space:nowrap;">Remove Photo</button>
       </div>
     </div>
+    <div style="margin-top:16px;">
+      <button id="edit-delete-btn" onclick="askDeleteEntry()" style="background:none;border:1px solid #e0b4b4;border-radius:6px;padding:6px 12px;font-size:13px;color:#c62828;cursor:pointer;">&#128465; Delete Entry</button>
+    </div>
+    <div id="edit-delete-confirm" style="display:none;margin-top:10px;padding:12px;border:1px solid #f5c2c0;background:#fdecea;border-radius:8px;">
+      <div style="font-size:14px;color:#b3261e;font-weight:600;margin-bottom:4px;">Delete this entry?</div>
+      <div style="font-size:12px;color:#555;margin-bottom:10px;">It will be removed from the report and the sheet.  This can&#39;t be undone.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn-cancel" onclick="cancelDeleteEntry()">Keep Entry</button>
+        <button id="edit-delete-go" onclick="confirmDeleteEntry()" style="background:#c62828;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:14px;font-weight:600;cursor:pointer;">Delete</button>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeEditEntryModal()">Cancel</button>
       <button class="btn-primary" onclick="saveEditEntry()">Save Changes</button>
@@ -3144,23 +3155,86 @@ function editEntry(btn){
     preview.dataset.photo = '';
   }
   document.getElementById('edit-photo-input').value = '';
+  // Photo starts untouched.  Only a new pick or Remove Photo changes this, and
+  // only those two make the save touch the photo columns (O/P/Q).
+  _editPhotoAction = 'keep';
+  _editPhotoLarge = '';
+  _resetDeleteConfirm();
   document.getElementById('edit-entry-modal').classList.add('open');
 }
 function closeEditEntryModal(){document.getElementById('edit-entry-modal').classList.remove('open');}
+// What happened to the photo in the Edit screen: 'keep' | 'replace' | 'remove'.
+// Sent to updateEntry as photoAction.  'keep' leaves cols O/P/Q alone, which is
+// what stops a caption fix from writing the Drive thumbnail URL into col Q.
+var _editPhotoAction = 'keep';
+var _editPhotoLarge = '';   // Drive-quality copy of a newly picked photo
 function handleEditPhoto(input){
   if(!input.files||!input.files[0])return;
-  var reader=new FileReader();
-  reader.onload=function(e){
+  // Same two-tier compression as a new entry: small copy for col Q, larger
+  // copy for Drive.  The old handler kept the raw full-size file, which never
+  // reached Drive and could overrun the 50,000 character cell limit.
+  compressPhoto(input.files[0], function(small, large){
     var preview=document.getElementById('edit-photo-preview');
-    preview.innerHTML='<img src="'+e.target.result+'" style="width:100%;max-width:200px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ddd;display:block;margin-bottom:4px;">';
-    preview.dataset.photo=e.target.result;
-  };
-  reader.readAsDataURL(input.files[0]);
+    preview.innerHTML='<img src="'+small+'" style="width:100%;max-width:200px;height:120px;object-fit:cover;border-radius:6px;border:1px solid #ddd;display:block;margin-bottom:4px;"><div style="font-size:11px;color:#888;">New photo, saved when you tap Save Changes</div>';
+    preview.dataset.photo=small;
+    _editPhotoLarge=large;
+    _editPhotoAction='replace';
+  });
 }
 function removeEditPhoto(){
   document.getElementById('edit-photo-preview').innerHTML='';
   document.getElementById('edit-photo-preview').dataset.photo='';
   document.getElementById('edit-photo-input').value='';
+  _editPhotoLarge='';
+  _editPhotoAction='remove';
+}
+
+// ── DELETE ENTRY (added 2026-10-09) ──
+// Two step: the Delete Entry button opens a confirm panel inside the modal
+// (no browser confirm dialog).  The entry is removed from this device only
+// after the server confirms, so an offline tap deletes nothing.  The server
+// refuses on a submitted/approved report, same as edits.
+function _resetDeleteConfirm(){
+  var c=document.getElementById('edit-delete-confirm'); if(c) c.style.display='none';
+  var b=document.getElementById('edit-delete-go'); if(b){ b.disabled=false; b.textContent='Delete'; }
+}
+function askDeleteEntry(){
+  if(p2_checkLock())return;
+  document.getElementById('edit-delete-confirm').style.display='block';
+}
+function cancelDeleteEntry(){ _resetDeleteConfirm(); }
+function confirmDeleteEntry(){
+  var id=document.getElementById('edit-entry-id').value;
+  var idx=entries.findIndex(function(en){return String(en.id)===String(id);});
+  if(idx===-1){ closeEditEntryModal(); return; }
+  var en=entries[idx];
+  var btn=document.getElementById('edit-delete-go');
+  btn.disabled=true; btn.textContent='Deleting…';
+  var body={
+    action:'deleteEntry',
+    entryId:String(en.id||'').replace(/\.0$/,'').trim(),
+    projectNumber:en.projectNumber||'',
+    project:en.project||'',
+    date:en.date||''
+  };
+  _flFetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:JSON.stringify(body)},30000)
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if(_flHandleReportLocked(res)){ _resetDeleteConfirm(); closeEditEntryModal(); return; }
+      if(res && res.success){
+        entries=entries.filter(function(x){ return String(x.id)!==String(id); });
+        saveEntriesWithPhotos();
+        closeEditEntryModal(); renderEntries();
+        showToast('Entry deleted',false);
+      } else {
+        _resetDeleteConfirm();
+        showToast((res && res.error) || 'Delete failed. Nothing was deleted.', true);
+      }
+    })
+    .catch(function(){
+      _resetDeleteConfirm();
+      showToast('Could not reach the sheet. Nothing was deleted. Try again when you have signal.', true);
+    });
 }
 function saveEditEntry(){
   const id=document.getElementById('edit-entry-id').value;
@@ -3169,10 +3243,18 @@ function saveEditEntry(){
   const dateVal=document.getElementById('edit-date').value;
   let newDate=entries[idx].date;
   if(dateVal){const[y,mo,d]=dateVal.split('-');newDate=new Date(y,mo-1,d).toLocaleDateString('en-US');}
-  // Handle photo update
+  // Photo: keep / replace / remove (set by handleEditPhoto / removeEditPhoto).
+  // 'keep' leaves the entry's photos exactly as they were.  The old code put
+  // the preview source back into photos, which for a synced entry is the Drive
+  // THUMBNAIL URL, and that URL was then written over col Q.
   var preview = document.getElementById('edit-photo-preview');
+  var photoAction = _editPhotoAction || 'keep';
   var newPhoto = preview.dataset.photo || '';
-  var updatedPhotos = newPhoto ? [newPhoto] : [];
+  if(photoAction==='replace' && newPhoto.indexOf('data:image/')!==0) photoAction='keep';
+  var updatedPhotos = photoAction==='replace' ? [newPhoto]
+                    : photoAction==='remove'  ? []
+                    : (entries[idx].photos||[]);
+  var photoLarge = photoAction==='replace' ? (_editPhotoLarge||newPhoto) : '';
 
   entries[idx]=Object.assign({},entries[idx],{
     desc:document.getElementById('edit-desc').value.trim(),
@@ -3183,18 +3265,54 @@ function saveEditEntry(){
     time:document.getElementById('edit-time').value,date:newDate,
     photos:updatedPhotos,
   });
+  if(photoAction==='remove'){ entries[idx].photoLinks=''; entries[idx].photoCount=0; }
+  if(photoAction==='replace'){ entries[idx].photoCount=1; }
   try{localStorage.setItem('balar_v5_entries',JSON.stringify(entries));}catch(e){}
   if(GOOGLE_SCRIPT_URL){
-    fetch(GOOGLE_SCRIPT_URL,{method:'POST',body:JSON.stringify(Object.assign({},entries[idx],{
+    var _editId=document.getElementById('edit-entry-id').value;
+    var _payload=Object.assign({},entries[idx],{
       action:'updateEntry',
-      entryId:document.getElementById('edit-entry-id').value,
+      entryId:_editId,
       originalProject:document.getElementById('edit-original-project').value,
       originalDesc:document.getElementById('edit-original-desc').value,
       originalTime:document.getElementById('edit-original-time').value,
-      photoBase64:entries[idx].photos&&entries[idx].photos.length>0?entries[idx].photos[0]:'',
-    }))}).then(r=>r.json()).then(res=>{if(!res.success)console.warn('Edit sync failed:',res);}).catch(err=>console.warn(err));
+      photos:[], photoOriginals:[],   // photo travels only in the fields below
+      photoAction:photoAction,
+      photoBase64:photoAction==='replace'?newPhoto:'',
+      photoOriginal:photoLarge
+    });
+    // 90s: a replaced photo uploads to Drive inside this request.
+    _flFetch(GOOGLE_SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:JSON.stringify(_payload)},90000)
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if(_flHandleReportLocked(res)) return;
+        if(!res || !res.success){
+          console.warn('Edit sync failed:',res);
+          showToast('Edit did not reach the sheet: '+((res&&res.error)||'unknown error')+'.  Open the entry and save again.', true);
+          return;
+        }
+        // photoAction echoed back means the server has the 2026-10-09 change.
+        if(res.photoAction==='replace'){
+          if(res.photoLink){
+            var i2=entries.findIndex(function(x){return String(x.id)===String(_editId);});
+            if(i2>=0){ entries[i2].photoLinks=res.photoLink; saveEntriesWithPhotos(); }
+            showToast('New photo saved \u2713',false);
+          } else if(res.photoSaved){
+            showToast('Entry updated, but the new photo did not reach Drive.  The report will use the sheet copy.', true);
+          } else {
+            showToast('Entry updated, but the new photo was not saved.  Open the entry and pick it again.', true);
+          }
+        }
+      })
+      .catch(function(err){
+        console.warn(err);
+        showToast(photoAction==='replace'
+          ? 'Could not confirm the new photo was saved.  Check the entry after the next refresh.'
+          : 'Could not confirm the edit reached the sheet.  Check the entry after the next refresh.', true);
+      });
   }
-  closeEditEntryModal();renderEntries();showToast('Entry updated',false);
+  closeEditEntryModal();renderEntries();
+  showToast(photoAction==='replace'?'Entry updated, uploading photo\u2026':'Entry updated',false);
 }
 
 // ── REPORT MODAL ─────────────────────────────────────────
