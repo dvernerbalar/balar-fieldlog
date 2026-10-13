@@ -4032,13 +4032,6 @@ function _flReportContractorHtml(s){
   return String(s||'').split(/\s*\/\s*/).filter(function(x){return x;}).join('/<br>');
 }
 // ── Report layout helpers (2026-10-12) ─────────────────────────────────────
-// Section heading with a full-width rule (same look as "Inspection Log").
-// Used by Project Information.
-function _flReportCard(title, bodyHtml){
-  return '<div style="margin:0 0 14px;page-break-inside:avoid;break-inside:avoid;">' +
-    '<div style="font-size:14px;font-weight:bold;color:#0d1b2a;border-bottom:2px solid #9b1c2e;padding-bottom:4px;margin-bottom:8px;">' + title + '</div>' +
-    bodyHtml + '</div>';
-}
 // "Wednesday, September 30, 2026": the month/day/year never splits, so a long
 // date breaks after the weekday only when it has to.
 function _flReportDateHtml(s){
@@ -4118,12 +4111,9 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
     }
   }
   const headerInfoHtml =
-    _flReportCard('Project Information',
-      '<div>' +
-      '<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;">' +
-      '<colgroup><col style="width:19%"><col style="width:34%"><col style="width:17%"><col style="width:30%"></colgroup>' +
-      _hdrRows + '</table>' +
-      '</div>');
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px;table-layout:fixed;">' +
+    '<colgroup><col style="width:19%"><col style="width:34%"><col style="width:17%"><col style="width:30%"></colgroup>' +
+    _hdrRows + '</table>';
 
   // Equipment — always show section, display None if selected
   var equipRows = equipment.length>0 ? equipment : [];
@@ -4133,7 +4123,7 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
     : equipRows.map(eq=>'<div style="font-size:13px;padding:2px 0;">'+eq.name+(eq.count?' &nbsp;—&nbsp; <strong>'+eq.count+'</strong>':'')+'</div>').join('');
   const equipHtml = equipRows.length>0 ?
     '<div style="display:inline-block;vertical-align:top;width:48%;margin-right:2%;margin-bottom:14px;">'+
-    '<div style="font-weight:bold;font-size:14px;color:#0d1b2a;border-bottom:2px solid #9b1c2e;padding-bottom:4px;margin-bottom:8px;">Equipment on Site</div>'+
+    '<div style="font-weight:bold;font-size:13px;color:#0d1b2a;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:8px;">Equipment on Site</div>'+
     equipRowsHtml+'</div>' : '';
 
   // Workforce — always show section, display None if selected
@@ -4144,7 +4134,7 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
     : workRows.map(w=>'<div style="font-size:13px;padding:2px 0;">'+w.classification+(w.count?' &nbsp;—&nbsp; <strong>'+w.count+'</strong>':'')+'</div>').join('');
   const workHtml = workRows.length>0 ?
     '<div style="display:inline-block;vertical-align:top;width:48%;margin-bottom:14px;">'+
-    '<div style="font-weight:bold;font-size:14px;color:#0d1b2a;border-bottom:2px solid #9b1c2e;padding-bottom:4px;margin-bottom:8px;">Workforce on Site</div>'+
+    '<div style="font-weight:bold;font-size:13px;color:#0d1b2a;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:8px;">Workforce on Site</div>'+
     workRowsHtml+'</div>' : '';
   // Show all checklist items - checked and unchecked
   const allItems = headerRow.allChecklistItems || CHECKLIST_ITEMS;
@@ -4220,29 +4210,32 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
   // heading nor the signatures can end up alone at a page break.
   var _avoid='page-break-inside:avoid;break-inside:avoid;';
   var _logHead='<div style="font-size:14px;font-weight:bold;color:#0d1b2a;border-bottom:2px solid #9b1c2e;padding-bottom:4px;margin-bottom:12px;page-break-after:avoid;break-after:avoid;">Inspection Log &nbsp;<span style="font-weight:normal;font-size:12px;color:#888;">('+workEntries.length+' entr'+(workEntries.length===1?'y':'ies')+')</span></div>';
+  // (2026-10-13) Closing block under an "End of Report" heading styled like
+  // Equipment on Site / Workforce on Site (bold title, thin gray rule).
   var _closing=
-    (_photoFolderUrl?'<table style="margin:16px auto 0;border-collapse:separate;"><tr><td style="background:#0d1b2a;border-radius:6px;padding:9px 22px;text-align:center;"><a href="'+_photoFolderUrl+'" target="_blank" style="color:#fff;font-family:Arial,sans-serif;font-size:12px;font-weight:bold;text-decoration:none;">&#128247;&nbsp; View All Site Photos for This Date &#8594;</a></td></tr></table>':'')+
+    '<div style="margin-top:18px;font-weight:bold;font-size:13px;color:#0d1b2a;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:12px;">End of Report</div>'+
+    (_photoFolderUrl?'<table style="margin:0 auto;border-collapse:separate;"><tr><td style="background:#0d1b2a;border-radius:6px;padding:9px 22px;text-align:center;"><a href="'+_photoFolderUrl+'" target="_blank" style="color:#fff;font-family:Arial,sans-serif;font-size:12px;font-weight:bold;text-decoration:none;">&#128247;&nbsp; View All Site Photos for This Date &#8594;</a></td></tr></table>':'')+
+    '<div style="text-align:center;font-size:9px;color:#aaa;margin-top:12px;">Balar Associates, Inc. &nbsp;·&nbsp; Daily Field Inspection Report &nbsp;·&nbsp; Generated '+new Date().toLocaleString()+'</div>'+
     _flSignatureRowHtml();
   var _logHtml;
+  // (2026-10-13, Drew) The closing block (photos button + "Generated" line +
+  // signatures) always stays together as its own block, whatever the entry
+  // count; it no longer sticks to the last entry, so entries fill each page.
+  // The heading still stays with the first entry.
   if(entryBlocks.length===0){
     _logHtml='<div style="'+_avoid+'">'+_logHead+
-      '<div style="color:#888;font-size:13px;font-style:italic;padding:10px 0;">No work entries logged for this date.</div>'+
-      _closing+'</div>';
-  } else if(entryBlocks.length===1){
-    _logHtml='<div style="'+_avoid+'">'+_logHead+entryBlocks[0]+_closing+'</div>';
+      '<div style="color:#888;font-size:13px;font-style:italic;padding:10px 0;">No work entries logged for this date.</div></div>';
   } else {
-    _logHtml='<div style="'+_avoid+'">'+_logHead+entryBlocks[0]+'</div>'+
-      entryBlocks.slice(1,-1).join('')+
-      '<div style="'+_avoid+'">'+entryBlocks[entryBlocks.length-1]+_closing+'</div>';
+    _logHtml='<div style="'+_avoid+'">'+_logHead+entryBlocks[0]+'</div>'+entryBlocks.slice(1).join('');
   }
+  _logHtml+='<div style="'+_avoid+'">'+_closing+'</div>';
 
   const doc='<!DOCTYPE html><html><head><meta charset="UTF-8">'+
     '<style>'+
     'html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
     'body{font-family:Georgia,serif;color:#222;margin:0;padding:0;}'+
     '@page{margin:0.55in 0.7in;}'+
-    '@page{@bottom-right{content:"Page " counter(page) " of " counter(pages);font-family:Georgia,serif;font-size:9px;color:#aaa;}'+
-    '@bottom-left{content:"Balar Associates, Inc.  ·  Daily Field Inspection Report  ·  Generated '+new Date().toLocaleString().replace(/"/g,'')+'";font-family:Georgia,serif;font-size:9px;color:#aaa;}}'+
+    '@page{@bottom-right{content:"Page " counter(page) " of " counter(pages);font-family:Georgia,serif;font-size:9px;color:#aaa;}}'+
     '</style>'+
     '</head><body>'+
     '<div style="text-align:center;padding-bottom:8px;border-bottom:2px solid #9b1c2e;margin-bottom:14px;">'+
