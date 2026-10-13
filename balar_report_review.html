@@ -178,6 +178,7 @@
   .modal-box label { font-size: 13px; font-weight: bold; color: #333; display: block; margin-bottom: 6px; }
 
   .modal-box input[type="text"],
+  .modal-box input[type="password"],
   .modal-box textarea {
     width: 100%;
     padding: 10px 12px;
@@ -246,6 +247,13 @@
     .btn { width: 100%; text-align: center; }
     .info-row { flex-direction: column; gap: 2px; }
     .info-label { min-width: unset; }
+    /* Popups on phones (2026-10-13): sit near the top so the keyboard doesn't
+       cover the buttons; scroll if needed; Confirm and Cancel both full width,
+       Confirm on top. */
+    .modal-overlay { align-items: flex-start; padding: 16px 0; overflow-y: auto; }
+    .modal-box { padding: 22px 18px; }
+    .modal-actions { flex-direction: column-reverse; gap: 10px; }
+    .modal-actions .btn, .modal-actions .btn-secondary { width: 100%; text-align: center; padding: 12px 22px !important; font-size: 15px !important; }
   }
 </style>
 </head>
@@ -345,7 +353,11 @@
 <div class="modal-overlay" id="approveModal">
   <div class="modal-box">
     <h3 class="approve">Approve Report</h3>
-    <p>This report will be approved by <strong id="approveEngineerName"></strong>. This action cannot be undone.</p>
+    <p>This report will be approved by <strong id="approveEngineerName"></strong><span id="approveNamePeriod">.</span> This action cannot be undone.</p>
+    <label for="approvePinInput">PIN for <span id="approvePinName"></span></label>
+    <input type="password" inputmode="numeric" maxlength="4" autocomplete="off" id="approvePinInput" placeholder="4-digit PIN"
+           onkeydown="if(event.key==='Enter')submitApproval()">
+    <div class="modal-error" id="approvePinError"></div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeApproveModal()">Cancel</button>
       <button class="btn btn-approve" onclick="submitApproval()" style="padding:10px 22px; font-size:14px;">
@@ -363,6 +375,9 @@
     <label for="rejectCommentInput">Comment for Inspector <span style="color:#c0392b;">*</span></label>
     <textarea id="rejectCommentInput" placeholder="Describe what needs to be corrected before resubmission…"></textarea>
     <div class="modal-error" id="rejectCommentError">A comment is required when rejecting.</div>
+    <label for="rejectPinInput">PIN for <span id="rejectPinName"></span></label>
+    <input type="password" inputmode="numeric" maxlength="4" autocomplete="off" id="rejectPinInput" placeholder="4-digit PIN">
+    <div class="modal-error" id="rejectPinError"></div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeRejectModal()">Cancel</button>
       <button class="btn btn-reject" onclick="submitRejection()" style="padding:10px 22px; font-size:14px;">
@@ -491,7 +506,12 @@ function renderReport(data) {
 function openApproveModal() {
   document.getElementById('actionRetryBanner').style.display = 'none';
   document.getElementById('approveEngineerName').textContent = _engineerName || 'Unknown Engineer';
+  document.getElementById('approveNamePeriod').textContent = /\.$/.test(_engineerName || '') ? '' : '.';
+  document.getElementById('approvePinName').textContent = _engineerName || 'the engineer';
+  document.getElementById('approvePinInput').value = '';
+  document.getElementById('approvePinError').style.display = 'none';
   document.getElementById('approveModal').classList.add('open');
+  document.getElementById('approvePinInput').focus();
 }
 
 function closeApproveModal() {
@@ -504,16 +524,22 @@ function submitApproval() {
     alert('Engineer name could not be determined. Please contact your administrator.');
     return;
   }
+  var pin = document.getElementById('approvePinInput').value.trim();
+  if (!pin) { _showPinError('approve', 'Enter your PIN.'); return; }
   closeApproveModal();
   document.getElementById('actionRetryBanner').style.display = 'none';
   showSpinner('Submitting approval…');
 
   // SIDE-EFFECT action: exactly one attempt — never auto-retried.
-  postActionOnce({ action: 'approveReport', token: _token, engineerName: name }, 25000)
+  postActionOnce({ action: 'approveReport', token: _token, engineerName: name, pin: pin }, 25000)
     .then(function(response) {
       hideSpinner();
       if (response && response.status === 'success') {
         showApprovedResolved(name, null);
+      } else if (response && response.pinError) {
+        // Wrong or missing PIN: nothing was done.  Reopen the modal with the message.
+        openApproveModal();
+        _showPinError('approve', response.message);
       } else {
         // Server answered with an error — re-check status before alarming the user.
         verifyAfterError('approve', name, (response && response.message) || '');
@@ -534,6 +560,9 @@ function openRejectModal() {
   document.getElementById('actionRetryBanner').style.display = 'none';
   document.getElementById('rejectCommentInput').value = '';
   document.getElementById('rejectCommentError').style.display = 'none';
+  document.getElementById('rejectPinName').textContent = _engineerName || 'the engineer';
+  document.getElementById('rejectPinInput').value = '';
+  document.getElementById('rejectPinError').style.display = 'none';
   document.getElementById('rejectModal').classList.add('open');
   document.getElementById('rejectCommentInput').focus();
 }
@@ -551,15 +580,22 @@ function submitRejection() {
     return;
   }
   document.getElementById('rejectCommentError').style.display = 'none';
+  var pin = document.getElementById('rejectPinInput').value.trim();
+  if (!pin) { _showPinError('reject', 'Enter your PIN.'); return; }
   closeRejectModal();
   document.getElementById('actionRetryBanner').style.display = 'none';
   showSpinner('Submitting rejection…');
 
-  postActionOnce({ action: 'rejectReport', token: _token, engineerName: name, comment: comment }, 25000)
+  postActionOnce({ action: 'rejectReport', token: _token, engineerName: name, comment: comment, pin: pin }, 25000)
     .then(function(response) {
       hideSpinner();
       if (response && response.status === 'success') {
         showRejectedResolved();
+      } else if (response && response.pinError) {
+        // Wrong or missing PIN: nothing was done.  Reopen with the comment kept.
+        document.getElementById('rejectPinInput').value = '';
+        document.getElementById('rejectModal').classList.add('open');
+        _showPinError('reject', response.message);
       } else {
         verifyAfterError('reject', comment, (response && response.message) || '');
       }
@@ -568,6 +604,15 @@ function submitRejection() {
       hideSpinner();
       verifyAfterError('reject', comment, '');
     });
+}
+
+function _showPinError(kind, msg) {
+  var el = document.getElementById(kind === 'approve' ? 'approvePinError' : 'rejectPinError');
+  el.textContent = msg || 'Incorrect PIN.';
+  el.style.display = 'block';
+  var inp = document.getElementById(kind === 'approve' ? 'approvePinInput' : 'rejectPinInput');
+  inp.value = '';
+  inp.focus();
 }
 
 // =============================================================================
