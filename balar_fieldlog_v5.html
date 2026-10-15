@@ -428,17 +428,9 @@ textarea{resize:vertical;min-height:90px;}
           </div>
           <div style="border-top:1px solid #eee;margin:16px 0;"></div>
           <div class="section-label" style="margin-bottom:12px;">Workforce on Site</div>
-          <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="workforce-same-check" onchange="toggleSameAsLast('workforce')" style="width:16px;height:16px;cursor:pointer;">
-            <label for="workforce-same-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">Same as last time for this project</label>
-          </div>
+          <!-- Workforce by company (2026-10-15): rendered by _wfRender() -->
+          <button type="button" id="wf-copy-btn" onclick="_wfCopyLast()" style="width:100%;margin-bottom:10px;padding:9px 12px;border:1px solid #c9d3de;border-radius:7px;background:#fff;color:#1b2d42;font-family:'Barlow',sans-serif;font-size:14px;font-weight:600;cursor:pointer;">&#128203; Copy from last report</button>
           <div class="item-list" id="workforce-list"><div style="color:#aaa;font-size:13px;padding:4px 0;">No workforce added yet.</div></div>
-          <div class="add-item-row">
-            <select id="workforce-select" style="flex:2;" onchange="toggleCustomInput('workforce-select','workforce-custom')"><option value="">Select classification...</option></select>
-            <input type="number" id="workforce-count" placeholder="No." min="1" style="max-width:75px;flex:0 0 75px;">
-            <button class="add-item-btn" onclick="addWorkforceItem()">+</button>
-          </div>
-          <input type="text" id="workforce-custom" placeholder="Or type custom classification..." style="width:100%;font-size:14px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;display:none;">
           <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
             <input type="checkbox" id="workforce-none-check" onchange="toggleNoneOnSite('workforce')" style="width:16px;height:16px;cursor:pointer;">
             <label for="workforce-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
@@ -1212,7 +1204,7 @@ function saveResources(){
     if(_resBtn){ _resBtn.disabled=false; _resBtn.innerHTML=_resLbl; }
     if(ok !== true) return;
     var eqSum = dailyHeader.equipment.map(function(e){return e.name+(e.count>0?' ('+e.count+')':'');}).join(', ')||'None';
-    var wfSum = dailyHeader.workforce.map(function(w){return w.classification+(w.count>0?' ('+w.count+')':'');}).join(', ')||'None';
+    var wfSum = _flWfSummary(dailyHeader.workforce)||'None';
     var resSummaryEl = document.getElementById('resources-summary');
     if(resSummaryEl) resSummaryEl.innerHTML = '<strong>Equipment:</strong> '+eqSum+'<br><strong>Workforce:</strong> '+wfSum;
     document.getElementById('resources-form-view').style.display = 'none';
@@ -1374,15 +1366,10 @@ function toggleNoneOnSite(type){
     var cb = document.getElementById('workforce-none-check');
     if(cb.checked){
       workforceItems = [{classification:'None', count:0}];
-      document.getElementById('workforce-select').disabled = true;
-      document.getElementById('workforce-count').disabled = true;
-      document.getElementById('workforce-custom').disabled = true;
     } else {
       workforceItems = [];
-      document.getElementById('workforce-select').disabled = false;
-      document.getElementById('workforce-count').disabled = false;
-      document.getElementById('workforce-custom').disabled = false;
     }
+    _wfOpen = null; _wfExtra = []; _wfAddingSub = false;
     renderWorkforceList('workforce-list', workforceItems);
   }
 }
@@ -1465,6 +1452,7 @@ function renderEquipmentList(listId,items){
 }
 
 function renderWorkforceList(listId,items){
+  if(listId==='workforce-list'){ _wfRender(); return; }   // company blocks (2026-10-15)
   var list=document.getElementById(listId);if(!list)return;
   if(!items||items.length===0){list.innerHTML="<div style='color:#aaa;font-size:13px;padding:4px 0;'>No workforce added yet.</div>";return;}
   var html="";
@@ -1480,6 +1468,214 @@ function renderWorkforceList(listId,items){
   list.innerHTML=html;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// WORKFORCE BY COMPANY (2026-10-15)
+// workforceItems stays a flat list, each item {company, classification, count}
+// (old items have no company and belong to the prime).  The card shows one
+// line per company; Edit opens that company's trades.  Subs come from the
+// project's Subcontractors column (getDropdowns -> projectsData[].subs);
+// "Other (not listed)" lets an inspector type one, and the server emails the
+// office when it is saved.  Handlers use group indexes, never names, so
+// company names with quotes or apostrophes are safe.
+// ═══════════════════════════════════════════════════════════════
+var _wfOpen = null;        // company name whose block is open, or null
+var _wfExtra = [];         // companies added with no trades yet
+var _wfAddingSub = false;  // add-subcontractor picker showing
+var _wfKey = '';           // report the state belongs to
+var _wfGroupsCache = [];
+function _wfEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _wfNorm(s){ return String(s||'').trim().toLowerCase(); }
+function _wfPrime(){
+  var p = (dailyHeader && dailyHeader.contractorPrimary) || ((document.getElementById('contractor-primary')||{}).value) || '';
+  return String(p).trim() || 'Prime Contractor';
+}
+function _wfProj(){
+  if(!dailyHeader) return null;
+  var n = String(dailyHeader.projectNumber||'').trim(), m = String(dailyHeader.project||'').trim();
+  for(var i=0;i<projectsData.length;i++){
+    var p = projectsData[i];
+    if(String(p.number||'').trim()===n && String(p.name||'').trim()===m) return p;
+  }
+  return null;
+}
+function _wfSubs(){ var p=_wfProj(); return (p && p.subs) || []; }
+function _wfIsNone(){ return workforceItems.length===1 && workforceItems[0].classification==='None'; }
+function _wfCo(it){ return String(it.company||'').trim() || _wfPrime(); }
+function _wfOnList(co){ var k=_wfNorm(co); return _wfSubs().some(function(s){ return _wfNorm(s)===k; }); }
+function _wfGroups(){
+  var prime = _wfPrime(), order = [], by = {};
+  function add(name){ var k=_wfNorm(name); if(!by[k]){ by[k]={name:name, prime:(k===_wfNorm(prime)), idx:[]}; order.push(k); } return by[k]; }
+  add(prime);
+  if(!_wfIsNone()){
+    workforceItems.forEach(function(it,i){ add(_wfCo(it)).idx.push(i); });
+    _wfExtra.forEach(function(c){ add(c); });
+  }
+  return order.map(function(k){ return by[k]; });
+}
+function _wfTotal(){ var t=0; workforceItems.forEach(function(w){ if(w.classification!=='None') t+=(parseInt(w.count)||0); }); return t; }
+function _wfSyncKey(){
+  var k = dailyHeader ? (dailyHeader.projectNumber+'||'+dailyHeader.project+'||'+dailyHeader.date) : '';
+  if(k !== _wfKey){ _wfKey = k; _wfOpen = null; _wfExtra = []; _wfAddingSub = false; }
+}
+// Summary text for the condensed views.  Old lists (no company anywhere) keep
+// the old "Laborers (4)" format.
+function _flWfSummary(list){
+  if(typeof list==='string'){ try{ list=JSON.parse(list); }catch(e){ list=[]; } }
+  list = list || [];
+  if(list.length===1 && list[0].classification==='None') return 'None on site today';
+  if(!list.some(function(w){ return String(w.company||'').trim(); })){
+    return list.map(function(w){ return w.classification+(w.count>0?' ('+w.count+')':''); }).join(', ');
+  }
+  var order=[], by={}, prime=_wfPrime();
+  list.forEach(function(w){ var c=String(w.company||'').trim()||prime, k=_wfNorm(c); if(!by[k]){ by[k]={name:c,items:[]}; order.push(k); } by[k].items.push(w); });
+  return order.map(function(k){ return by[k].name+': '+by[k].items.map(function(w){ return w.classification+' '+w.count; }).join(', '); }).join(' · ');
+}
+function _wfRender(){
+  _wfSyncKey();
+  var list = document.getElementById('workforce-list'); if(!list) return;
+  if(_wfIsNone()){
+    list.innerHTML = "<div class='item-row'><span class='item-row-name' style='color:#888;font-style:italic;'>None on site today</span></div>";
+    return;
+  }
+  var groups = _wfGroups(); _wfGroupsCache = groups;
+  var openK = _wfOpen===null ? null : _wfNorm(_wfOpen);
+  if(openK===null && !workforceItems.length && !_wfExtra.length) openK = _wfNorm(_wfPrime());   // nothing yet: open the prime
+  var tot = _wfTotal();
+  var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px;color:#555;"><span>Companies on site</span><span>Total <strong>'+tot+'</strong></span></div>';
+  groups.forEach(function(g,gi){
+    var sub = 0; g.idx.forEach(function(i){ sub += (parseInt(workforceItems[i].count)||0); });
+    var role = g.prime ? 'prime' : 'sub';
+    var tag = '';   // no "not on list" tag in the app (Drew, 2026-10-15); the server emails the office on its own
+    if(_wfNorm(g.name)===openK){
+      h += '<div style="border:1.5px solid #1b2d42;border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#fff;">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><span style="font-weight:600;font-size:15px;">'+_wfEsc(g.name)+' <span style="font-weight:500;font-size:12px;color:#777;">'+role+'</span>'+tag+'</span>'+
+           (g.prime?'':'<button type="button" onclick="_wfRemoveCo('+gi+')" style="border:none;background:none;color:#9b1c2e;font-size:13px;cursor:pointer;">Remove</button>')+'</div>';
+      if(!g.idx.length) h += '<div style="color:#aaa;font-size:13px;padding:6px 0;">No trades added yet.</div>';
+      g.idx.forEach(function(i){
+        var it = workforceItems[i];
+        h += '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">'+
+             '<span style="flex:1;font-size:15px;">'+_wfEsc(it.classification)+'</span>'+
+             '<button type="button" onclick="_wfStep('+i+',-1)" style="width:36px;height:36px;border:1px solid #c9d3de;border-radius:7px;background:#f8fafc;font-size:18px;cursor:pointer;">&minus;</button>'+
+             '<span style="min-width:26px;text-align:center;font-weight:600;font-size:16px;">'+(parseInt(it.count)||0)+'</span>'+
+             '<button type="button" onclick="_wfStep('+i+',1)" style="width:36px;height:36px;border:1px solid #c9d3de;border-radius:7px;background:#f8fafc;font-size:18px;cursor:pointer;">+</button>'+
+             '<button class="item-row-remove" type="button" onclick="_wfRemoveTrade('+i+')">x</button></div>';
+      });
+      var opts = '<option value="">Add trade...</option>'+workforceData.map(function(n){ return '<option value="'+_wfEsc(n)+'">'+_wfEsc(n)+'</option>'; }).join('')+'<option value="__other__">Other / Not Listed...</option>';
+      h += '<div class="add-item-row" style="margin-top:10px;">'+
+           '<select id="wf-add-trade" style="flex:2;font-size:16px;" onchange="document.getElementById(\'wf-add-trade-custom\').style.display=this.value===\'__other__\'?\'block\':\'none\'">'+opts+'</select>'+
+           '<input type="number" id="wf-add-count" placeholder="No." min="1" inputmode="numeric" style="max-width:75px;flex:0 0 75px;font-size:16px;">'+
+           '<button class="add-item-btn" type="button" onclick="_wfAddTrade('+gi+')">+</button></div>'+
+           '<input type="text" id="wf-add-trade-custom" placeholder="Type the trade..." style="width:100%;font-size:16px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;display:none;">';
+      h += '<button type="button" onclick="_wfDone()" style="width:100%;margin-top:10px;padding:9px;border:1px solid #1b2d42;border-radius:7px;background:#1b2d42;color:#fff;font-family:\'Barlow\',sans-serif;font-size:15px;font-weight:600;cursor:pointer;">Done</button>';
+      h += '</div>';
+    } else {
+      var detail = g.idx.length ? g.idx.map(function(i){ return _wfEsc(workforceItems[i].classification)+' '+(parseInt(workforceItems[i].count)||0); }).join(', ') : '<span style="color:#aaa;">No trades yet</span>';
+      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:9px 12px;border:1px solid #e0e5ea;border-radius:8px;background:#f8fafc;margin-bottom:8px;">'+
+           '<div><div style="font-weight:600;font-size:15px;">'+_wfEsc(g.name)+' <span style="font-weight:500;font-size:12px;color:#777;">'+role+' · '+sub+'</span>'+tag+'</div>'+
+           '<div style="font-size:13px;color:#555;margin-top:2px;">'+detail+'</div></div>'+
+           '<button type="button" onclick="_wfEdit('+gi+')" style="border:none;background:none;color:#1565c0;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;">Edit</button></div>';
+    }
+  });
+  if(_wfAddingSub){
+    var have = {}; groups.forEach(function(g){ have[_wfNorm(g.name)] = 1; });
+    var subs = _wfSubs().filter(function(s){ return !have[_wfNorm(s)]; });
+    h += '<div style="border:1px solid #c9d3de;border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#fff;">'+
+         '<div style="font-weight:600;font-size:14px;margin-bottom:6px;">Add subcontractor on site</div>'+
+         '<select id="wf-sub-select" style="width:100%;font-size:16px;" onchange="document.getElementById(\'wf-sub-other\').style.display=this.value===\'__other__\'?\'block\':\'none\'">'+
+         '<option value="">Select subcontractor...</option>'+subs.map(function(s){ return '<option value="'+_wfEsc(s)+'">'+_wfEsc(s)+'</option>'; }).join('')+
+         '<option value="__other__">Other (not listed)...</option></select>'+
+         '<input type="text" id="wf-sub-other" placeholder="Type the company name..." style="width:100%;font-size:16px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;display:none;">'+
+         '<div id="wf-sub-error" style="display:none;color:#9b1c2e;font-size:13px;margin-top:6px;"></div>'+
+         '<div style="display:flex;gap:8px;margin-top:8px;">'+
+         '<button type="button" onclick="_wfAddingSub=false;_wfRender();" style="flex:1;padding:9px;border:1px solid #c9d3de;border-radius:7px;background:#fff;font-size:15px;cursor:pointer;">Cancel</button>'+
+         '<button type="button" onclick="_wfAddSub()" style="flex:1;padding:9px;border:1px solid #1b2d42;border-radius:7px;background:#1b2d42;color:#fff;font-size:15px;font-weight:600;cursor:pointer;">Add company</button></div>'+
+         (subs.length||_wfSubs().length ? '' : '<div style="font-size:12px;color:#888;margin-top:6px;">No subcontractors are listed for this project yet; use Other.</div>')+
+         '</div>';
+  } else {
+    h += '<button type="button" onclick="_wfShowAddSub()" style="width:100%;padding:9px;border:1px dashed #9aa8b6;border-radius:8px;background:none;color:#555;font-family:\'Barlow\',sans-serif;font-size:14px;cursor:pointer;">+ Add subcontractor on site</button>';
+  }
+  list.innerHTML = h;
+}
+function _wfLocked(){ return (typeof p2_checkLock==='function') && p2_checkLock(); }
+function _wfEdit(gi){ if(_wfLocked()) return; var g=_wfGroupsCache[gi]; if(!g) return; _wfOpen=g.name; _wfAddingSub=false; _wfRender(); }
+function _wfDone(){ _wfOpen=null; _wfRender(); }
+function _wfStep(i,d){
+  if(_wfLocked()) return;
+  var it=workforceItems[i]; if(!it) return;
+  if(!_wfOpen) _wfOpen=_wfCo(it);
+  it.count=(parseInt(it.count)||0)+d;
+  if(it.count<1){ if(!_wfExtra.some(function(c){return _wfNorm(c)===_wfNorm(_wfCo(it));})) _wfExtra.push(_wfCo(it)); workforceItems.splice(i,1); }
+  _wfRender();
+}
+function _wfRemoveTrade(i){
+  if(_wfLocked()) return;
+  var it=workforceItems[i]; if(!it) return;
+  var co=_wfCo(it); if(!_wfOpen) _wfOpen=co;
+  if(!_wfExtra.some(function(c){return _wfNorm(c)===_wfNorm(co);})) _wfExtra.push(co);
+  workforceItems.splice(i,1); _wfRender();
+}
+function _wfAddTrade(gi){
+  if(_wfLocked()) return;
+  var g=_wfGroupsCache[gi]; if(!g) return;
+  var sel=document.getElementById('wf-add-trade'), cus=document.getElementById('wf-add-trade-custom');
+  var name = sel && sel.value==='__other__' ? String(cus&&cus.value||'').trim() : String(sel&&sel.value||'').trim();
+  if(!name) return;
+  var n=parseInt((document.getElementById('wf-add-count')||{}).value)||1;
+  var co = g.prime ? _wfPrime() : g.name;
+  var hit=-1; workforceItems.forEach(function(w,i){ if(_wfNorm(_wfCo(w))===_wfNorm(co) && _wfNorm(w.classification)===_wfNorm(name)) hit=i; });
+  if(hit>=0) workforceItems[hit].count=(parseInt(workforceItems[hit].count)||0)+n;
+  else workforceItems.push({company:co, classification:name, count:n});
+  _wfExtra=_wfExtra.filter(function(c){ return _wfNorm(c)!==_wfNorm(co); });
+  _wfOpen=co; _wfRender();
+}
+function _wfRemoveCo(gi){
+  if(_wfLocked()) return;
+  var g=_wfGroupsCache[gi]; if(!g || g.prime) return;
+  var k=_wfNorm(g.name);
+  workforceItems=workforceItems.filter(function(w){ return _wfNorm(_wfCo(w))!==k; });
+  _wfExtra=_wfExtra.filter(function(c){ return _wfNorm(c)!==k; });
+  _wfOpen=null; _wfRender();
+}
+function _wfShowAddSub(){
+  if(_wfLocked()) return;
+  if(_wfIsNone()){ workforceItems=[]; var nc=document.getElementById('workforce-none-check'); if(nc) nc.checked=false; }
+  _wfAddingSub=true; _wfOpen=null; _wfRender();
+}
+function _wfAddSub(){
+  var sel=document.getElementById('wf-sub-select'), oth=document.getElementById('wf-sub-other'), err=document.getElementById('wf-sub-error');
+  var v = sel ? sel.value : '';
+  var name = v==='__other__' ? String(oth&&oth.value||'').trim().replace(/\s+/g,' ') : String(v||'').trim();
+  function bad(m){ if(err){ err.textContent=m; err.style.display='block'; } }
+  if(!name) return bad(v==='__other__' ? 'Type the company name.' : 'Select a subcontractor.');
+  if(_wfNorm(name)===_wfNorm(_wfPrime())) return bad('That is the prime contractor.');
+  if(_wfGroups().some(function(g){ return _wfNorm(g.name)===_wfNorm(name); })) return bad('That company is already on the list.');
+  // Use the listed spelling when a typed name matches a listed sub.
+  _wfSubs().forEach(function(s){ if(_wfNorm(s)===_wfNorm(name)) name=s; });
+  _wfExtra.push(name); _wfAddingSub=false; _wfOpen=name; _wfRender();
+}
+async function _wfCopyLast(){
+  if(_wfLocked()) return;
+  if(!dailyHeader){ showToast('Post a Daily Header first.', true); return; }
+  var btn=document.getElementById('wf-copy-btn'); var lbl=btn?btn.innerHTML:'';
+  if(btn){ btn.disabled=true; btn.textContent='Copying...'; }
+  var last=null;
+  try{
+    var url = GOOGLE_SCRIPT_URL+'?action=getLastHeader&projectName='+encodeURIComponent(dailyHeader.project)+'&projectNumber='+encodeURIComponent(dailyHeader.projectNumber||'')+'&excludeDate='+encodeURIComponent(dailyHeader.date);
+    var resp = await _flFetch(url, {}, 30000);
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    var data = await resp.json(); if(data && data.header) last=data.header;
+  }catch(e){}
+  if(btn){ btn.disabled=false; btn.innerHTML=lbl; }
+  var wf = last ? (last.workforce||[]) : [];
+  if(typeof wf==='string'){ try{ wf=JSON.parse(wf); }catch(e){ wf=[]; } }
+  wf = wf.filter(function(w){ return w.classification && w.classification!=='None'; });
+  if(!wf.length){ showToast('No previous workforce found for this project', true); return; }
+  var prime=_wfPrime();
+  workforceItems = wf.map(function(w){ return {company:String(w.company||'').trim()||prime, classification:w.classification, count:parseInt(w.count)||1}; });
+  var nc=document.getElementById('workforce-none-check'); if(nc) nc.checked=false;
+  _wfOpen=null; _wfExtra=[]; _wfAddingSub=false; _wfRender();
+  showToast('Copied workforce from '+(last.date||'the last report')+'. Edit as needed.');
+}
 function updateEquipmentCount(idx, val){
   if(equipmentItems[idx]) equipmentItems[idx].count = parseInt(val)||1;
 }
@@ -2715,7 +2911,7 @@ function restoreHeader(h){
 
   // Build summary
   const equipStr=(h.equipment&&h.equipment.length?h.equipment.map(e=>e.name+(e.count?' ('+e.count+')':'')).join(', '):'');
-  const workStr=(h.workforce&&h.workforce.length?h.workforce.map(w=>w.classification+(w.count?': '+w.count:'')).join(', '):'');
+  const workStr=(h.workforce&&h.workforce.length?_flWfSummary(h.workforce):'');
   const checkStr=h.checks&&h.checks.length?h.checks.join(', '):'None';
   var needsStyle='color:#c0392b;font-weight:700;';
   var weatherStr = h.dailyWeather?(h.dailyWeather+(h.dailyTemperature?' · '+h.dailyTemperature+'°F':'')):'<span style="'+needsStyle+'">⚠ Needs Input</span>';
@@ -2773,7 +2969,7 @@ function restoreHeader(h){
   // Restore resources condensed view
   if(h.equipment && h.equipment.length > 0 && h.workforce && h.workforce.length > 0){
     var eqSum = h.equipment.map(function(e){return e.name+(e.count>0?' ('+e.count+')':'');}).join(', ');
-    var wfSum = h.workforce.map(function(w){return w.classification+(w.count>0?' ('+w.count+')':'');}).join(', ');
+    var wfSum = _flWfSummary(h.workforce);
     var resSummary = document.getElementById('resources-summary');
     if(resSummary) resSummary.innerHTML = '<strong>Equipment:</strong> '+eqSum+'<br><strong>Workforce:</strong> '+wfSum;
     var resPosted = document.getElementById('resources-posted-view');
@@ -3616,7 +3812,7 @@ function _flSheetDrift(headerRec){
   function listKey(l){
     if(typeof l === 'string'){ try{ l = JSON.parse(l); }catch(e){ l = []; } }
     if(!l || !l.length) return '';
-    return l.map(function(x){ return norm(x && x.name) + ':' + norm(x && x.count); })
+    return l.map(function(x){ return norm(x && (x.name || ((x.company ? x.company + '/' : '') + (x.classification || '')))) + ':' + norm(x && x.count); })
             .sort().join('|');
   }
 
@@ -4129,12 +4325,43 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
   // Workforce — always show section, display None if selected
   var workRows = workforce.length>0 ? workforce : [];
   var isNoneWf = workRows.length===1 && workRows[0].classification==='None';
-  var workRowsHtml = isNoneWf
-    ? '<div style="font-size:13px;padding:2px 0;color:#888;font-style:italic;">None on site today</div>'
-    : workRows.map(w=>'<div style="font-size:13px;padding:2px 0;">'+w.classification+(w.count?' &nbsp;—&nbsp; <strong>'+w.count+'</strong>':'')+'</div>').join('');
+  // Grouped by company (2026-10-15).  Prime first, then subs in the order
+  // logged; items with no company (reports from before this change) belong to
+  // the prime.  If NO item has a company, the old flat list is kept, so older
+  // reports regenerate exactly as before apart from the total on the heading.
+  var _wfLine = function(w,pad){ return '<div style="font-size:13px;padding:2px 0'+(pad?';padding-left:14px':'')+';">'+w.classification+(w.count?' &nbsp;—&nbsp; <strong>'+w.count+'</strong>':'')+'</div>'; };
+  var _wfTot = 0; workRows.forEach(function(w){ if(w.classification!=='None') _wfTot += (parseInt(w.count)||0); });
+  var workRowsHtml, _wfWide = false;
+  if(isNoneWf){
+    workRowsHtml = '<div style="font-size:13px;padding:2px 0;color:#888;font-style:italic;">None on site today</div>';
+  } else if(!workRows.some(function(w){ return String(w.company||'').trim(); })){
+    workRowsHtml = workRows.map(function(w){ return _wfLine(w,false); }).join('');
+  } else {
+    var _pr = String(contractor||'').trim(), _order = [], _byCo = {};
+    var _key = function(c){ return String(c||'').trim().toLowerCase(); };
+    if(_pr){ _order.push(_key(_pr)); _byCo[_key(_pr)] = {name:_pr, prime:true, items:[]}; }
+    workRows.forEach(function(w){
+      var c = String(w.company||'').trim() || _pr || 'Prime Contractor', k = _key(c);
+      if(!_byCo[k]){ _byCo[k] = {name:c, prime:(k===_key(_pr)), items:[]}; _order.push(k); }
+      _byCo[k].items.push(w);
+    });
+    // Companies sit side by side, two per row, so a day with subs grows
+    // sideways instead of down (2026-10-15).  With 2+ companies the Workforce
+    // column widens to two thirds of the page and Equipment narrows to one
+    // third (see _wfWide at the doc assembly).
+    var _shown = _order.filter(function(k){ return _byCo[k].items.length; });
+    _wfWide = _shown.length > 1;
+    workRowsHtml = _shown.map(function(k){
+      var g = _byCo[k], sub = 0; g.items.forEach(function(w){ sub += (parseInt(w.count)||0); });
+      return '<div style="display:inline-block;vertical-align:top;width:'+(_wfWide?'48%;margin-right:2%':'100%')+';margin-bottom:6px;">'+
+        '<div style="font-size:13px;font-weight:bold;color:#0d1b2a;padding:0 0 2px;">'+g.name+
+        ' <span style="font-weight:normal;color:#777;white-space:nowrap;">('+(g.prime?'prime':'sub')+', '+sub+')</span></div>'+
+        g.items.map(function(w){ return _wfLine(w,true); }).join('')+'</div>';
+    }).join('');
+  }
   const workHtml = workRows.length>0 ?
-    '<div style="display:inline-block;vertical-align:top;width:48%;margin-bottom:14px;">'+
-    '<div style="font-weight:bold;font-size:13px;color:#0d1b2a;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:8px;">Workforce on Site</div>'+
+    '<div style="display:inline-block;vertical-align:top;width:'+(_wfWide?'66%':'48%')+';margin-bottom:14px;">'+
+    '<div style="font-weight:bold;font-size:13px;color:#0d1b2a;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:8px;">Workforce on Site'+(_wfTot>0?' ('+_wfTot+')':'')+'</div>'+
     workRowsHtml+'</div>' : '';
   // Show all checklist items - checked and unchecked
   const allItems = headerRow.allChecklistItems || CHECKLIST_ITEMS;
@@ -4245,7 +4472,7 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
     '</div>'+
     '<div style="font-size:20px;font-weight:bold;color:#0d1b2a;margin-bottom:10px;">Daily Inspection Report</div>'+
     headerInfoHtml+
-    (equipHtml||workHtml ? '<div style="margin-bottom:14px;">'+equipHtml+workHtml+'</div>' : '')+
+    (equipHtml||workHtml ? '<div style="margin-bottom:14px;">'+(_wfWide?equipHtml.replace('width:48%;margin-right:2%;','width:32%;margin-right:2%;'):equipHtml)+workHtml+'</div>' : '')+
     narrativeHtml+
     checkHtml+
     _logHtml+
