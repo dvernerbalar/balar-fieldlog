@@ -60,6 +60,7 @@ function attemptFirstLogin(){
     document.getElementById('login-screen').style.display='none';
     document.getElementById('welcome-screen').style.display='none';
     err.style.display='none';
+    _flToTop();
   }).catch(function(){
     _flLoginBusy('#login-screen .btn-login', false);
     err.textContent='Couldn’t reach the server to check your PIN. Check your connection and try again.';
@@ -76,6 +77,7 @@ function attemptWelcomeLogin(){
     document.getElementById('welcome-screen').style.display='none';
     err.style.display='none';
     pinEl.value='';
+    _flToTop();
     setTimeout(updatePostHeaderBtn,50);
   }
   var saved = _flGetSavedPin();
@@ -101,6 +103,16 @@ function attemptWelcomeLogin(){
                             : 'Couldn’t reach the server to check your PIN. Check your connection and try again.';
     err.style.display='block'; pinEl.value='';
   });
+}
+// Close the keyboard and go to the top.  Run again after the keyboard finishes
+// closing, because iOS scrolls the page while it animates away.
+function _flToTop(){
+  function go(){
+    try{ window.scrollTo(0, 0); }catch(e){}
+    var m = document.querySelector('main'); if(m) m.scrollTop = 0;   // native: main is the scroller
+  }
+  try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); }catch(e){}
+  go(); setTimeout(go, 350); setTimeout(go, 800);
 }
 function resetIdentity(){
   localStorage.removeItem('balar_inspector_name');
