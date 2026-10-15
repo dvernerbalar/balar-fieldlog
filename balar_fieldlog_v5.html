@@ -227,6 +227,11 @@ textarea{resize:vertical;min-height:90px;}
 .login-field input{width:100%;padding:12px 14px;border:1px solid #d0d7de;border-radius:7px;font-family:'Barlow',sans-serif;font-size:15px;color:#222;background:#f8fafc;outline:none;}
 .btn-login{width:100%;background:var(--red);color:white;border:none;border-radius:8px;padding:14px;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;}
 .btn-login:hover{background:var(--red-dark);}
+/* 2026-10-15: a card is dimmed and not tappable while its section saves; the "Saving" notice stays live */
+.fl-busy > *:not(.section-label):not([id^="fl-secwarn-"]){pointer-events:none;opacity:0.55;}
+/* 2026-10-15: report modal confirms the header on screen */
+#fl-report-confirm{display:grid;grid-template-columns:96px 1fr;column-gap:10px;row-gap:10px;font-size:15px;color:#222;line-height:1.35;background:#f8fafc;border:1px solid #e0e5ea;border-radius:8px;padding:14px;margin-bottom:6px;}
+#fl-report-confirm .rl{font-size:11px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:#7a8794;padding-top:3px;}
 @media(max-width:480px){.two-col,.weather-row{grid-template-columns:1fr;}.checklist-grid{grid-template-columns:1fr;}.add-item-row{flex-wrap:wrap;}}
 @media print{body,html{background:white !important;}.no-print{display:none !important;}#report-container{display:block !important;position:absolute;top:0;left:0;width:100%;}}
 </style>
@@ -588,10 +593,11 @@ textarea{resize:vertical;min-height:90px;}
 <div class="modal-overlay" id="report-modal">
   <div class="modal-box">
     <div class="modal-title">Generate Inspection Report</div>
-    <div class="modal-sub">Select date and project to generate report.</div>
+    <div class="modal-sub">Confirm the report date and project.</div>
     <div class="modal-error" id="modal-error"></div>
-    <div class="modal-field"><label>Report Date</label><input type="date" id="report-date" onchange="flGuardFutureDate(this);loadReportProjects()"></div>
-    <div class="modal-field"><label>Project</label><select id="report-project" onchange="document.getElementById('btn-generate').disabled=!this.value;"><option value="">Select a date first...</option></select></div>
+    <div id="fl-report-confirm"></div>
+    <div class="modal-field" style="display:none;"><label>Report Date</label><input type="date" id="report-date" onchange="flGuardFutureDate(this);loadReportProjects()"></div>
+    <div class="modal-field" style="display:none;"><label>Project</label><select id="report-project" onchange="document.getElementById('btn-generate').disabled=!this.value;"><option value="">Select a date first...</option></select></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeReportModal()">Cancel</button>
       <button class="btn-primary" id="btn-generate" disabled onclick="generateReport()">Generate / Review Report</button>
@@ -2679,6 +2685,7 @@ function _flSectionWarnId(label){ return 'fl-secwarn-' + label.replace(/[^a-z]/g
 function _flClearSectionWarn(label){
   var el = document.getElementById(_flSectionWarnId(label));
   if(el) el.remove();
+  var _bh = document.getElementById(_FL_SECTION_ANCHOR[label] || ''); if(_bh) _bh.classList.remove('fl-busy');
 }
 
 function _flShowSectionPending(label){
@@ -2687,6 +2694,7 @@ function _flShowSectionPending(label){
   d.style.cssText = 'background:#eef2f7;border:1px solid #d3dce6;border-radius:7px;padding:10px 14px;margin:0 0 8px 0;font-size:13px;color:#31465e;';
   d.innerHTML = '&#8987; Saving ' + label.toLowerCase() + ' to the sheet\u2026';
   _flInsertSectionNotice(label, d);
+  var _bh = document.getElementById(_FL_SECTION_ANCHOR[label] || ''); if(_bh) _bh.classList.add('fl-busy');
 }
 
 function _flShowSectionWarn(label, retryFn){
@@ -4114,7 +4122,33 @@ function openReportModal(){
   document.getElementById('modal-error').style.display='none';
   document.getElementById('report-modal').classList.add('open');
   _flReportBtnBusy(false);
-  loadReportProjects();
+  _flFillReportConfirm();   // 2026-10-15: report is for the header on screen; no project lookup
+}
+// Report modal: no date / project pickers.  The report is for the header on
+// screen; the modal shows it to confirm.  generateReport still reads the hidden
+// report-date and report-project fields, so they are filled here.
+function _flFillReportConfirm(){
+  var h = dailyHeader;
+  var sel = document.getElementById('report-project');
+  var box = document.getElementById('fl-report-confirm');
+  var b = document.getElementById('btn-generate');
+  if(!h){ if(box) box.innerHTML = 'Post a Daily Header first.'; if(b) b.disabled = true; return; }
+  var proj = { number: h.projectNumber || '', name: h.project || '', client: h.client || '' };
+  sel.innerHTML = '';
+  var o = document.createElement('option');
+  o.value = JSON.stringify(proj);
+  o.textContent = (proj.number ? proj.number + ' \u2014 ' : '') + shortProjectName(proj.number, proj.name);
+  sel.appendChild(o); sel.selectedIndex = 0;
+  if(box){
+    var cl = h.client ? getClientDisplayName(h.client) : '';
+    var dp = String(h.date||'').split('/'), dTxt = h.date || '';
+    if(dp.length === 3){ var _d = new Date(+dp[2], +dp[0]-1, +dp[1]); if(!isNaN(_d)) dTxt = _d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric'}); }
+    box.innerHTML =
+      '<div class="rl">Report date</div><div>' + dTxt + '</div>' +
+      '<div class="rl">Project</div><div>' + (proj.number ? proj.number + ' \u00b7 ' : '') + (cl ? cl + '<br>' : '') +
+      '<b>' + shortProjectName(proj.number, proj.name) + '</b></div>';
+  }
+  if(b){ b.disabled = false; b.textContent = 'Generate / Review Report'; }
 }
 function closeReportModal(){document.getElementById('report-modal').classList.remove('open');}
 
