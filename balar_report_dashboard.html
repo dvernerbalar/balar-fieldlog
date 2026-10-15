@@ -254,6 +254,12 @@ var REVIEW_URL = 'https://dvernerbalar.github.io/balar-fieldlog/balar_report_rev
 
 var allReports = [];
 
+// Engineer to preselect, from ?engineer=<name> (consumed on first load).
+var _flUrlEngineer = (function() {
+  try { return new URLSearchParams(window.location.search).get('engineer') || ''; }
+  catch (e) { return ''; }
+})();
+
 // ── Sorting ───────────────────────────────────────────────────────────────
 // Default: report date ascending (oldest report first).
 var sortKey = 'reportDate';
@@ -401,6 +407,21 @@ function loadDashboard() {
         sel.appendChild(o);
       });
       if (currentVal && currentVal !== 'all') sel.value = currentVal;
+
+      // First load only: preselect the engineer named in ?engineer= (link in the
+      // submit email).  Matched case/space-insensitively against the server's
+      // list; no match leaves "All Engineers".  Cleared after use so Refresh
+      // keeps whatever the user has picked since.
+      if (_flUrlEngineer) {
+        var want = _flUrlEngineer.replace(/\s+/g, ' ').trim().toLowerCase();
+        for (var i = 1; i < sel.options.length; i++) {
+          if (sel.options[i].value.replace(/\s+/g, ' ').trim().toLowerCase() === want) {
+            sel.selectedIndex = i;
+            break;
+          }
+        }
+        _flUrlEngineer = '';
+      }
 
       document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleString();
       filterReports();
