@@ -4425,6 +4425,20 @@ function _flReportDateHtml(s){
   return m ? m[1] + ' <span style="white-space:nowrap;">' + m[2] + '</span>' : String(s||'');
 }
 // Keeps a trailing credential (", P.E.", ", RPR") attached to the name.
+// (2026-10-15) "Name (n)": the count is glued to the last word so it never
+// wraps onto its own line, and a trailing business suffix (", Inc.", ", LLC",
+// "Corp.", ...) is glued to the word before it, so "Wicker Construction,
+// LLC (5)" can only break before "Construction".
+function _flGlueCount(name, n){
+  var s = String(name||'').trim(), tail = (n || n===0) && String(n)!=='' ? ' ('+n+')' : '';
+  var suf = '', m;
+  var re = /^(.*\S)(,?\s+(?:Inc|L\.?L\.?C|Corp|Co|Ltd|L\.?P|L\.?L\.?P|P\.?L\.?L\.?C|P\.?C)\.?)$/i;
+  while((m = s.match(re))){ suf = m[2] + suf; s = m[1]; }
+  m = s.match(/^([\s\S]*\s)?(\S+)$/);
+  if(!m) return s + suf + tail;
+  var glued = m[2] + suf + tail;
+  return (m[1]||'') + (glued.indexOf(' ')>=0 || tail ? '<span style="white-space:nowrap;">'+glued+'</span>' : glued);
+}
 function _flKeepCredentials(s){
   s = String(s||'');
   var m = s.match(/^(.*?)(,\s*[A-Za-z.]{1,8})$/);
@@ -4497,7 +4511,7 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
     }
   }
   const headerInfoHtml =
-    '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px;table-layout:fixed;">' +
+    '<table class="fl-hdr" style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:13px;table-layout:fixed;">' +
     '<colgroup><col style="width:19%"><col style="width:34%"><col style="width:17%"><col style="width:30%"></colgroup>' +
     _hdrRows + '</table>';
 
@@ -4506,9 +4520,9 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
   var isNoneEq = equipRows.length===1 && equipRows[0].name==='None';
   var equipRowsHtml = isNoneEq
     ? '<div style="font-size:13px;padding:2px 0;color:#888;font-style:italic;">None on site today</div>'
-    : equipRows.map(eq=>'<div style="font-size:13px;padding:2px 0;">'+eq.name+(eq.count?' &nbsp;—&nbsp; <strong>'+eq.count+'</strong>':'')+'</div>').join('');
+    : equipRows.map(eq=>'<div style="font-size:13px;padding:2px 0;">'+_flGlueCount(eq.name, eq.count||'')+'</div>').join('');
   const equipHtml = equipRows.length>0 ?
-    '<div style="display:inline-block;vertical-align:top;width:48%;margin-right:2%;margin-bottom:14px;">'+
+    '<div class="fl-eq" style="display:inline-block;vertical-align:top;width:48%;margin-right:2%;margin-bottom:14px;">'+
     '<div style="font-weight:bold;font-size:13px;color:#0d1b2a;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:8px;">Equipment on Site</div>'+
     equipRowsHtml+'</div>' : '';
 
@@ -4519,7 +4533,7 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
   // logged; items with no company (reports from before this change) belong to
   // the prime.  If NO item has a company, the old flat list is kept, so older
   // reports regenerate exactly as before apart from the total on the heading.
-  var _wfLine = function(w,pad){ return '<div style="font-size:13px;padding:2px 0'+(pad?';padding-left:14px':'')+';">'+w.classification+(w.count?' &nbsp;—&nbsp; <strong>'+w.count+'</strong>':'')+'</div>'; };
+  var _wfLine = function(w,pad){ return '<div style="font-size:13px;padding:2px 0'+(pad?';padding-left:14px':'')+';">'+_flGlueCount(w.classification, w.count||'')+'</div>'; };
   var _wfTot = 0; workRows.forEach(function(w){ if(w.classification!=='None') _wfTot += (parseInt(w.count)||0); });
   var workRowsHtml, _wfWide = false;
   if(isNoneWf){
@@ -4543,14 +4557,15 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
     _wfWide = _shown.length > 1;
     workRowsHtml = _shown.map(function(k){
       var g = _byCo[k], sub = 0; g.items.forEach(function(w){ sub += (parseInt(w.count)||0); });
-      return '<div style="display:inline-block;vertical-align:top;width:'+(_wfWide?'48%;margin-right:2%':'100%')+';margin-bottom:6px;">'+
-        '<div style="font-size:13px;font-weight:bold;color:#0d1b2a;padding:0 0 2px;">'+g.name+
-        ' <span style="font-weight:normal;color:#777;white-space:nowrap;">('+(g.prime?'prime':'sub')+', '+sub+')</span></div>'+
+      // (2026-10-15) "Company (n)" like the heading total; no prime/sub tag
+      // (the prime is named in the header and is always listed first).
+      return '<div class="fl-co" style="display:inline-block;vertical-align:top;width:'+(_wfWide?'48%;margin-right:2%':'100%')+';margin-bottom:6px;">'+
+        '<div style="font-size:13px;font-weight:bold;color:#0d1b2a;padding:0 0 2px;">'+_flGlueCount(g.name, sub)+'</div>'+
         g.items.map(function(w){ return _wfLine(w,true); }).join('')+'</div>';
     }).join('');
   }
   const workHtml = workRows.length>0 ?
-    '<div style="display:inline-block;vertical-align:top;width:'+(_wfWide?'66%':'48%')+';margin-bottom:14px;">'+
+    '<div class="fl-wf" style="display:inline-block;vertical-align:top;width:'+(_wfWide?'70%':'48%')+';margin-bottom:14px;">'+
     '<div style="font-weight:bold;font-size:13px;color:#0d1b2a;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:8px;">Workforce on Site'+(_wfTot>0?' ('+_wfTot+')':'')+'</div>'+
     workRowsHtml+'</div>' : '';
   // Show all checklist items - checked and unchecked
@@ -4657,12 +4672,12 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
     '</head><body>'+
     '<div style="text-align:center;padding-bottom:8px;border-bottom:2px solid #9b1c2e;margin-bottom:14px;">'+
     '<img src="data:image/jpeg;base64,'+LOGO_B64+'" style="height:60px;margin-bottom:4px;display:block;margin-left:auto;margin-right:auto;">'+
-    '<div style="font-size:10px;color:#555;">BALAR ASSOCIATES, INC. &nbsp;&#9654;&nbsp; 631 MILAM STREET, SUITE 300 &nbsp;&#9654;&nbsp; SHREVEPORT, LOUISIANA 71101</div>'+
-    '<div style="font-size:10px;color:#555;">PHONE: 318-221-8312 &nbsp;&#9654;&nbsp; FAX: 318-424-6508 &nbsp;&#9654;&nbsp; www.balar-engineers.com</div>'+
+    '<div class="fl-lh" style="font-size:10px;color:#555;"><span style="white-space:nowrap;">BALAR ASSOCIATES, INC.</span> &nbsp;&#9654;&nbsp; <span style="white-space:nowrap;">631 MILAM STREET, SUITE 300</span> &nbsp;&#9654;&nbsp; <span style="white-space:nowrap;">SHREVEPORT, LOUISIANA 71101</span></div>'+
+    '<div class="fl-lh" style="font-size:10px;color:#555;"><span style="white-space:nowrap;">PHONE: 318-221-8312</span> &nbsp;&#9654;&nbsp; <span style="white-space:nowrap;">FAX: 318-424-6508</span> &nbsp;&#9654;&nbsp; <span style="white-space:nowrap;">www.balar-engineers.com</span></div>'+
     '</div>'+
     '<div style="font-size:20px;font-weight:bold;color:#0d1b2a;margin-bottom:10px;">Daily Inspection Report</div>'+
     headerInfoHtml+
-    (equipHtml||workHtml ? '<div style="margin-bottom:14px;">'+(_wfWide?equipHtml.replace('width:48%;margin-right:2%;','width:32%;margin-right:2%;'):equipHtml)+workHtml+'</div>' : '')+
+    (equipHtml||workHtml ? '<div style="margin-bottom:14px;">'+(_wfWide?equipHtml.replace('width:48%;margin-right:2%;','width:28%;margin-right:2%;'):equipHtml)+workHtml+'</div>' : '')+
     narrativeHtml+
     checkHtml+
     _logHtml+
@@ -4671,7 +4686,28 @@ function buildAndPrintReport(headerRow,workEntries,proj,dateLocale,reportWin){
   // Write into the pre-opened window (opened synchronously in generateReport
   // to bypass Chrome's popup blocker)
   var _oif=document.getElementById('report-iframe');
+  // Phone preview (2026-10-15): same content and order as the PDF, reflowed
+  // into one column.  Injected into the preview iframe ONLY; the doc that is
+  // submitted and rendered to PDF never carries these rules.  The
+  // format-detection meta stops iOS turning the phone/fax numbers into links.
   if(_oif) _oif.srcdoc=doc.replace('</head>',
+    '<meta name="format-detection" content="telephone=no,address=no,email=no,date=no">'+
+    '<style>@media screen and (max-width:600px){'+
+      'body{padding:14px 14px 28px;}'+
+      '.fl-lh{font-size:9px !important;line-height:1.5;}'+
+      'table.fl-hdr,table.fl-hdr tbody,table.fl-hdr colgroup{display:block;width:100% !important;}'+
+      'table.fl-hdr col{display:none;}'+
+      'table.fl-hdr tr{display:flex;flex-wrap:wrap;}'+
+      'table.fl-hdr td{display:block;box-sizing:border-box;}'+
+      'table.fl-hdr td:empty{display:none;}'+
+      'table.fl-hdr td:nth-child(odd){width:38% !important;padding-right:8px !important;}'+
+      'table.fl-hdr td:nth-child(even){width:62% !important;padding-right:0 !important;}'+
+      '.fl-eq,.fl-wf,.fl-co{display:block !important;width:auto !important;margin-right:0 !important;}'+
+      'table.fl-entry,table.fl-entry tbody,table.fl-entry tr,table.fl-entry td{display:block;width:auto !important;}'+
+      'table.fl-entry td.fl-ph{padding:10px 10px 0 !important;}'+
+      'table.fl-entry td.fl-ph img{max-width:100% !important;max-height:360px !important;}'+
+      'table.fl-entry td.fl-tx{padding:8px 12px 10px !important;}'+
+    '}</style>'+
     '<style>@media screen and (min-width:900px){'+
       'html{background:#d9dde2;}'+
       'body{box-sizing:border-box;width:8.5in;min-height:11in;margin:24px auto;padding:0.55in 0.7in;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.25);}'+
