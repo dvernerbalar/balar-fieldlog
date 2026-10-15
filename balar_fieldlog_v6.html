@@ -5420,7 +5420,15 @@ function v6Refresh(){
   var posted = !!(h && h.project && h.date && pv && pv.style.display !== 'none');
   // New report on screen (switch project, new header, other date): start collapsed.
   var key = posted ? _flHeaderKey(h) : '';
-  if(key !== _v6LastKey){ _v6LastKey = key; v6CollapseAll(); }
+  if(key !== _v6LastKey){
+    _v6LastKey = key; v6CollapseAll();
+    // A different report just loaded (posted, restored, switched): start at the
+    // top so the Daily Header card is in view, not wherever the form left off.
+    if(key){
+      try{ window.scrollTo(0, 0); }catch(e){}
+      var _mn = document.querySelector('main'); if(_mn) _mn.scrollTop = 0;   // native: main is the scroller
+    }
+  }
 
   // Pinned bar: REPORT date (flagged when it isn't today), client / number, full name.
   var tp = document.getElementById('v6-top-proj'), ts = document.getElementById('v6-top-sub'), td = document.getElementById('header-date');
@@ -5435,7 +5443,7 @@ function v6Refresh(){
     _v6Set(tp, 'textContent', '');
   }
   // Before a header is posted there is no report date yet: show today's date, spelled out.
-  var dTxt = "Today's date: " + new Date().toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'}), past = false;
+  var dTxt = "Today's date: " + new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric', year:'numeric'}), past = false;
   if(rDate){
     var dd = _v6ParseDate(rDate), t0 = new Date(); t0.setHours(0,0,0,0);
     var ago = dd ? Math.round((t0 - dd) / 86400000) : 0;
