@@ -394,49 +394,66 @@ textarea{resize:vertical;min-height:90px;}
          SECTION 1C: EQUIPMENT & WORKFORCE
          ════════════════════════════════════════════ -->
     <div id="resources-section" style="margin-top:16px;display:none;">
-      <div class="section-label">Equipment &amp; Workforce</div>
+      <!-- 2026-10-15: Equipment and Workforce are separate cards, each with its
+           own Save and its own saved (condensed) view.  Both are still required
+           before a report can be generated. -->
 
-      <!-- Equipment & Workforce combined card -->
-      <!-- Posted/condensed view -->
-      <div id="resources-posted-view" style="display:none;">
-        <div class="card posted">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <div class="posted-badge">✓ Equipment &amp; Workforce Saved</div>
-            <button class="btn-edit-header" onclick="editResources()">Edit</button>
+      <!-- ── EQUIPMENT ── -->
+      <div id="equipment-section">
+        <div class="section-label">Equipment on Site</div>
+        <div id="eq-posted-view" style="display:none;">
+          <div class="card posted">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <div class="posted-badge">&#10003; Equipment Saved</div>
+              <button class="btn-edit-header" onclick="editEquipment()">Edit</button>
+            </div>
+            <div id="eq-summary" style="font-size:13px;color:#333;line-height:1.8;"></div>
           </div>
-          <div id="resources-summary" style="font-size:13px;color:#333;line-height:1.8;"></div>
+        </div>
+        <div id="eq-form-view">
+          <div class="card header-card" id="equipment-card">
+            <button type="button" id="eq-copy-btn" onclick="_eqCopyLast()" style="width:100%;margin-bottom:10px;padding:9px 12px;border:1px solid #c9d3de;border-radius:7px;background:#fff;color:#1b2d42;font-family:'Barlow',sans-serif;font-size:14px;font-weight:600;cursor:pointer;">&#128203; Copy from last report</button>
+            <div class="item-list" id="equipment-list"><div style="color:#aaa;font-size:13px;padding:4px 0;">No equipment added yet.</div></div>
+            <div class="add-item-row">
+              <select id="equipment-select" style="flex:2;" onchange="toggleCustomInput('equipment-select','equipment-custom')"><option value="">Select equipment...</option></select>
+              <input type="number" id="equipment-count" placeholder="Qty" min="1" style="max-width:75px;flex:0 0 75px;">
+              <button class="add-item-btn" onclick="addEquipmentItem()">+</button>
+            </div>
+            <input type="text" id="equipment-custom" placeholder="Or type custom equipment..." style="width:100%;font-size:16px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;display:none;">
+            <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="equipment-none-check" onchange="toggleNoneOnSite('equipment')" style="width:16px;height:16px;cursor:pointer;">
+              <label for="equipment-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
+            </div>
+            <div id="eq-error" class="error-box" style="margin-top:8px;display:none;"></div>
+            <button class="btn-post-header" style="margin-top:12px;background:#1b2d42;" onclick="saveEquipment()">&#128190; Save Equipment</button>
+          </div>
         </div>
       </div>
-      <!-- Form view -->
-      <div id="resources-form-view">
-        <div class="card header-card" id="resources-card">
-          <div class="section-label" style="margin-bottom:12px;">Equipment on Site</div>
-          <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="equipment-same-check" onchange="toggleSameAsLast('equipment')" style="width:16px;height:16px;cursor:pointer;">
-            <label for="equipment-same-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">Same as last time for this project</label>
+
+      <!-- ── WORKFORCE ── -->
+      <div id="workforce-section" style="margin-top:16px;">
+        <div class="section-label">Workforce on Site</div>
+        <div id="wf-posted-view" style="display:none;">
+          <div class="card posted">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <div class="posted-badge">&#10003; Workforce Saved</div>
+              <button class="btn-edit-header" onclick="editWorkforce()">Edit</button>
+            </div>
+            <div id="wf-summary" style="font-size:13px;color:#333;line-height:1.8;"></div>
           </div>
-          <div class="item-list" id="equipment-list"><div style="color:#aaa;font-size:13px;padding:4px 0;">No equipment added yet.</div></div>
-          <div class="add-item-row">
-            <select id="equipment-select" style="flex:2;" onchange="toggleCustomInput('equipment-select','equipment-custom')"><option value="">Select equipment...</option></select>
-            <input type="number" id="equipment-count" placeholder="Qty" min="1" style="max-width:75px;flex:0 0 75px;">
-            <button class="add-item-btn" onclick="addEquipmentItem()">+</button>
+        </div>
+        <div id="wf-form-view">
+          <div class="card header-card" id="workforce-card">
+            <!-- Workforce by company: rendered by _wfRender() -->
+            <button type="button" id="wf-copy-btn" onclick="_wfCopyLast()" style="width:100%;margin-bottom:10px;padding:9px 12px;border:1px solid #c9d3de;border-radius:7px;background:#fff;color:#1b2d42;font-family:'Barlow',sans-serif;font-size:14px;font-weight:600;cursor:pointer;">&#128203; Copy from last report</button>
+            <div class="item-list" id="workforce-list"><div style="color:#aaa;font-size:13px;padding:4px 0;">No workforce added yet.</div></div>
+            <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="workforce-none-check" onchange="toggleNoneOnSite('workforce')" style="width:16px;height:16px;cursor:pointer;">
+              <label for="workforce-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
+            </div>
+            <div id="wf-error" class="error-box" style="margin-top:8px;display:none;"></div>
+            <button class="btn-post-header" style="margin-top:12px;background:#1b2d42;" onclick="saveWorkforce()">&#128190; Save Workforce</button>
           </div>
-          <input type="text" id="equipment-custom" placeholder="Or type custom equipment..." style="width:100%;font-size:14px;padding:9px 12px;border:1px solid #d0d7de;border-radius:7px;background:#f8fafc;outline:none;margin-top:6px;display:none;">
-          <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="equipment-none-check" onchange="toggleNoneOnSite('equipment')" style="width:16px;height:16px;cursor:pointer;">
-            <label for="equipment-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
-          </div>
-          <div style="border-top:1px solid #eee;margin:16px 0;"></div>
-          <div class="section-label" style="margin-bottom:12px;">Workforce on Site</div>
-          <!-- Workforce by company (2026-10-15): rendered by _wfRender() -->
-          <button type="button" id="wf-copy-btn" onclick="_wfCopyLast()" style="width:100%;margin-bottom:10px;padding:9px 12px;border:1px solid #c9d3de;border-radius:7px;background:#fff;color:#1b2d42;font-family:'Barlow',sans-serif;font-size:14px;font-weight:600;cursor:pointer;">&#128203; Copy from last report</button>
-          <div class="item-list" id="workforce-list"><div style="color:#aaa;font-size:13px;padding:4px 0;">No workforce added yet.</div></div>
-          <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="workforce-none-check" onchange="toggleNoneOnSite('workforce')" style="width:16px;height:16px;cursor:pointer;">
-            <label for="workforce-none-check" style="font-size:13px;color:#555;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;margin:0;">None on site today</label>
-          </div>
-          <div id="resources-error" class="error-box" style="margin-top:8px;display:none;"></div>
-          <button class="btn-post-header" style="margin-top:12px;background:#1b2d42;" onclick="saveResources()">💾 Update Equipment &amp; Workforce</button>
         </div>
       </div>
     </div>
@@ -1171,92 +1188,110 @@ function editChecklist(){
   document.getElementById('checklist-posted-view').style.display = 'none';
 }
 
-function saveResources(){
+// ── Equipment and Workforce saves (2026-10-15: separate cards) ──
+// Each writes only its own column (20 = equipment, 21 = workforce) and only
+// condenses once the sheet confirms, like the other section saves.
+function _flResSave(kind){
   if(p2_checkLock()) return;
   if(!dailyHeader) return;
-  if(equipmentItems.length===0){
-    var errDiv=document.getElementById('resources-error');
-    errDiv.textContent='Please add equipment or check "None on site today".';
-    errDiv.style.display='block';
-    highlightCard('resources-section');
+  var isEq = kind==='equipment';
+  var items = isEq ? equipmentItems : workforceItems.filter(function(w){ return w.classification==='None' || (parseInt(w.count)||0) > 0; });
+  var errDiv = document.getElementById(isEq ? 'eq-error' : 'wf-error');
+  if(!items.length){
+    errDiv.textContent = 'Please add '+(isEq?'equipment':'workforce')+' or check "None on site today".';
+    errDiv.style.display = 'block';
+    highlightCard(isEq ? 'equipment-card' : 'workforce-card');
     return;
   }
-  if(workforceItems.length===0){
-    var errDiv=document.getElementById('resources-error');
-    errDiv.textContent='Please add workforce or check "None on site today".';
-    errDiv.style.display='block';
-    highlightCard('resources-section');
-    return;
-  }
-  document.getElementById('resources-error').style.display='none';
-  dailyHeader.equipment = equipmentItems.slice();
-  dailyHeader.workforce = workforceItems.slice();
+  errDiv.style.display = 'none';
+  if(isEq) dailyHeader.equipment = items.slice(); else { workforceItems = items; dailyHeader.workforce = items.slice(); }
   _flPersistHeaderIfConfirmed();
-  // Show saving state on the button — consistent with the other section saves.
-  var _resBtn=document.querySelector('button[onclick="saveResources()"]');
-  var _resLbl=_resBtn?_resBtn.innerHTML:'';
-  if(_resBtn){ _resBtn.disabled=true; _resBtn.textContent='Saving...'; }
-  // Condense only once the sheet confirms — see saveConditions.
-  _flSaveHeaderSection('Equipment & workforce',
-    {'20':dailyHeader.equipment||[],'21':dailyHeader.workforce||[]},
-    function(){ saveResources(); })
+  var btn = document.querySelector('button[onclick="'+(isEq?'saveEquipment()':'saveWorkforce()')+'"]');
+  var lbl = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving...'; }
+  var cols = {}; cols[isEq ? '20' : '21'] = isEq ? dailyHeader.equipment : dailyHeader.workforce;
+  _flSaveHeaderSection(isEq ? 'Equipment' : 'Workforce', cols, function(){ _flResSave(kind); })
   .then(function(ok){
-    if(_resBtn){ _resBtn.disabled=false; _resBtn.innerHTML=_resLbl; }
+    if(btn){ btn.disabled = false; btn.innerHTML = lbl; }
     if(ok !== true) return;
-    var eqSum = dailyHeader.equipment.map(function(e){return e.name+(e.count>0?' ('+e.count+')':'');}).join(', ')||'None';
-    var wfSum = _flWfSummary(dailyHeader.workforce)||'None';
-    var resSummaryEl = document.getElementById('resources-summary');
-    if(resSummaryEl) resSummaryEl.innerHTML = '<strong>Equipment:</strong> '+eqSum+'<br><strong>Workforce:</strong> '+wfSum;
-    document.getElementById('resources-form-view').style.display = 'none';
-    document.getElementById('resources-posted-view').style.display = 'block';
-    restoreHeader(dailyHeader);
+    if(!isEq) _wfOpen = null;
+    _flResShowSaved(kind);
+    try{ _flRenderHeaderSummary(dailyHeader); }catch(e){}
   });
 }
-
-function editResources(){
-  if(p2_checkLock()) return;
-  // Repopulate from dailyHeader and re-enable all inputs
-  if(dailyHeader){
-    equipmentItems = (dailyHeader.equipment||[]).filter(function(e){return e.name&&e.name!=='None';});
-    workforceItems = (dailyHeader.workforce||[]).filter(function(w){return w.classification&&w.classification!=='None';});
-    renderEquipmentList('equipment-list', equipmentItems);
-    renderWorkforceList('workforce-list', workforceItems);
-    // Restore None checkbox states
-    var hasNoneEq = (dailyHeader.equipment||[]).some(function(e){return e.name==='None';});
-    var hasNoneWf = (dailyHeader.workforce||[]).some(function(w){return w.classification==='None';});
-    var eqNone = document.getElementById('equipment-none-check');
-    var wfNone = document.getElementById('workforce-none-check');
-    if(eqNone) eqNone.checked = hasNoneEq;
-    if(wfNone) wfNone.checked = hasNoneWf;
-    // Restore equipmentItems and workforceItems from dailyHeader so saveResources sees correct state
-    equipmentItems = (dailyHeader.equipment||[]).slice();
-    workforceItems = (dailyHeader.workforce||[]).slice();
-    renderEquipmentList('equipment-list', equipmentItems);
-    renderWorkforceList('workforce-list', workforceItems);
-    // Disable inputs if None is checked
-    if(hasNoneEq){
-      ['equipment-select','equipment-count','equipment-custom'].forEach(function(id){
-        var el=document.getElementById(id);if(el)el.disabled=true;
-      });
-    }
-    if(hasNoneWf){
-      ['workforce-select','workforce-count','workforce-custom'].forEach(function(id){
-        var el=document.getElementById(id);if(el)el.disabled=true;
-      });
-    }
+function saveEquipment(){ _flResSave('equipment'); }
+function saveWorkforce(){ _flResSave('workforce'); }
+// Condensed view for one card, from dailyHeader.
+function _flResShowSaved(kind, h){
+  var isEq = kind==='equipment';
+  h = h || dailyHeader;
+  var list = (h && (isEq ? h.equipment : h.workforce)) || [];
+  var sum = document.getElementById(isEq ? 'eq-summary' : 'wf-summary');
+  if(sum){
+    sum.innerHTML = isEq ? _flEqSavedHtml(list) : _flWfSavedHtml(list);
   }
-  // Re-enable all inputs
-  ['equipment-select','equipment-count','equipment-custom',
-   'workforce-select','workforce-count','workforce-custom'].forEach(function(id){
-    var el = document.getElementById(id); if(el) el.disabled = false;
-  });
-  // Also uncheck same-as-last checkboxes
-  var eqSame = document.getElementById('equipment-same-check');
-  var wfSame = document.getElementById('workforce-same-check');
-  if(eqSame) eqSame.checked = false;
-  if(wfSame) wfSame.checked = false;
-  document.getElementById('resources-form-view').style.display = 'block';
-  document.getElementById('resources-posted-view').style.display = 'none';
+  document.getElementById(isEq ? 'eq-form-view' : 'wf-form-view').style.display = 'none';
+  document.getElementById(isEq ? 'eq-posted-view' : 'wf-posted-view').style.display = 'block';
+}
+function _flResShowForm(kind){
+  var isEq = kind==='equipment';
+  document.getElementById(isEq ? 'eq-form-view' : 'wf-form-view').style.display = 'block';
+  document.getElementById(isEq ? 'eq-posted-view' : 'wf-posted-view').style.display = 'none';
+}
+function editEquipment(){
+  if(p2_checkLock()) return;
+  equipmentItems = ((dailyHeader && dailyHeader.equipment) || []).slice();
+  var none = equipmentItems.some(function(e){ return e.name==='None'; });
+  var cb = document.getElementById('equipment-none-check'); if(cb) cb.checked = none;
+  ['equipment-select','equipment-count','equipment-custom'].forEach(function(id){ var el=document.getElementById(id); if(el) el.disabled = none; });
+  renderEquipmentList('equipment-list', equipmentItems);
+  _flResShowForm('equipment');
+}
+function editWorkforce(){
+  if(p2_checkLock()) return;
+  workforceItems = ((dailyHeader && dailyHeader.workforce) || []).map(function(w){ return Object.assign({}, w); });
+  var none = workforceItems.some(function(w){ return w.classification==='None'; });
+  var cb = document.getElementById('workforce-none-check'); if(cb) cb.checked = none;
+  _wfOpen = null; _wfExtra = []; _wfAddingSub = false;
+  renderWorkforceList('workforce-list', workforceItems);
+  _flResShowForm('workforce');
+}
+// Old names, kept so nothing that still calls them breaks.
+function saveResources(){ saveEquipment(); saveWorkforce(); }
+function editResources(){ editEquipment(); editWorkforce(); }
+
+// Equipment: one-tap copy from the last report (replaces the old locking
+// "Same as last time" checkbox).  Everything stays editable afterwards.
+async function _eqCopyLast(){
+  if(p2_checkLock()) return;
+  if(!dailyHeader){ showToast('Post a Daily Header first.', true); return; }
+  var btn=document.getElementById('eq-copy-btn'); var lbl=btn?btn.innerHTML:'';
+  if(btn){ btn.disabled=true; btn.textContent='Copying...'; }
+  var last=null;
+  try{
+    var url = GOOGLE_SCRIPT_URL+'?action=getLastHeader&projectName='+encodeURIComponent(dailyHeader.project)+'&projectNumber='+encodeURIComponent(dailyHeader.projectNumber||'')+'&excludeDate='+encodeURIComponent(dailyHeader.date);
+    var resp = await _flFetch(url, {}, 30000);
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    var data = await resp.json(); if(data && data.header) last=data.header;
+  }catch(e){}
+  if(btn){ btn.disabled=false; btn.innerHTML=lbl; }
+  var eq = last ? (last.equipment||[]) : [];
+  if(typeof eq==='string'){ try{ eq=JSON.parse(eq); }catch(e){ eq=[]; } }
+  eq = eq.filter(function(e){ return e.name && e.name!=='None'; });
+  if(!eq.length){ showToast('No previous equipment found for this project', true); return; }
+  equipmentItems = eq.map(function(e){ return {name:e.name, count:parseInt(e.count)||1}; });
+  var cb=document.getElementById('equipment-none-check'); if(cb) cb.checked=false;
+  ['equipment-select','equipment-count','equipment-custom'].forEach(function(id){ var el=document.getElementById(id); if(el) el.disabled=false; });
+  renderEquipmentList('equipment-list', equipmentItems);
+  var _ee=document.getElementById('eq-error'); if(_ee) _ee.style.display='none';
+  showToast('Copied equipment from '+(last.date||'the last report')+'. Edit as needed.');
+}
+function _eqStep(i,d){
+  if(p2_checkLock()) return;
+  var it=equipmentItems[i]; if(!it) return;
+  it.count=(parseInt(it.count)||0)+d;
+  if(it.count<1) equipmentItems.splice(i,1);
+  renderEquipmentList('equipment-list', equipmentItems);
 }
 
 function highlightCard(id){
@@ -1348,6 +1383,7 @@ async function toggleSameAsLast(type){
 }
 
 function toggleNoneOnSite(type){
+  var _ne=document.getElementById(type==='equipment'?'eq-error':'wf-error'); if(_ne) _ne.style.display='none';
   if(type === 'equipment'){
     var cb = document.getElementById('equipment-none-check');
     if(cb.checked){
@@ -1444,7 +1480,14 @@ function renderEquipmentList(listId,items){
     html+="<div class='item-row'>";
     html+="<span class='item-row-name'>"+items[i].name+"</span>";
     html+="<div class='item-row-right'>";
+    if(listId==='equipment-list'){
+      var _sb="width:32px;height:32px;border:1px solid #c9d3de;border-radius:7px;background:#f8fafc;font-size:17px;cursor:pointer;";
+      html+="<button type='button' onclick='_eqStep("+i+",-1)' style='"+_sb+"'>&minus;</button>"+
+            "<span style='min-width:24px;text-align:center;font-weight:600;font-size:15px;'>"+items[i].count+"</span>"+
+            "<button type='button' onclick='_eqStep("+i+",1)' style='"+_sb+"'>+</button>";
+    } else {
     html+="<span class='item-row-count'>"+items[i].count+"</span>";
+    }
     html+="<button class='item-row-remove' data-list='"+listId+"' data-idx='"+i+"' onclick='removeEquipmentFrom(this.dataset.list,this.dataset.idx)'>x</button>";
     html+="</div></div>";
   }
@@ -1529,6 +1572,55 @@ function _flWfSummary(list){
   var order=[], by={}, prime=_wfPrime();
   list.forEach(function(w){ var c=String(w.company||'').trim()||prime, k=_wfNorm(c); if(!by[k]){ by[k]={name:c,items:[]}; order.push(k); } by[k].items.push(w); });
   return order.map(function(k){ return by[k].name+': '+by[k].items.map(function(w){ return w.classification+' '+w.count; }).join(', '); }).join(' · ');
+}
+// Saved (condensed) card views, 2026-10-15: a list of rows, not a sentence.
+function _flSavedBox(inner){
+  return '<div style="padding:9px 12px;border:1px solid #e0e5ea;border-radius:8px;background:#f8fafc;margin-bottom:8px;line-height:1.45;">'+inner+'</div>';
+}
+function _flEqSavedHtml(list){
+  if(typeof list==='string'){ try{ list=JSON.parse(list); }catch(e){ list=[]; } }
+  list = list || [];
+  if(!list.length) return '';
+  if(list.length===1 && list[0].name==='None') return '<span style="color:#888;font-style:italic;">None on site today</span>';
+  var tot = 0; list.forEach(function(e){ tot += (parseInt(e.count)||0); });
+  var rows = list.map(function(e){
+    return '<div style="display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:2px 0;"><span>'+_wfEsc(e.name)+'</span><strong>'+(parseInt(e.count)||0)+'</strong></div>';
+  }).join('');
+  return '<div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-bottom:6px;"><span>'+list.length+' type'+(list.length===1?'':'s')+'</span><span>Total <strong>'+tot+'</strong></span></div>'+_flSavedBox(rows);
+}
+function _flWfSavedHtml(list){
+  if(typeof list==='string'){ try{ list=JSON.parse(list); }catch(e){ list=[]; } }
+  list = list || [];
+  if(!list.length) return '';
+  if(list.length===1 && list[0].classification==='None') return '<span style="color:#888;font-style:italic;">None on site today</span>';
+  var order=[], by={}, prime=_wfPrime(), tot=0;
+  list.forEach(function(w){
+    var c=String(w.company||'').trim()||prime, k=_wfNorm(c);
+    if(!by[k]){ by[k]={name:c,items:[],sub:0}; order.push(k); }
+    by[k].items.push(w); by[k].sub += (parseInt(w.count)||0); tot += (parseInt(w.count)||0);
+  });
+  var h = '<div style="display:flex;justify-content:space-between;font-size:13px;color:#555;margin-bottom:6px;"><span>'+order.length+' compan'+(order.length===1?'y':'ies')+'</span><span>Total <strong>'+tot+'</strong></span></div>';
+  order.forEach(function(k){
+    var g = by[k], role = _wfNorm(g.name)===_wfNorm(prime) ? 'prime' : 'sub';
+    var rows = g.items.map(function(w){
+      return '<div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;color:#555;padding:1px 0;"><span>'+_wfEsc(w.classification)+'</span><span>'+(parseInt(w.count)||0)+'</span></div>';
+    }).join('');
+    h += _flSavedBox('<div style="font-weight:600;font-size:15px;margin-bottom:3px;">'+_wfEsc(g.name)+' <span style="font-weight:500;font-size:12px;color:#777;">'+role+' · '+g.sub+'</span></div>'+rows);
+  });
+  return h;
+}
+// Short header card line: "7 on site, 2 types" / "18 on site, 3 companies".
+function _flResCountLine(kind, list){
+  if(typeof list==='string'){ try{ list=JSON.parse(list); }catch(e){ list=[]; } }
+  list = list || [];
+  var isEq = kind==='equipment';
+  if(list.length===1 && (isEq ? list[0].name : list[0].classification)==='None') return 'None on site today';
+  var tot = 0; list.forEach(function(x){ tot += (parseInt(x.count)||0); });
+  var n;
+  if(isEq) n = list.length;
+  else { var seen={}, prime=_wfPrime(); list.forEach(function(w){ seen[_wfNorm(String(w.company||'').trim()||prime)]=1; }); n = Object.keys(seen).length; }
+  var word = isEq ? (n===1?'type':'types') : (n===1?'company':'companies');
+  return tot+' on site, '+n+' '+word;
 }
 function _wfRender(){
   _wfSyncKey();
@@ -1674,6 +1766,7 @@ async function _wfCopyLast(){
   workforceItems = wf.map(function(w){ return {company:String(w.company||'').trim()||prime, classification:w.classification, count:parseInt(w.count)||1}; });
   var nc=document.getElementById('workforce-none-check'); if(nc) nc.checked=false;
   _wfOpen=null; _wfExtra=[]; _wfAddingSub=false; _wfRender();
+  var _we=document.getElementById('wf-error'); if(_we) _we.style.display='none';
   showToast('Copied workforce from '+(last.date||'the last report')+'. Edit as needed.');
 }
 function updateEquipmentCount(idx, val){
@@ -2488,7 +2581,8 @@ function _flArmPostHeaderWatchdog(){
 var _FL_SECTION_ANCHOR = {
   'Conditions': 'conditions-section',
   'Checklist':  'checklist-section',
-  'Equipment & workforce': 'resources-section',
+  'Equipment':  'equipment-section',
+  'Workforce':  'workforce-section',
   'Narrative':  'narrative-section'
 };
 
@@ -2844,6 +2938,30 @@ function _showHeaderSyncError(){
 // Kept as an alias: older inline handlers may still reference it.
 function retryHeaderPost(){ return flRepostHeader(false); }
 
+// Header card summary (Equipment / Workforce lines included).  Also called
+// after a single card save so the header card stays current.
+function _flRenderHeaderSummary(h){
+  if(!h) return;
+  const equipStr=(h.equipment&&h.equipment.length?_flResCountLine('equipment',h.equipment):'');
+  const workStr=(h.workforce&&h.workforce.length?_flResCountLine('workforce',h.workforce):'');
+  const checkStr=h.checks&&h.checks.length?h.checks.join(', '):'None';
+  var needsStyle='color:#c0392b;font-weight:700;';
+  var weatherStr = h.dailyWeather?(h.dailyWeather+(h.dailyTemperature?' · '+h.dailyTemperature+'°F':'')):'<span style="'+needsStyle+'">⚠ Needs Input</span>';
+  var equipDisplay = (h.equipment&&h.equipment.length>0)?equipStr:'<span style="'+needsStyle+'">⚠ Needs Input</span>';
+  var workDisplay = (h.workforce&&h.workforce.length>0)?workStr:'<span style="'+needsStyle+'">⚠ Needs Input</span>';
+  var checkDisplay = (h.checks&&h.checks.length>0)?checkStr:'<span style="color:#888;">None checked</span>';
+  var _hsEl=document.getElementById('header-summary'); if(!_hsEl) return;
+  _hsEl.innerHTML=
+    '<strong>'+h.projectNumber+' — '+shortProjectName(h.projectNumber,h.project)+'</strong><br>'+
+    'Client: '+h.client+' &nbsp;|&nbsp; Engineer: '+h.projectEngineer+'<br>'+
+    'Contractor: '+h.contractorPrimary+' &nbsp;|&nbsp; Inspector: '+h.inspector+'<br>'+
+    'Date: '+h.date+' &nbsp;|&nbsp; '+h.dayType+'<br>'+
+    'Weather: '+weatherStr+'<br>'+
+    'Equipment: '+equipDisplay+'<br>'+
+    'Workforce: '+workDisplay+'<br>'+
+    'Checklist: '+checkDisplay;
+}
+
 function restoreHeader(h){
   // Restore narrative from sheet data
   var narrativeEl=document.getElementById('daily-narrative');
@@ -2910,23 +3028,7 @@ function restoreHeader(h){
   _flApplyHeaderButtons();
 
   // Build summary
-  const equipStr=(h.equipment&&h.equipment.length?h.equipment.map(e=>e.name+(e.count?' ('+e.count+')':'')).join(', '):'');
-  const workStr=(h.workforce&&h.workforce.length?_flWfSummary(h.workforce):'');
-  const checkStr=h.checks&&h.checks.length?h.checks.join(', '):'None';
-  var needsStyle='color:#c0392b;font-weight:700;';
-  var weatherStr = h.dailyWeather?(h.dailyWeather+(h.dailyTemperature?' · '+h.dailyTemperature+'°F':'')):'<span style="'+needsStyle+'">⚠ Needs Input</span>';
-  var equipDisplay = (h.equipment&&h.equipment.length>0)?equipStr:'<span style="'+needsStyle+'">⚠ Needs Input</span>';
-  var workDisplay = (h.workforce&&h.workforce.length>0)?workStr:'<span style="'+needsStyle+'">⚠ Needs Input</span>';
-  var checkDisplay = (h.checks&&h.checks.length>0)?checkStr:'<span style="color:#888;">None checked</span>';
-  document.getElementById('header-summary').innerHTML=
-    '<strong>'+h.projectNumber+' — '+shortProjectName(h.projectNumber,h.project)+'</strong><br>'+
-    'Client: '+h.client+' &nbsp;|&nbsp; Engineer: '+h.projectEngineer+'<br>'+
-    'Contractor: '+h.contractorPrimary+' &nbsp;|&nbsp; Inspector: '+h.inspector+'<br>'+
-    'Date: '+h.date+' &nbsp;|&nbsp; '+h.dayType+'<br>'+
-    'Weather: '+weatherStr+'<br>'+
-    'Equipment: '+equipDisplay+'<br>'+
-    'Workforce: '+workDisplay+'<br>'+
-    'Checklist: '+checkDisplay;
+  _flRenderHeaderSummary(h);
 
   // Set entry time default
   const now=new Date();
@@ -2966,22 +3068,10 @@ function restoreHeader(h){
     if(clPosted) clPosted.style.display='none';
     if(clForm) clForm.style.display='block';
   }
-  // Restore resources condensed view
-  if(h.equipment && h.equipment.length > 0 && h.workforce && h.workforce.length > 0){
-    var eqSum = h.equipment.map(function(e){return e.name+(e.count>0?' ('+e.count+')':'');}).join(', ');
-    var wfSum = _flWfSummary(h.workforce);
-    var resSummary = document.getElementById('resources-summary');
-    if(resSummary) resSummary.innerHTML = '<strong>Equipment:</strong> '+eqSum+'<br><strong>Workforce:</strong> '+wfSum;
-    var resPosted = document.getElementById('resources-posted-view');
-    var resForm = document.getElementById('resources-form-view');
-    if(resPosted) resPosted.style.display='block';
-    if(resForm) resForm.style.display='none';
-  } else {
-    var resPosted = document.getElementById('resources-posted-view');
-    var resForm = document.getElementById('resources-form-view');
-    if(resPosted) resPosted.style.display='none';
-    if(resForm) resForm.style.display='block';
-  }
+  // Restore each card's condensed view on its own (2026-10-15): a card is
+  // "saved" when the sheet holds something for it.
+  if(h.equipment && h.equipment.length > 0) _flResShowSaved('equipment', h); else _flResShowForm('equipment');
+  if(h.workforce && h.workforce.length > 0) _flResShowSaved('workforce', h); else _flResShowForm('workforce');
   // Restore equipment/workforce None checkbox states
   // Update project number/name display fields from header
   var pnField=document.getElementById('project-number');
