@@ -292,7 +292,6 @@ textarea{resize:vertical;min-height:90px;}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
           <div class="posted-badge">✓ Daily Header Posted</div>
           <div style="display:flex;gap:8px;">
-            <button class="btn-edit-header" onclick="editDailyHeader()">Edit Header</button>
             <button class="btn-edit-header" onclick="openSwitchProject()" style="border-color:var(--red);color:var(--red);">Switch Project</button>
           </div>
         </div>
@@ -307,7 +306,6 @@ textarea{resize:vertical;min-height:90px;}
       <div class="card header-card">
         <div class="form-row two-col">
           <div><label>Date of Work</label><input type="date" id="entry-date" placeholder="Select date of work" onchange="flGuardFutureDate(this);onDateChange()" style="min-width:160px;"></div>
-          <div><label>Day Type</label><select id="day-type"><option value="">Select day type...</option><option value="Working Day">Working Day</option><option value="Non-Working Day (No Contractor)">Non-Working Day (No Contractor)</option><option value="Non-Working Day (Weather)">Non-Working Day (Weather)</option><option value="Non-Working Day (Holiday)">Non-Working Day (Holiday)</option><option value="Non-Working Day (Weekend)">Non-Working Day (Weekend)</option></select></div>
         </div>
         <div class="form-row two-col">
           <div><label>Client</label><select id="client-select" onchange="onClientChange()"><option value="">Select client...</option></select></div>
@@ -333,6 +331,31 @@ textarea{resize:vertical;min-height:90px;}
 
       <div id="header-error" class="error-box"></div>
       <button class="btn-post-header" id="btn-post-header-main" onclick="postDailyHeader()" disabled style="opacity:0.4;cursor:not-allowed;pointer-events:none;">📋 Post Daily Header</button>
+    </div>
+
+    <!-- ════════════════════════════════════════════
+         SECTION 1A: DAY TYPE (2026-10-15: own card after the header is posted;
+         required before a report, not before posting the header)
+         ════════════════════════════════════════════ -->
+    <div id="daytype-section" style="margin-top:16px;display:none;">
+      <div class="section-label">Day Type</div>
+      <div id="daytype-posted-view" style="display:none;">
+        <div class="card posted">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div class="posted-badge">&#10003; Day Type Saved</div>
+            <button class="btn-edit-header" onclick="editDayType()">Edit</button>
+          </div>
+          <div id="daytype-summary" style="font-size:13px;color:#333;margin-top:8px;"></div>
+        </div>
+      </div>
+      <div id="daytype-form-view">
+        <div class="card header-card" id="daytype-card">
+          <select id="day-type" style="width:100%;font-size:16px;" onchange="if(this.value) saveDayType();"><option value="">Select day type...</option><option value="Working Day">Working Day</option><option value="Non-Working Day (No Contractor)">Non-Working Day (No Contractor)</option><option value="Non-Working Day (Weather)">Non-Working Day (Weather)</option><option value="Non-Working Day (Holiday)">Non-Working Day (Holiday)</option><option value="Non-Working Day (Weekend)">Non-Working Day (Weekend)</option></select>
+          <div id="daytype-hint" style="font-size:12px;color:#888;margin-top:6px;">Required before the report.  Saves as soon as you pick one.</div>
+          <div id="daytype-error" class="error-box" style="margin-top:8px;"></div>
+          <button type="button" id="daytype-cancel" onclick="_flDayTypeShow(dailyHeader)" style="display:none;margin-top:8px;border:none;background:none;color:#1565c0;font-size:14px;font-weight:600;cursor:pointer;padding:4px 0;">Cancel</button>
+        </div>
+      </div>
     </div>
 
     <!-- ════════════════════════════════════════════
@@ -1144,8 +1167,53 @@ function saveConditions(){
     document.getElementById('conditions-form-view').style.display='none';
     document.getElementById('conditions-posted-view').style.display='block';
     document.getElementById('conditions-summary').textContent = weather + ' · ' + temp + '°F';
-    restoreHeader(dailyHeader);
+    try{ _flRenderHeaderSummary(dailyHeader); }catch(e){}
   });
+}
+
+// ── Day Type card (2026-10-15) ──
+function saveDayType(){
+  if(p2_checkLock()) return;
+  if(!dailyHeader) return;
+  var v = document.getElementById('day-type').value;
+  var err = document.getElementById('daytype-error');
+  err.style.display = 'none';
+  if(!v){ err.textContent = 'Please select a day type.'; err.style.display = 'block'; highlightCard('daytype-card'); return; }
+  dailyHeader.dayType = v;
+  _flPersistHeaderIfConfirmed();
+  var sel = document.getElementById('day-type'), hint = document.getElementById('daytype-hint');
+  var hintTxt = hint ? hint.textContent : '';
+  if(sel) sel.disabled = true;
+  if(hint) hint.textContent = 'Saving...';
+  _flSaveHeaderSection('Day type', {'26': v}, function(){ saveDayType(); })
+  .then(function(ok){
+    if(sel) sel.disabled = false;
+    if(hint) hint.textContent = hintTxt;
+    if(ok !== true) return;
+    _flDayTypeShow(dailyHeader);
+    try{ _flRenderHeaderSummary(dailyHeader); }catch(e){}
+  });
+}
+function _flDayTypeShow(h){
+  var v = String((h && h.dayType) || '').trim();
+  var f = document.getElementById('daytype-form-view'), p = document.getElementById('daytype-posted-view');
+  if(!f || !p) return;
+  var _c = document.getElementById('daytype-cancel'); if(_c) _c.style.display = 'none';
+  var _e = document.getElementById('daytype-error'); if(_e) _e.style.display = 'none';
+  if(v){
+    document.getElementById('daytype-summary').textContent = v;
+    f.style.display = 'none'; p.style.display = 'block';
+  } else {
+    _flSetDayTypeSelect('day-type', '');
+    f.style.display = 'block'; p.style.display = 'none';
+  }
+}
+function editDayType(){
+  if(p2_checkLock()) return;
+  _flSetDayTypeSelect('day-type', (dailyHeader && dailyHeader.dayType) || '');
+  var _c = document.getElementById('daytype-cancel'); if(_c) _c.style.display = (dailyHeader && dailyHeader.dayType) ? 'inline-block' : 'none';
+  document.getElementById('daytype-form-view').style.display = 'block';
+  document.getElementById('daytype-posted-view').style.display = 'none';
 }
 
 function editConditions(){
@@ -1178,7 +1246,7 @@ function saveChecklist(){
     if(summaryEl) summaryEl.textContent = checked;
     document.getElementById('checklist-form-view').style.display = 'none';
     document.getElementById('checklist-posted-view').style.display = 'block';
-    restoreHeader(dailyHeader);
+    try{ _flRenderHeaderSummary(dailyHeader); }catch(e){}
   });
 }
 
@@ -2579,6 +2647,7 @@ function _flArmPostHeaderWatchdog(){
 // half the time — and the notice was inserted ABOVE the anchor, so it floated
 // above the card and read as belonging to whatever sat above it.
 var _FL_SECTION_ANCHOR = {
+  'Day type':   'daytype-section',
   'Conditions': 'conditions-section',
   'Checklist':  'checklist-section',
   'Equipment':  'equipment-section',
@@ -2826,12 +2895,6 @@ function postDailyHeader(){
     errDiv.scrollIntoView({behavior:'smooth',block:'center'});
     return;
   }
-  if(!document.getElementById('day-type').value){
-    errDiv.textContent='Please select a Day Type before posting the header.';
-    errDiv.style.display='block';
-    errDiv.scrollIntoView({behavior:'smooth',block:'center'});
-    return;
-  }
   const checks=Array.from(document.querySelectorAll('.check-item.checked')).map(el=>CHECKLIST_ITEMS[el.dataset.index]);
   const dateVal=document.getElementById('entry-date').value;
   let entryDate=new Date().toLocaleDateString('en-US');
@@ -2846,7 +2909,7 @@ function postDailyHeader(){
     contractorPrimary:document.getElementById('contractor-primary').value.trim(),
     projectType:(function(){ var s=document.getElementById('project-select'); return s&&s.selectedIndex>0?s.options[s.selectedIndex].dataset.projectType||'':''; })(),
     inspector, date:entryDate,
-    dayType:document.getElementById('day-type').value,
+    dayType:'',   // set later in the Day Type card
     dailyWeather:weather,
     dailyTemperature:document.getElementById('temperature').value.trim(),
     equipment:[...equipmentItems],
@@ -2955,7 +3018,7 @@ function _flRenderHeaderSummary(h){
     '<strong>'+h.projectNumber+' — '+shortProjectName(h.projectNumber,h.project)+'</strong><br>'+
     'Client: '+h.client+' &nbsp;|&nbsp; Engineer: '+h.projectEngineer+'<br>'+
     'Contractor: '+h.contractorPrimary+' &nbsp;|&nbsp; Inspector: '+h.inspector+'<br>'+
-    'Date: '+h.date+' &nbsp;|&nbsp; '+h.dayType+'<br>'+
+    'Date: '+h.date+' &nbsp;|&nbsp; '+(h.dayType?h.dayType:'<span style="'+needsStyle+'">⚠ Day type needed</span>')+'<br>'+
     'Weather: '+weatherStr+'<br>'+
     'Equipment: '+equipDisplay+'<br>'+
     'Workforce: '+workDisplay+'<br>'+
@@ -3017,6 +3080,8 @@ function restoreHeader(h){
   // Show posted view
   document.getElementById('header-form-view').style.display='none';
   document.getElementById('header-posted-view').style.display='block';
+  var dts=document.getElementById('daytype-section');if(dts)dts.style.display='block';
+  _flDayTypeShow(h);
   var cs=document.getElementById('conditions-section');if(cs)cs.style.display='block';
   var cls=document.getElementById('checklist-section');if(cls)cls.style.display='block';
   var rs=document.getElementById('resources-section');if(rs)rs.style.display='block';
@@ -3767,7 +3832,7 @@ function openSwitchProject(){
       var border = isCurrent ? '#a5d6a7' : '#e0e5ea';
       html += "<div style='display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:"+bg+";border:1px solid "+border+";border-radius:7px;margin-bottom:8px;'>";
       html += "<div><div style='font-size:14px;font-weight:600;color:#222;'>"+h.projectNumber+" — "+shortProjectName(h.projectNumber,h.project)+"</div>";
-      html += "<div style='font-size:12px;color:#888;'>"+h.inspector+" &nbsp;·&nbsp; "+h.dayType+"</div></div>";
+      html += "<div style='font-size:12px;color:#888;'>"+h.inspector+(h.dayType?" &nbsp;·&nbsp; "+h.dayType:"")+"</div></div>";
       if(isCurrent){
         html += "<span style='font-size:11px;font-weight:700;color:#1e7e34;'>ACTIVE</span>";
       } else {
@@ -3834,6 +3899,7 @@ function startNewProjectHeader(){
   var _hs = document.getElementById('fl-header-sync-state'); if(_hs) _hs.innerHTML='';
   document.getElementById('header-form-view').style.display = 'block';
   document.getElementById('header-posted-view').style.display = 'none';
+  var _dts=document.getElementById('daytype-section'); if(_dts) _dts.style.display = 'none';
   document.getElementById('conditions-section').style.display = 'none';
   document.getElementById('checklist-section').style.display = 'none';
   document.getElementById('resources-section').style.display = 'none';
@@ -4893,10 +4959,11 @@ function p2_applyLockUI(){
   else if(pb&&!anyLock){pb.disabled=false;pb.style.opacity='';pb.style.cursor='';pb.style.pointerEvents='';}
   var eh=document.querySelector('.btn-edit-header[onclick="editDailyHeader()"]');
   if(eh) eh.style.display=anyLock?'none':'';
-  ['conditions','checklist','resources'].forEach(function(k){
+  // 2026-10-15: covers the split cards.  Unlocking no longer forces every card
+  // open (restoreHeader already shows each one saved or open from its data).
+  ['conditions','checklist','daytype','eq','wf'].forEach(function(k){
     var f=document.getElementById(k+'-form-view'),p=document.getElementById(k+'-posted-view');
     if(anyLock&&f&&p){f.style.display='none';p.style.display='block';}
-    else if(!anyLock&&f&&p){f.style.display='block';p.style.display='none';}
     var eb=document.querySelector('#'+k+'-posted-view .btn-edit-header');
     if(eb) eb.style.display=anyLock?'none':'';
   });
