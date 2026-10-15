@@ -307,7 +307,7 @@ textarea{resize:vertical;min-height:90px;}
       <div class="card header-card">
         <div class="form-row two-col">
           <div><label>Date of Work</label><input type="date" id="entry-date" placeholder="Select date of work" onchange="flGuardFutureDate(this);onDateChange()" style="min-width:160px;"></div>
-          <div><label>Day Type</label><select id="day-type"><option value="">Select day type...</option><option value="Working Day">Working Day</option><option value="Non-Working Day (Weather)">Non-Working Day (Weather)</option><option value="Non-Working Day (Holiday)">Non-Working Day (Holiday)</option><option value="Non-Working Day (Weekend)">Non-Working Day (Weekend)</option></select></div>
+          <div><label>Day Type</label><select id="day-type"><option value="">Select day type...</option><option value="Working Day">Working Day</option><option value="Non-Working Day (No Contractor)">Non-Working Day (No Contractor)</option><option value="Non-Working Day (Weather)">Non-Working Day (Weather)</option><option value="Non-Working Day (Holiday)">Non-Working Day (Holiday)</option><option value="Non-Working Day (Weekend)">Non-Working Day (Weekend)</option></select></div>
         </div>
         <div class="form-row two-col">
           <div><label>Client</label><select id="client-select" onchange="onClientChange()"><option value="">Select client...</option></select></div>
@@ -623,7 +623,7 @@ textarea{resize:vertical;min-height:90px;}
       <div><label>Temp (°F)</label><input type="text" id="edit-header-temp"></div>
     </div>
     <div class="form-row two-col">
-      <div><label>Day Type</label><select id="edit-header-daytype"><option value="">Select day type...</option><option value="Working Day">Working Day</option><option value="Non-Working Day (Weather)">Non-Working Day (Weather)</option><option value="Non-Working Day (Holiday)">Non-Working Day (Holiday)</option><option value="Non-Working Day (Weekend)">Non-Working Day (Weekend)</option></select></div>
+      <div><label>Day Type</label><select id="edit-header-daytype"><option value="">Select day type...</option><option value="Working Day">Working Day</option><option value="Non-Working Day (No Contractor)">Non-Working Day (No Contractor)</option><option value="Non-Working Day (Weather)">Non-Working Day (Weather)</option><option value="Non-Working Day (Holiday)">Non-Working Day (Holiday)</option><option value="Non-Working Day (Weekend)">Non-Working Day (Weekend)</option></select></div>
       <div></div>
     </div>
     <div class="modal-actions">
