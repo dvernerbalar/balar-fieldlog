@@ -414,7 +414,7 @@ html.flh-lock, html.flh-lock body, html.flh-lock main{overflow:hidden !important
 <div id="fl-home" class="no-print">
   <div class="flh-top">
     <div class="flh-row"><div class="v6-brand">BALAR <b>FieldLog</b></div><div class="date-badge" id="flh-today" style="color:#b8c6d6;font-size:12px;"></div></div>
-    <div class="flh-title" id="flh-title">My Reports</div>
+    <div class="flh-row"><div class="flh-title" id="flh-title">My Reports</div><button type="button" class="flh-lnk" id="flh-switch" style="color:#b8c6d6;flex-shrink:0;" onclick="flHomeSwitchUser()">Log out</button></div>
   </div>
   <div class="flh-body" id="flh-body"></div>
   <div class="flh-foot"><button type="button" class="flh-new" onclick="flHomeNewReport()">+ New Report</button></div>
@@ -6003,6 +6003,15 @@ function flHomeOpenReport(r){
   var ps = document.getElementById('project-select'), want = p.number + '|||' + p.name;
   if(ps.value !== want){ ps.value = want; if(ps.value === want) onProjectSelectChange(); }
   _flToTop();
+}
+
+// Switch user (2026-10-21): back to the name + PIN screen without a browser
+// refresh.  The report screen is reset first so the next person doesn't land
+// in the previous person's open report.  Logging in reopens My Reports.
+function flHomeSwitchUser(){
+  try{ startNewProjectHeader(); }catch(e){}
+  _flHome.reports = []; _flHome.checkedAt = ''; _flHome.seq++;
+  resetIdentity();
 }
 
 function flHomeNewReport(){
