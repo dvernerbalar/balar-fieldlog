@@ -271,6 +271,17 @@ textarea{resize:vertical;min-height:90px;}
 .v6-ready-miss{font-size:12px;font-weight:600;color:var(--red);margin-top:7px;line-height:1.35;}
 .v6-ready-miss:empty{display:none;}
 .v6-ready.all .v6-ready-miss{color:#1e7e34;}
+/* Rejected, not submitted (2026-10-21): both ready bars carry the engineer note */
+.v6-ready.rej{border:1.5px solid #e3b4bb;}
+.v6-ready.rej .v6-ready-txt{color:var(--red);font-weight:700;}
+.v6-ready-rej{display:none;background:#fbeef0;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:13px;line-height:1.35;color:#5c1220;}
+.v6-ready.rej .v6-ready-rej{display:block;}
+.v6-ready-rej .act{display:block;margin-top:4px;font-size:12px;font-weight:600;color:var(--red);line-height:1.3;}
+/* Phones/tablets: iOS zooms in when a box under 16px is tapped and stays zoomed (PIN box at login).
+   16px on every typing box, touch screens only, so desktop keeps its sizes (2026-10-21). */
+@media (pointer:coarse){
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]), select, textarea{font-size:16px !important;}
+}
 /* v6 My Reports landing (2026-10-21) */
 #fl-home{position:fixed;inset:0;z-index:9000;background:#f4f6f8;display:none;flex-direction:column;}
 #fl-home.open{display:flex;}
@@ -457,7 +468,7 @@ html.flh-lock, html.flh-lock body, html.flh-lock main{overflow:hidden !important
         <!-- v6: Reload Header is the Refresh button in the top bar -->
       </div>
       <!-- v6: report readiness -->
-      <div class="v6-ready"><div class="v6-ready-top"><span class="v6-ready-txt">Ready for report</span><span class="v6-ready-n"></span></div><div class="v6-bar"><div class="v6-bar-fill"></div></div><div class="v6-ready-miss"></div></div>
+      <div class="v6-ready"><div class="v6-ready-top"><span class="v6-ready-txt">Ready for report</span><span class="v6-ready-n"></span></div><div class="v6-bar"><div class="v6-bar-fill"></div></div><div class="v6-ready-rej"></div><div class="v6-ready-miss"></div></div>
     </div>
 
     <!-- Header form -->
@@ -744,7 +755,7 @@ html.flh-lock, html.flh-lock body, html.flh-lock main{overflow:hidden !important
 
     <!-- v6: same readiness bar again right above Generate / Review (not pinned) -->
     <div id="v6-bottom" class="v6-bottom" style="display:none;">
-      <div class="v6-ready"><div class="v6-ready-top"><span class="v6-ready-txt">Ready for report</span><span class="v6-ready-n"></span></div><div class="v6-bar"><div class="v6-bar-fill"></div></div><div class="v6-ready-miss"></div></div>
+      <div class="v6-ready"><div class="v6-ready-top"><span class="v6-ready-txt">Ready for report</span><span class="v6-ready-n"></span></div><div class="v6-bar"><div class="v6-bar-fill"></div></div><div class="v6-ready-rej"></div><div class="v6-ready-miss"></div></div>
       <div id="report-btn-container"><button class="btn-report" id="btn-generate-report" onclick="openReportModal()">📄 Generate / Review Report</button><button class="btn-report" id="btn-view-approved" style="display:none;background:#d1f2eb;color:#000;border:2px solid #1a5e35;" onclick="window.open(p2_approvedPdfLink,'_blank')">📄 View Approved Report</button></div>
     </div>
 
@@ -5163,7 +5174,10 @@ function p2_refreshStatusBanner() {
     banner.style.color = '#922b21';
     banner.style.border = '1px solid #f1948a';
     banner.innerHTML = '❌ Rejected by engineer — correct entries and regenerate the report';
-    if (typeof flHomeRejectNoteHtml === 'function') banner.innerHTML += flHomeRejectNoteHtml();
+    // 2026-10-21: the two ready bars show the rejection and the engineer note, so hide this one.
+    banner.style.display = 'none';
+    if(section) section.style.display = 'none';
+    if(refreshBtn) refreshBtn.style.display = 'none';
   } else {
     banner.style.display = 'none';
     if(section) section.style.display='none';
@@ -5568,13 +5582,17 @@ function v6Refresh(){
   var items = _v6ReadyItems(), n = 0, miss = [];
   items.forEach(function(it){ if(it.ok) n++; else miss.push(it.short || it.name); });
   var all = n === items.length, locked = _v6Locked();
-  var rt = locked ? (p2_currentReportStatus === 'approved' ? 'Report approved' : 'Submitted, awaiting engineer review') : 'Ready for report';
+  var rej = !locked && p2_currentReportStatus === 'rejected';
+  var rt = locked ? (p2_currentReportStatus === 'approved' ? 'Report approved' : 'Submitted, awaiting engineer review') : (rej ? 'Rejected, not submitted' : 'Ready for report');
+  var rejNote = rej && typeof flHomeRejectNoteText === 'function' ? flHomeRejectNoteText() : '';
+  var rejHtml = rej ? (rejNote ? '<b>Engineer note:</b> ' + String(rejNote).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '') + '<span class="act">Regenerate and resubmit once the corrections are made.</span>' : '';
   var mt = locked ? '' : (all ? 'Ready to generate' : 'Still needed: ' + miss.join(', '));
   var w = (locked ? 100 : Math.round(n * 100 / items.length)) + '%';
   var bars = document.querySelectorAll('.v6-ready');
   for(var bi = 0; bi < bars.length; bi++){
     var rb = bars[bi];
-    _v6Set(rb, 'className', 'v6-ready' + ((all || locked) ? ' all' : ''));
+    _v6Set(rb, 'className', 'v6-ready' + ((all || locked) ? ' all' : '') + (rej ? ' rej' : ''));
+    _v6Set(rb.querySelector('.v6-ready-rej'), 'innerHTML', rejHtml);
     _v6Set(rb.querySelector('.v6-ready-txt'), 'textContent', rt);
     _v6Set(rb.querySelector('.v6-ready-n'), 'textContent', locked ? '' : n + ' of ' + items.length);
     _v6Set(rb.querySelector('.v6-ready-miss'), 'textContent', mt);
@@ -5995,6 +6013,16 @@ function flHomeNewReport(){
 
 // Rejected banner on the report screen: add the engineer's note when the
 // open report is one the landing list knows is rejected.
+function flHomeRejectNoteText(){
+  if(!dailyHeader) return '';
+  var R = _flHome.reports || [];
+  for(var i = 0; i < R.length; i++){
+    var r = R[i];
+    if(r.status === 'rejected' && r.projectNumber === String(dailyHeader.projectNumber || '') &&
+       r.projectName === String(dailyHeader.project || '') && r.date === String(dailyHeader.date || '')) return r.rejectionComment || '';
+  }
+  return '';
+}
 function flHomeRejectNoteHtml(){
   if(!dailyHeader) return '';
   var R = _flHome.reports || [];
