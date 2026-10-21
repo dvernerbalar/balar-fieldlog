@@ -61,6 +61,7 @@ function attemptFirstLogin(){
     document.getElementById('welcome-screen').style.display='none';
     err.style.display='none';
     _flToTop();
+    if(typeof flHomeOpen==='function') flHomeOpen();   // v6 My Reports landing (2026-10-21)
   }).catch(function(){
     _flLoginBusy('#login-screen .btn-login', false);
     err.textContent='Couldn’t reach the server to check your PIN. Check your connection and try again.';
@@ -79,6 +80,7 @@ function attemptWelcomeLogin(){
     pinEl.value='';
     _flToTop();
     setTimeout(updatePostHeaderBtn,50);
+    if(typeof flHomeOpen==='function') flHomeOpen();   // v6 My Reports landing (2026-10-21)
   }
   var saved = _flGetSavedPin();
   if(saved && pin === saved){
@@ -269,6 +271,58 @@ textarea{resize:vertical;min-height:90px;}
 .v6-ready-miss{font-size:12px;font-weight:600;color:var(--red);margin-top:7px;line-height:1.35;}
 .v6-ready-miss:empty{display:none;}
 .v6-ready.all .v6-ready-miss{color:#1e7e34;}
+/* v6 My Reports landing (2026-10-21) */
+#fl-home{position:fixed;inset:0;z-index:9000;background:#f4f6f8;display:none;flex-direction:column;}
+#fl-home.open{display:flex;}
+.flh-top{background:var(--navy);border-bottom:3px solid var(--red);padding:calc(12px + env(safe-area-inset-top)) 16px 12px;display:flex;flex-direction:column;gap:5px;flex-shrink:0;}
+.flh-row{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.flh-title{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:#fff;}
+.flh-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 20px;display:flex;flex-direction:column;gap:10px;}
+.flh-foot{flex-shrink:0;background:#fff;border-top:1px solid #e0e5ea;padding:12px 16px max(18px, calc(12px + env(safe-area-inset-bottom)));}
+.flh-new{display:block;width:100%;text-align:center;background:var(--red);color:#fff;border:none;border-radius:7px;padding:14px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;}
+.flh-check{display:flex;justify-content:space-between;align-items:center;gap:8px;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;}
+.flh-check.ok{background:#e9f5ec;border:1px solid #b9dfc3;color:#1e6b34;}
+.flh-check.busy{background:#eef1f4;border:1px solid #dde2e8;color:#31465e;}
+.flh-check.fail{background:#fff8e1;border:1px solid #ffc107;color:#5c4500;flex-direction:column;align-items:flex-start;}
+.flh-lnk{background:none;border:none;padding:4px 0;font:inherit;font-size:12px;font-weight:600;color:inherit;text-decoration:underline;cursor:pointer;}
+.flh-retry{background:#7a5c00;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;}
+.flh-sh{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;background:#fff;border:1px solid #e0e5ea;border-radius:10px;padding:12px 14px;min-height:48px;cursor:pointer;font:inherit;text-align:left;}
+.flh-sh.hot{border-color:#e3b4bb;}
+.flh-lbl{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--red);}
+.flh-lbl.quiet{color:#31465e;}
+.flh-chev{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;color:#5a6b7e;white-space:nowrap;}
+.flh-tag{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;border-radius:4px;padding:2px 7px;letter-spacing:.5px;white-space:nowrap;}
+.flh-tag.red{background:var(--red);color:#fff;}
+.flh-tag.gold{background:#f6c343;color:#3d2c00;}
+.flh-tag.gray{background:#e8ecf0;color:#31465e;}
+.flh-tag.slate{background:#5a6b7e;color:#fff;}
+.flh-list{display:flex;flex-direction:column;gap:8px;}
+.flh-card{background:#fff;border:1px solid #e0e5ea;border-radius:10px;padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;flex-direction:column;gap:6px;cursor:pointer;}
+.flh-card.rej{border-color:#e3b4bb;}
+.flh-card.other{background:#fafbfc;}
+.flh-card.del{opacity:.7;cursor:default;}
+.flh-cd{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--navy);letter-spacing:.3px;}
+.flh-sub{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;color:#5a6b7e;letter-spacing:.4px;text-transform:uppercase;}
+.flh-nm{font-size:14px;font-weight:600;color:#1b2d42;line-height:1.25;}
+.flh-meta{font-size:12px;color:#5a6b7e;}
+.flh-note{background:#fbeef0;border-radius:6px;padding:8px 10px;font-size:13px;line-height:1.35;color:#5c1220;}
+.flh-bar{height:6px;background:#e8ecf0;border-radius:3px;overflow:hidden;}
+.flh-bar div{height:100%;background:var(--red);}
+.flh-bar.all div{background:#1e8449;}
+.flh-miss{font-size:12px;font-weight:600;color:var(--red);line-height:1.3;}
+.flh-miss.ok{color:#1e7e34;}
+.flh-pend{background:#fff;border:1px solid #e0e5ea;border-radius:10px;padding:4px 14px;}
+.flh-pend > div{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eef1f4;}
+.flh-pend > div:last-child{border-bottom:none;}
+.flh-dash{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border:1px solid #e0e5ea;border-radius:10px;padding:12px 14px;text-decoration:none;margin-top:4px;}
+.flh-empty{background:#fff;border:1px solid #b9dfc3;border-radius:10px;padding:24px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;}
+.flh-modal{position:fixed;inset:0;z-index:9500;background:rgba(13,27,42,.55);display:none;align-items:center;justify-content:center;padding:16px;}
+.flh-modal.open{display:flex;}
+.flh-dlg{background:#fff;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px;width:100%;max-width:420px;box-sizing:border-box;}
+.flh-dlg input{font:inherit;font-size:16px;border:1px solid #c5ced8;border-radius:7px;padding:10px 12px;width:100%;box-sizing:border-box;}
+.flh-btn2{flex:1;background:#fff;color:#31465e;border:1px solid #c5ced8;border-radius:7px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;}
+.flh-btn1{flex:2;background:var(--red);color:#fff;border:none;border-radius:7px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;}
+.flh-btn1:disabled{background:#ccc;}
 .sec{background:#fff;border:1px solid #e0e5ea;border-left:5px solid #c3ccd6;border-radius:10px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.06);scroll-margin-top:84px;}
 .sec.sec-done{border-left-color:#1e8449;}
 .sec.sec-need{border-left-color:var(--red);}
@@ -340,11 +394,37 @@ textarea{resize:vertical;min-height:90px;}
   </div>
 </div>
 
+<!-- v6 My Reports landing (2026-10-21): shown after every login and from the My Reports button -->
+<div id="fl-home" class="no-print">
+  <div class="flh-top">
+    <div class="flh-row"><div class="v6-brand">BALAR <b>FieldLog</b></div><div class="date-badge" id="flh-today" style="color:#b8c6d6;font-size:12px;"></div></div>
+    <div class="flh-title" id="flh-title">My Reports</div>
+  </div>
+  <div class="flh-body" id="flh-body"></div>
+  <div class="flh-foot"><button type="button" class="flh-new" onclick="flHomeNewReport()">+ New Report</button></div>
+</div>
+<div class="flh-modal no-print" id="flh-del-modal">
+  <div class="flh-dlg" role="dialog" aria-labelledby="flh-del-title">
+    <div id="flh-del-title" style="font-family:'Barlow Condensed',sans-serif;font-size:21px;font-weight:700;color:var(--navy);">Request delete of this report?</div>
+    <div id="flh-del-what" style="background:#f4f6f8;border-radius:8px;padding:10px 12px;font-size:13px;color:#31465e;line-height:1.4;"></div>
+    <div style="font-size:14px;line-height:1.4;color:#31465e;">The office will get an email to remove this header.  Nothing is deleted from your phone or the sheet right now.</div>
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <label for="flh-del-reason" style="font-size:12px;font-weight:600;color:#31465e;">Reason (optional)</label>
+      <input id="flh-del-reason" type="text" autocomplete="off">
+    </div>
+    <div id="flh-del-err" style="display:none;font-size:13px;font-weight:600;color:var(--red);"></div>
+    <div style="display:flex;gap:10px;margin-top:4px;">
+      <button type="button" class="flh-btn2" onclick="flHomeDelClose()">Cancel</button>
+      <button type="button" class="flh-btn1" id="flh-del-send" onclick="flHomeDelSend()">Send request</button>
+    </div>
+  </div>
+</div>
+
 <header class="no-print">
   <!-- v6: no logo; wordmark + REPORT date, then client / number, then the full project name (2 lines max) -->
   <div class="v6-top">
     <div class="v6-top-row"><div class="v6-brand">BALAR <b>FieldLog</b></div><div class="date-badge" id="header-date"></div></div>
-    <div class="v6-top-row v6-top-row2"><div class="v6-top-sub" id="v6-top-sub"></div><div class="v6-top-btns" id="v6-top-btns" style="display:none;"><button type="button" class="v6-tb" onclick="openSwitchProject()">&#8644; Switch</button><button type="button" class="v6-tb" id="v6-refresh-btn" onclick="v6RefreshAll()">&#8635; Refresh</button></div></div>
+    <div class="v6-top-row v6-top-row2"><div class="v6-top-sub" id="v6-top-sub"></div><div class="v6-top-btns" id="v6-top-btns" style="display:none;"><button type="button" class="v6-tb" onclick="flHomeOpen()">&#9776; My Reports</button><button type="button" class="v6-tb" id="v6-refresh-btn" onclick="v6RefreshAll()">&#8635; Refresh</button></div></div>
     <div class="v6-top-proj" id="v6-top-proj"></div>
   </div>
 </header>
@@ -5078,6 +5158,7 @@ function p2_refreshStatusBanner() {
     banner.style.color = '#922b21';
     banner.style.border = '1px solid #f1948a';
     banner.innerHTML = '❌ Rejected by engineer — correct entries and regenerate the report';
+    if (typeof flHomeRejectNoteHtml === 'function') banner.innerHTML += flHomeRejectNoteHtml();
   } else {
     banner.style.display = 'none';
     if(section) section.style.display='none';
@@ -5444,7 +5525,8 @@ function v6Refresh(){
 
   // Pinned bar: REPORT date (flagged when it isn't today), client / number, full name.
   var tp = document.getElementById('v6-top-proj'), ts = document.getElementById('v6-top-sub'), td = document.getElementById('header-date');
-  var tb = document.getElementById('v6-top-btns'); if(tb) _v6Set(tb.style, 'display', posted ? '' : 'none');
+  var tb = document.getElementById('v6-top-btns'); if(tb) _v6Set(tb.style, 'display', '');   // My Reports always available (2026-10-21)
+  var _rfb = document.getElementById('v6-refresh-btn'); if(_rfb) _v6Set(_rfb.style, 'display', posted ? '' : 'none');
   var rDate = posted ? h.date : '';
   if(posted){
     var cl = h.client ? getClientDisplayName(h.client) : '';
@@ -5656,6 +5738,312 @@ init();
        style="font-size:15px; color:#1a3a5c; font-weight:bold;"></div>
   <style>@keyframes p2spin { to { transform: rotate(360deg); } }</style>
 </div>
+
+<script>
+// =============================================================================
+// v6 MY REPORTS LANDING (2026-10-21)
+// Shown after every login and from the My Reports button in the top bar.
+// Lists the inspector's open work from the sheet (getOpenReports).  Opening a
+// report drives the normal header selection (date, client, project), so the
+// usual "Checking..." lookup loads it.  No existing function changes behavior.
+// =============================================================================
+var FL_HOME_CACHE_KEY = 'fl_home_cache_v1';
+var FL_INSP_DASH_URL  = 'https://dvernerbalar.github.io/balar-fieldlog/balar_inspector_dashboard.html';
+var _flHome = { reports: [], checkedAt: '', state: 'busy', fromCache: false, open: {}, delTarget: null, seq: 0 };
+
+function _flhEsc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function _flhMe(){ try{ return localStorage.getItem('balar_inspector_name') || ''; }catch(e){ return ''; } }
+function _flhParse(d){ var m = String(d || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? new Date(+m[3], +m[1] - 1, +m[2]) : null; }
+function _flhAge(d){ var dd = _flhParse(d); if(!dd) return null; var t = new Date(); t.setHours(0,0,0,0); return Math.round((t - dd) / 86400000); }
+function _flhNice(d){
+  var dd = _flhParse(d); if(!dd) return d;
+  var s = dd.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+  return _flhAge(d) === 0 ? 'Today, ' + s.replace(/^\w+, /, '') : s;
+}
+function _flhShort(d){ var dd = _flhParse(d); return dd ? dd.toLocaleDateString('en-US', {month:'short', day:'numeric'}).toUpperCase() : String(d || '').toUpperCase(); }
+function _flhTime(iso){ var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}); }
+function _flhWhen(iso){
+  var d = new Date(iso); if(isNaN(d)) return '';
+  return d.toDateString() === new Date().toDateString() ? _flhTime(iso) : d.toLocaleDateString('en-US', {weekday:'short'}) + ' ' + _flhTime(iso);
+}
+function _flhUnsynced(r){
+  try{ return (entries || []).filter(function(e){ return (e.synced === false || e.synced === 'syncing') && e.date === r.date && e.project === r.projectName; }).length; }
+  catch(e){ return 0; }
+}
+function _flhSaveCache(){
+  try{ localStorage.setItem(FL_HOME_CACHE_KEY, JSON.stringify({ inspector: _flhMe(), checkedAt: _flHome.checkedAt, reports: _flHome.reports })); }catch(e){}
+}
+
+function flHomeOpen(){
+  var el = document.getElementById('fl-home'); if(!el) return;
+  var me = _flhMe();
+  _flHome.open = {};   // every section starts collapsed
+  document.getElementById('flh-title').textContent = 'My Reports' + (me ? ' · ' + me : '');
+  document.getElementById('flh-today').textContent = new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+  var c = null;
+  try{ c = JSON.parse(localStorage.getItem(FL_HOME_CACHE_KEY) || 'null'); }catch(e){}
+  if(c && c.inspector === me && Array.isArray(c.reports)){
+    _flHome.reports = c.reports; _flHome.checkedAt = c.checkedAt || ''; _flHome.fromCache = true;
+  } else {
+    _flHome.reports = []; _flHome.checkedAt = ''; _flHome.fromCache = false;
+  }
+  el.classList.add('open');
+  var b = document.getElementById('flh-body'); if(b) b.scrollTop = 0;
+  flHomeRefresh();
+}
+function flHomeClose(){ var el = document.getElementById('fl-home'); if(el) el.classList.remove('open'); }
+
+function flHomeRefresh(){
+  var me = _flhMe(), seq = ++_flHome.seq;
+  _flHome.state = 'busy'; _flhRender();
+  if(!GOOGLE_SCRIPT_URL || !me){ _flHome.state = 'fail'; _flhRender(); return; }
+  // ONE attempt at 30s: the Worker retries inside its 24s budget (same rule as getDropdowns).
+  flFetchJson(GOOGLE_SCRIPT_URL + '?action=getOpenReports&inspector=' + encodeURIComponent(me) + '&_ts=' + Date.now(), 1, 30000, 0)
+    .then(function(d){
+      if(seq !== _flHome.seq) return;
+      if(!d || d.ok !== true || !Array.isArray(d.reports)) throw new Error('bad-response');
+      _flHome.reports = d.reports; _flHome.checkedAt = d.checkedAt || new Date().toISOString();
+      _flHome.fromCache = false; _flHome.state = 'ok';
+      _flhSaveCache(); _flhRender();
+    })
+    .catch(function(){ if(seq !== _flHome.seq) return; _flHome.state = 'fail'; _flhRender(); });
+}
+
+function _flhAgeTag(r){
+  var a = _flhAge(r.date);
+  if(a === null) return '';
+  if(a <= 0) return '<span class="flh-tag gray">TODAY</span>';
+  return '<span class="flh-tag ' + (a === 1 ? 'gold' : 'red') + '">' + a + (a === 1 ? ' DAY' : ' DAYS') + '</span>';
+}
+
+function _flhCard(r, i, kind){
+  var del = !!r.deleteRequested;
+  var cls = 'flh-card' + (kind === 'rej' ? ' rej' : '') + (kind === 'other' ? ' other' : '') + (del ? ' del' : '');
+  var tag = del ? '<span class="flh-tag slate">DELETE REQUESTED ' + _flhEsc(_flhShort(r.deleteRequested)) + '</span>'
+          : kind === 'rej' ? '<span class="flh-tag red">REJECTED</span>' : _flhAgeTag(r);
+  var client = r.client ? getClientDisplayName(r.client) : '';
+  var h = '<div class="' + cls + '"' + (del ? '' : ' data-act="open" data-i="' + i + '" role="button" tabindex="0"') + '>';
+  h += '<div class="flh-row"><span class="flh-cd">' + _flhEsc(_flhNice(r.date)) + '</span>' + tag + '</div>';
+  h += '<div class="flh-sub">' + _flhEsc([r.projectNumber, client].filter(Boolean).join(' · ')) + '</div>';
+  h += '<div class="flh-nm">' + _flhEsc(shortProjectName(r.projectNumber, r.projectName)) + '</div>';
+
+  if(kind === 'rej'){
+    h += '<div class="flh-note"><b>Engineer note:</b> ' + _flhEsc(r.rejectionComment || '(No comment provided)') + '</div>';
+  }
+  if(kind === 'other'){
+    h += '<div class="flh-meta" style="color:#31465e;"><b>' + _flhEsc(r.creator) + '’s report</b> · you have ' + r.myEntries + ' of ' + r.entryCount + ' entries</div>';
+  }
+  if(kind !== 'rej' && !del && Array.isArray(r.ready)){
+    var n = 0, miss = [];
+    r.ready.forEach(function(it){ if(it.ok) n++; else miss.push(it.name); });
+    var all = n === r.ready.length, pct = r.ready.length ? Math.round(n * 100 / r.ready.length) : 0;
+    h += '<div class="flh-row" style="margin-top:2px;"><span style="font-size:12px;color:#31465e;font-weight:600;">Ready for report</span><span class="flh-cd" style="font-size:14px;">' + n + ' of ' + r.ready.length + '</span></div>';
+    h += '<div class="flh-bar' + (all ? ' all' : '') + '"><div style="width:' + pct + '%;"></div></div>';
+    if(!r.entryCount) h += '<div class="flh-miss">No entries logged.' + (miss.length ? '  Still needed: ' + _flhEsc(miss.join(', ')) : '') + '</div>';
+    else h += '<div class="flh-miss' + (all ? ' ok' : '') + '">' + (all ? 'Ready to generate and submit' : 'Still needed: ' + _flhEsc(miss.join(', '))) + '</div>';
+  }
+
+  if(del){
+    h += '<div class="flh-meta">Stays here until the office removes it.  Not counted as outstanding.</div>';
+  } else {
+    var meta = r.entryCount + (r.entryCount === 1 ? ' entry' : ' entries');
+    var names = Object.keys(r.byInspector || {});
+    if(names.length > 1){
+      meta += ' · ' + names.map(function(nm){ return _flhEsc(String(nm).split(/\s+/)[0]) + ' ' + r.byInspector[nm]; }).join(', ');
+    }
+    var un = _flhUnsynced(r);
+    if(un) meta += ' · <b style="color:#b26a00;">' + un + ' not synced on this device</b>';
+    var canDel = r.isCreator && kind !== 'other';
+    h += '<div class="flh-row"><span class="flh-meta">' + meta + '</span>' +
+         (canDel ? '<button type="button" class="flh-lnk" style="color:#5a6b7e;" data-act="del" data-i="' + i + '">Request delete</button>' : '') + '</div>';
+  }
+  return h + '</div>';
+}
+
+function _flhSection(g, label, quiet, count, flag, body){
+  var open = !!_flHome.open[g];
+  return '<div class="flh-list">' +
+    '<button type="button" class="flh-sh' + (g === 'att' ? ' hot' : '') + '" data-act="tog" data-g="' + g + '" aria-expanded="' + open + '">' +
+      '<span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span class="flh-lbl' + (quiet ? ' quiet' : '') + '">' + label + ' · ' + count + '</span>' + (flag || '') + '</span>' +
+      '<span class="flh-chev">' + (open ? 'HIDE ▲' : 'SHOW ▼') + '</span>' +
+    '</button>' + (open ? body : '') + '</div>';
+}
+
+function _flhRender(){
+  var body = document.getElementById('flh-body'); if(!body) return;
+  var R = _flHome.reports || [];
+  var att = [], started = [], other = [], pend = [];
+  R.forEach(function(r, i){
+    var it = { r: r, i: i };
+    if(r.status === 'rejected') att.push(it);
+    else if(r.status === 'pending') pend.push(it);
+    else if(r.isCreator) started.push(it);
+    else other.push(it);
+  });
+  var byDate = function(a, b){ var x = _flhParse(a.r.date), y = _flhParse(b.r.date); return (x ? x.getTime() : 0) - (y ? y.getTime() : 0); };
+  att.sort(byDate); started.sort(byDate); other.sort(byDate); pend.sort(byDate);
+  var startedLive = started.filter(function(it){ return !it.r.deleteRequested; });
+  var outstanding = att.length + startedLive.length + other.length;
+  var haveList = R.length > 0;
+
+  var h = '';
+  if(_flHome.state === 'busy'){
+    h += '<div class="flh-check busy"><span>Checking for open reports…</span></div>';
+  } else if(_flHome.state === 'ok'){
+    h += '<div class="flh-check ok"><span>✓ Checked with server ' + _flhEsc(_flhTime(_flHome.checkedAt)) + '</span><button type="button" class="flh-lnk" data-act="refresh">Refresh</button></div>';
+  } else {
+    h += '<div class="flh-check fail"><div style="font-size:14px;font-weight:700;">Couldn’t check for open reports</div>' +
+         '<div style="font-weight:400;line-height:1.35;">No signal, or the server didn’t answer.  ' +
+         (_flHome.fromCache && _flHome.checkedAt
+           ? 'Showing the list saved on this device as of ' + _flhEsc(_flhWhen(_flHome.checkedAt)) + '.  It may be missing reports or show ones already handled.'
+           : 'Nothing saved on this device yet.') +
+         '</div><button type="button" class="flh-retry" data-act="retry">Retry</button></div>';
+  }
+
+  if(_flHome.state === 'ok' && outstanding === 0){
+    h += '<div class="flh-empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1e8449" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M7 12.5l3 3 7-7"/></svg>' +
+         '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:21px;font-weight:700;color:var(--navy);">No outstanding reports</div>' +
+         '<div style="font-size:14px;color:#31465e;">Nothing started, nothing rejected.</div></div>';
+  }
+
+  if(haveList && (_flHome.state !== 'busy' || _flHome.fromCache)){
+    if(att.length){
+      h += _flhSection('att', 'Needs attention', false, att.length, '<span class="flh-tag red">REJECTED</span>',
+        '<div class="flh-list">' + att.map(function(it){ return _flhCard(it.r, it.i, 'rej'); }).join('') + '</div>');
+    }
+    if(started.length){
+      var oldest = startedLive.length ? _flhAge(startedLive[0].r.date) : null;
+      var flag = oldest && oldest >= 1 ? '<span class="flh-tag ' + (oldest === 1 ? 'gold' : 'red') + '">OLDEST ' + oldest + (oldest === 1 ? ' DAY' : ' DAYS') + '</span>' : '';
+      h += _flhSection('st', 'Started, not submitted', false, startedLive.length, flag,
+        '<div class="flh-list">' + started.map(function(it){ return _flhCard(it.r, it.i, 'st'); }).join('') + '</div>');
+    }
+    if(other.length){
+      h += _flhSection('co', 'Others’ reports with your entries', true, other.length, '',
+        '<div class="flh-list">' + other.map(function(it){ return _flhCard(it.r, it.i, 'other'); }).join('') + '</div>');
+    }
+    if(pend.length){
+      h += _flhSection('pe', 'Waiting on engineer review', true, pend.length, '',
+        '<div class="flh-pend">' + pend.map(function(it){
+          var r = it.r, s = r.submittedAt ? _flhAge(new Date(r.submittedAt).toLocaleDateString('en-US')) : null;
+          return '<div><div style="display:flex;flex-direction:column;gap:2px;min-width:0;"><span class="flh-cd" style="font-size:14px;">' + _flhEsc(_flhNice(r.date)) + '</span>' +
+                 '<span class="flh-meta">' + _flhEsc(r.projectNumber + ' · ' + shortProjectName(r.projectNumber, r.projectName)) + '</span></div>' +
+                 '<span class="flh-meta" style="white-space:nowrap;">' + (s === null ? 'Submitted' : s <= 0 ? 'Submitted today' : 'Submitted ' + s + (s === 1 ? ' day ago' : ' days ago')) + '</span></div>';
+        }).join('') + '</div>');
+    }
+  }
+
+  var me = _flhMe();
+  h += '<a class="flh-dash" href="' + FL_INSP_DASH_URL + '?inspector=' + encodeURIComponent(me) + '&tab=approved" target="_blank" rel="noopener">' +
+       '<span style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:14px;font-weight:600;color:#1b2d42;">Recently approved reports</span>' +
+       '<span class="flh-meta">Opens the Inspector Dashboard, your reports, last 3 weeks</span></span><span class="flh-chev" style="font-size:16px;">›</span></a>';
+
+  body.innerHTML = h;
+}
+
+// One delegated listener: inline onclick handlers have broken on quoting in this codebase.
+(function(){
+  var body = document.getElementById('flh-body'); if(!body) return;
+  function act(ev){
+    var t = ev.target.closest ? ev.target.closest('[data-act]') : null; if(!t) return;
+    var a = t.getAttribute('data-act');
+    if(a === 'tog'){ var g = t.getAttribute('data-g'); _flHome.open[g] = !_flHome.open[g]; _flhRender(); }
+    else if(a === 'open'){ flHomeOpenReport(_flHome.reports[+t.getAttribute('data-i')]); }
+    else if(a === 'del'){ ev.stopPropagation(); flHomeDelAsk(+t.getAttribute('data-i')); }
+    else if(a === 'refresh' || a === 'retry'){ flHomeRefresh(); }
+  }
+  body.addEventListener('click', act);
+  body.addEventListener('keydown', function(ev){ if(ev.key === 'Enter' && ev.target.getAttribute && ev.target.getAttribute('data-act') === 'open') act(ev); });
+})();
+
+// Open a report through the normal selection path: same reset as the old
+// Switch > "Select or Create Different Project", then date, client, project.
+function flHomeOpenReport(r){
+  if(!r) return;
+  if(typeof projectsData === 'undefined' || !projectsData.length){
+    showToast('Still loading the project list.  Try again in a moment.', true); return;
+  }
+  var p = null;
+  for(var k = 0; k < projectsData.length; k++){
+    var x = projectsData[k];
+    if(String(x.number || '').trim() === r.projectNumber && String(x.name || '').trim() === r.projectName){ p = x; break; }
+  }
+  if(!p){ showToast('That project is no longer in the project list.  Ask the office.', true); return; }
+  var d = _flhParse(r.date); if(!d) return;
+  var iso = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  flHomeClose();
+  startNewProjectHeader();
+  document.getElementById('entry-date').value = iso;
+  var cs = document.getElementById('client-select');
+  cs.value = p.client; onClientChange();          // a client with one project selects it and runs the check
+  var ps = document.getElementById('project-select'), want = p.number + '|||' + p.name;
+  if(ps.value !== want){ ps.value = want; if(ps.value === want) onProjectSelectChange(); }
+  _flToTop();
+}
+
+function flHomeNewReport(){
+  flHomeClose();
+  startNewProjectHeader();
+  _flToTop();
+}
+
+// Rejected banner on the report screen: add the engineer's note when the
+// open report is one the landing list knows is rejected.
+function flHomeRejectNoteHtml(){
+  if(!dailyHeader) return '';
+  var R = _flHome.reports || [];
+  for(var i = 0; i < R.length; i++){
+    var r = R[i];
+    if(r.status === 'rejected' && r.rejectionComment && r.projectNumber === String(dailyHeader.projectNumber || '') &&
+       r.projectName === String(dailyHeader.project || '') && r.date === String(dailyHeader.date || '')){
+      return '<div style="margin-top:6px;font-weight:400;">Engineer note: ' + _flhEsc(r.rejectionComment) + '</div>';
+    }
+  }
+  return '';
+}
+
+// ── Delete request ──
+function flHomeDelAsk(i){
+  var r = _flHome.reports[i]; if(!r) return;
+  _flHome.delTarget = r;
+  document.getElementById('flh-del-what').innerHTML = '<b>' + _flhEsc(_flhNice(r.date) + ' · ' + r.projectNumber) + '</b><br>' +
+    _flhEsc(shortProjectName(r.projectNumber, r.projectName)) + ' · ' + r.entryCount + (r.entryCount === 1 ? ' entry' : ' entries');
+  document.getElementById('flh-del-reason').value = '';
+  var err = document.getElementById('flh-del-err'); err.style.display = 'none'; err.textContent = '';
+  var b = document.getElementById('flh-del-send'); b.disabled = false; b.textContent = 'Send request';
+  document.getElementById('flh-del-modal').classList.add('open');
+}
+function flHomeDelClose(){
+  document.getElementById('flh-del-modal').classList.remove('open');
+  _flHome.delTarget = null;
+}
+function flHomeDelSend(){
+  var r = _flHome.delTarget; if(!r) return;
+  var b = document.getElementById('flh-del-send'), err = document.getElementById('flh-del-err');
+  b.disabled = true; b.textContent = 'Sending…'; err.style.display = 'none';
+  var ctrl = new AbortController(), timer = setTimeout(function(){ ctrl.abort(); }, 30000);
+  fetch(GOOGLE_SCRIPT_URL, {
+    method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' }, signal: ctrl.signal,
+    body: JSON.stringify({ action: 'requestHeaderDelete', projectNumber: r.projectNumber, project: r.projectName,
+                           date: r.date, inspector: _flhMe(), reason: document.getElementById('flh-del-reason').value.trim() })
+  })
+  .then(function(res){ clearTimeout(timer); return res.json(); })
+  .then(function(d){
+    if(d && d.success){
+      r.deleteRequested = d.deleteRequested || r.date;
+      _flhSaveCache(); flHomeDelClose(); _flhRender();
+      showToast(d.alreadyRequested ? 'Delete was already requested for this report.' : 'Delete request sent to the office.', false);
+    } else {
+      err.textContent = (d && d.error) || 'The request didn’t go through.  Try again.';
+      err.style.display = 'block'; b.disabled = false; b.textContent = 'Send request';
+    }
+  })
+  .catch(function(){
+    clearTimeout(timer);
+    err.textContent = 'Couldn’t confirm the request reached the office.  Try again; a repeat won’t send a second email.';
+    err.style.display = 'block'; b.disabled = false; b.textContent = 'Send request';
+  });
+}
+</script>
 
 </body>
 </html>

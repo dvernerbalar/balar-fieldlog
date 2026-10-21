@@ -352,6 +352,7 @@ function loadDashboard() {
       allOpt.value = 'all'; allOpt.textContent = 'All Inspectors';
       sel.appendChild(allOpt);
       if (currentVal) sel.value = currentVal;
+      else _flApplyUrlPreselect(sel);
 
       document.getElementById('last-updated').textContent = 'Last updated: ' + new Date().toLocaleString();
       renderDashboard();
@@ -361,6 +362,31 @@ function loadDashboard() {
       document.getElementById('error-container').innerHTML =
         '<div class="error-msg">&#9888; Couldn’t reach the FieldLog server (usually a temporary Google hiccup). <a href="#" onclick="loadDashboard();return false;" style="color:#922b21;font-weight:700;">Retry</a></div>';
     });
+}
+
+// Preselect from the link (added 2026-10-21), used by the v6 My Reports screen:
+//   ?inspector=<name>   matched to the dropdown ignoring case and extra spaces
+//   ?tab=approved       opens the Recently Approved tab
+// Applied once, on the first load.  No match leaves "Select your name...".
+var _flUrlPreselectDone = false;
+function _flApplyUrlPreselect(sel) {
+  if (_flUrlPreselectDone) return;
+  _flUrlPreselectDone = true;
+  var q = new URLSearchParams(window.location.search);
+  var norm = function(s) { return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase(); };
+  var want = norm(q.get('inspector'));
+  if (want) {
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value && sel.options[i].value !== 'all' && norm(sel.options[i].value) === want) {
+        sel.value = sel.options[i].value; break;
+      }
+    }
+  }
+  if (norm(q.get('tab')) === 'approved') {
+    currentTab = 'approved';
+    document.getElementById('tab-active').classList.remove('active');
+    document.getElementById('tab-approved').classList.add('active');
+  }
 }
 
 function switchTab(tab) {
