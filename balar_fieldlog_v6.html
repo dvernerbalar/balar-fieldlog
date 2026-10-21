@@ -5835,6 +5835,7 @@ function _flhCard(r, i, kind){
 
   if(kind === 'rej'){
     h += '<div class="flh-note"><b>Engineer note:</b> ' + _flhEsc(r.rejectionComment || '(No comment provided)') + '</div>';
+    h += '<div class="flh-miss">Not submitted.  Regenerate and resubmit once the corrections are made.</div>';
   }
   if(kind === 'other'){
     h += '<div class="flh-meta" style="color:#31465e;"><b>' + _flhEsc(r.creator) + '’s report</b> · you have ' + r.myEntries + ' of ' + r.entryCount + ' entries</div>';
