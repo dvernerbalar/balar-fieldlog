@@ -275,6 +275,12 @@ textarea{resize:vertical;min-height:90px;}
 .v6-ready.rej{border:1.5px solid #e3b4bb;}
 .v6-ready.rej .v6-ready-txt{color:var(--red);font-weight:700;}
 .v6-ready.ok .v6-ready-txt{color:#1e7e34;font-weight:700;}
+.v6-ready.sync .v6-ready-txt{color:#b26a00;font-weight:700;}
+.v6-ready.sync .v6-bar-fill{background:#d9a441;}
+.fl-ico{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#1e8449;flex-shrink:0;vertical-align:middle;}
+.fl-ico.sync{background:#b26a00;}
+.flh-card.sync{border-left-color:#b26a00;}
+.flh-bar.sync div{background:#d9a441;}
 .v6-ready-rej{display:none;background:#fbeef0;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:13px;line-height:1.35;color:#5c1220;}
 .v6-ready.rej .v6-ready-rej{display:block;}
 .v6-ready-rej .act{display:block;margin-top:4px;font-size:12px;font-weight:600;color:var(--red);line-height:1.3;}
@@ -476,7 +482,7 @@ html.flh-lock, html.flh-lock body, html.flh-lock main{overflow:hidden !important
         <!-- v6: Reload Header is the Refresh button in the top bar -->
       </div>
       <!-- v6: report readiness -->
-      <div class="v6-ready"><div class="v6-ready-top"><span class="v6-ready-txt">Ready for report</span><span class="v6-ready-n"></span></div><div class="v6-bar"><div class="v6-bar-fill"></div></div><div class="v6-ready-rej"></div><div class="v6-ready-miss"></div></div>
+      <div class="v6-ready"><div class="v6-ready-top"><span class="v6-ready-txt">Report progress</span><span class="v6-ready-n"></span></div><div class="v6-bar"><div class="v6-bar-fill"></div></div><div class="v6-ready-rej"></div><div class="v6-ready-miss"></div></div>
     </div>
 
     <!-- Header form -->
@@ -763,7 +769,7 @@ html.flh-lock, html.flh-lock body, html.flh-lock main{overflow:hidden !important
 
     <!-- v6: same readiness bar again right above Generate / Review (not pinned) -->
     <div id="v6-bottom" class="v6-bottom" style="display:none;">
-      <div class="v6-ready"><div class="v6-ready-top"><span class="v6-ready-txt">Ready for report</span><span class="v6-ready-n"></span></div><div class="v6-bar"><div class="v6-bar-fill"></div></div><div class="v6-ready-rej"></div><div class="v6-ready-miss"></div></div>
+      <div class="v6-ready"><div class="v6-ready-top"><span class="v6-ready-txt">Report progress</span><span class="v6-ready-n"></span></div><div class="v6-bar"><div class="v6-bar-fill"></div></div><div class="v6-ready-rej"></div><div class="v6-ready-miss"></div></div>
       <div id="report-btn-container"><button class="btn-report" id="btn-generate-report" onclick="openReportModal()">📄 Generate / Review Report</button><button class="btn-report" id="btn-view-approved" style="display:none;background:#d1f2eb;color:#000;border:2px solid #1a5e35;" onclick="window.open(p2_approvedPdfLink,'_blank')">📄 View Approved Report</button></div>
     </div>
 
@@ -5534,6 +5540,12 @@ function _v6ReadyItems(){
   ];
 }
 
+// Complete-state icons (2026-10-22): a check replaces "6 of 6"; while entries
+// are still uploading, an amber sync icon and "Waiting on N entries to sync".
+var FL_ICON_CHECK = '<span class="fl-ico ok" aria-label="Complete"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
+var FL_ICON_SYNC  = '<span class="fl-ico sync" aria-label="Waiting to sync"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.5-4.5L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16"/><path d="M20 21v-5h-5"/></svg></span>';
+function _flSyncTitle(n){ return 'Waiting on ' + n + (n === 1 ? ' entry' : ' entries') + ' to sync'; }
+
 function _v6Set(el, prop, val){ if(el && el[prop] !== val) el[prop] = val; }
 
 function v6Refresh(){
@@ -5593,20 +5605,23 @@ function v6Refresh(){
   items.forEach(function(it){ if(it.ok) n++; else miss.push(it.short || it.name); });
   var all = n === items.length, locked = _v6Locked();
   var rej = !locked && p2_currentReportStatus === 'rejected';
-  var rt = locked ? (p2_currentReportStatus === 'approved' ? 'Report approved' : 'Submitted, awaiting engineer review') : (rej ? 'Rejected, not submitted' : (all ? 'Ready for report' : 'Report progress'));
+  var rt = locked ? (p2_currentReportStatus === 'approved' ? 'Report approved' : 'Submitted, awaiting engineer review') : (rej ? 'Rejected, not submitted' : (all ? 'Ready to generate and submit' : 'Report progress'));
   var rejNote = rej && typeof flHomeRejectNoteText === 'function' ? flHomeRejectNoteText() : '';
   var rejHtml = rej ? (rejNote ? '<b>Engineer note:</b> ' + String(rejNote).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '') + '<span class="act">Regenerate and resubmit once the corrections are made.</span>' : '';
-  var mt = locked ? '' : (all ? 'Ready to generate' : 'Still needed: ' + miss.join(', '));
+  var mt = locked ? '' : (all ? '' : 'Still needed: ' + miss.join(', '));
   var _un = locked ? 0 : _v6Unsynced();
-  if(_un) mt += (mt ? '  \u00b7  ' : '') + _un + (_un === 1 ? ' entry' : ' entries') + ' not synced yet';
+  var syncWait = all && !locked && !rej && _un > 0;
+  if(syncWait) rt = _flSyncTitle(_un);
+  else if(_un) mt += (mt ? '  \u00b7  ' : '') + _un + (_un === 1 ? ' entry' : ' entries') + ' not synced yet';
+  var nHtml = locked ? '' : (all && !rej ? (syncWait ? FL_ICON_SYNC : FL_ICON_CHECK) : n + ' of ' + items.length);
   var w = (locked ? 100 : Math.round(n * 100 / items.length)) + '%';
   var bars = document.querySelectorAll('.v6-ready');
   for(var bi = 0; bi < bars.length; bi++){
     var rb = bars[bi];
-    _v6Set(rb, 'className', 'v6-ready' + ((all || locked) ? ' all' : '') + (rej ? ' rej' : '') + (all && !locked && !rej ? ' ok' : ''));
+    _v6Set(rb, 'className', 'v6-ready' + ((all || locked) ? ' all' : '') + (rej ? ' rej' : '') + (all && !locked && !rej && !syncWait ? ' ok' : '') + (syncWait ? ' sync' : ''));
     _v6Set(rb.querySelector('.v6-ready-rej'), 'innerHTML', rejHtml);
     _v6Set(rb.querySelector('.v6-ready-txt'), 'textContent', rt);
-    _v6Set(rb.querySelector('.v6-ready-n'), 'textContent', locked ? '' : n + ' of ' + items.length);
+    _v6Set(rb.querySelector('.v6-ready-n'), 'innerHTML', nHtml);
     _v6Set(rb.querySelector('.v6-ready-miss'), 'textContent', mt);
     var fill = rb.querySelector('.v6-bar-fill');
     if(fill && fill.style.width !== w) fill.style.width = w;
@@ -5855,7 +5870,8 @@ function _flhAgeTag(r){
 function _flhCard(r, i, kind){
   var del = !!r.deleteRequested;
   var _rdy = kind !== 'rej' && !del && Array.isArray(r.ready) && r.ready.length && r.ready.every(function(it){ return it.ok; });
-  var cls = 'flh-card' + (kind === 'rej' ? ' rej' : '') + (kind === 'other' ? ' other' : '') + (_rdy ? ' ready' : '') + (del ? ' del' : '');
+  var _syn = _rdy && _flhUnsynced(r) > 0;
+  var cls = 'flh-card' + (kind === 'rej' ? ' rej' : '') + (kind === 'other' ? ' other' : '') + (_rdy && !_syn ? ' ready' : '') + (_syn ? ' sync' : '') + (del ? ' del' : '');
   var tag = del ? '<span class="flh-tag slate">DELETE REQUESTED ' + _flhEsc(_flhShort(r.deleteRequested)) + '</span>'
           : kind === 'rej' ? '<span class="flh-tag red">REJECTED</span>' : _flhAgeTag(r);
   var client = r.client ? getClientDisplayName(r.client) : '';
@@ -5875,9 +5891,13 @@ function _flhCard(r, i, kind){
     var n = 0, miss = [];
     r.ready.forEach(function(it){ if(it.ok) n++; else miss.push(it.name); });
     var all = n === r.ready.length, pct = r.ready.length ? Math.round(n * 100 / r.ready.length) : 0;
-    h += '<div class="flh-row" style="margin-top:2px;"><span style="font-size:12px;font-weight:700;color:' + (all ? '#1e7e34' : '#31465e') + ';">' + (all ? 'Ready for report' : 'Report progress') + '</span><span class="flh-cd" style="font-size:14px;">' + n + ' of ' + r.ready.length + '</span></div>';
-    h += '<div class="flh-bar' + (all ? ' all' : '') + '"><div style="width:' + pct + '%;"></div></div>';
-    h += '<div class="flh-prog' + (all ? ' ok' : '') + '">' + (all ? 'Ready to generate and submit' : 'Still needed: ' + _flhEsc(miss.join(', '))) + '</div>';
+    var unC = all ? _flhUnsynced(r) : 0;
+    var ttl = all ? (unC ? _flSyncTitle(unC) : 'Ready to generate and submit') : 'Report progress';
+    var tclr = all ? (unC ? '#b26a00' : '#1e7e34') : '#31465e';
+    h += '<div class="flh-row" style="margin-top:2px;"><span style="font-size:12px;font-weight:700;color:' + tclr + ';">' + ttl + '</span>' +
+         (all ? (unC ? FL_ICON_SYNC : FL_ICON_CHECK) : '<span class="flh-cd" style="font-size:14px;">' + n + ' of ' + r.ready.length + '</span>') + '</div>';
+    h += '<div class="flh-bar' + (all ? (unC ? ' sync' : ' all') : '') + '"><div style="width:' + pct + '%;"></div></div>';
+    if(!all) h += '<div class="flh-prog">Still needed: ' + _flhEsc(miss.join(', ')) + '</div>';
   }
 
   if(del){
