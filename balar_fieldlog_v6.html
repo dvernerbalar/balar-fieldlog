@@ -5983,7 +5983,8 @@ function _flhRender(){
         '<div class="flh-pend">' + pend.map(function(it){
           var r = it.r, s = r.submittedAt ? _flhAge(new Date(r.submittedAt).toLocaleDateString('en-US')) : null;
           return '<div><div style="display:flex;flex-direction:column;gap:2px;min-width:0;"><span class="flh-cd" style="font-size:14px;">' + _flhEsc(_flhNice(r.date)) + '</span>' +
-                 '<span class="flh-meta">' + _flhEsc(r.projectNumber + ' · ' + shortProjectName(r.projectNumber, r.projectName)) + '</span></div>' +
+                 '<span class="flh-sub">' + _flhEsc([r.projectNumber, r.client ? getClientDisplayName(r.client) : ''].filter(Boolean).join(' \u00b7 ')) + '</span>' +
+                 '<span class="flh-meta">' + _flhEsc(shortProjectName(r.projectNumber, r.projectName)) + '</span></div>' +
                  '<span class="flh-meta" style="white-space:nowrap;">' + (s === null ? 'Submitted' : s <= 0 ? 'Submitted today' : 'Submitted ' + s + (s === 1 ? ' day ago' : ' days ago')) + '</span></div>';
         }).join('') + '</div>');
     }
