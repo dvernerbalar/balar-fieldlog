@@ -5807,14 +5807,14 @@ function _flhParse(d){ var m = String(d || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d
 function _flhAge(d){ var dd = _flhParse(d); if(!dd) return null; var t = new Date(); t.setHours(0,0,0,0); return Math.round((t - dd) / 86400000); }
 function _flhNice(d){
   var dd = _flhParse(d); if(!dd) return d;
-  var s = dd.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+  var s = dd.toLocaleDateString('en-US', {weekday:'short', month:'long', day:'numeric', year:'numeric'});   // "Wed, October 14, 2026"
   return _flhAge(d) === 0 ? 'Today, ' + s.replace(/^\w+, /, '') : s;
 }
-function _flhShort(d){ var dd = _flhParse(d); return dd ? dd.toLocaleDateString('en-US', {month:'short', day:'numeric'}).toUpperCase() : String(d || '').toUpperCase(); }
+function _flhShort(d){ var dd = _flhParse(d); return dd ? dd.toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'}).toUpperCase() : String(d || '').toUpperCase(); }
 function _flhTime(iso){ var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}); }
 function _flhWhen(iso){
   var d = new Date(iso); if(isNaN(d)) return '';
-  return d.toDateString() === new Date().toDateString() ? _flhTime(iso) : d.toLocaleDateString('en-US', {weekday:'short'}) + ' ' + _flhTime(iso);
+  return d.toDateString() === new Date().toDateString() ? _flhTime(iso) : d.toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'}) + ', ' + _flhTime(iso);
 }
 function _flhUnsynced(r){
   try{ return (entries || []).filter(function(e){ return (e.synced === false || e.synced === 'syncing') && e.date === r.date && e.project === r.projectName; }).length; }
@@ -5829,7 +5829,7 @@ function flHomeOpen(){
   var me = _flhMe();
   _flHome.open = {};   // every section starts collapsed
   document.getElementById('flh-title').textContent = 'My Reports' + (me ? ' · ' + me : '');
-  document.getElementById('flh-today').textContent = new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+  document.getElementById('flh-today').textContent = new Date().toLocaleDateString('en-US', {weekday:'short', month:'long', day:'numeric', year:'numeric'});
   var c = null;
   try{ c = JSON.parse(localStorage.getItem(FL_HOME_CACHE_KEY) || 'null'); }catch(e){}
   if(c && c.inspector === me && Array.isArray(c.reports)){
@@ -5872,7 +5872,7 @@ function _flhCard(r, i, kind){
   var _rdy = kind !== 'rej' && !del && Array.isArray(r.ready) && r.ready.length && r.ready.every(function(it){ return it.ok; });
   var _syn = _rdy && _flhUnsynced(r) > 0;
   var cls = 'flh-card' + (kind === 'rej' ? ' rej' : '') + (kind === 'other' ? ' other' : '') + (_rdy && !_syn ? ' ready' : '') + (_syn ? ' sync' : '') + (del ? ' del' : '');
-  var tag = del ? '<span class="flh-tag slate">DELETE REQUESTED ' + _flhEsc(_flhShort(r.deleteRequested)) + '</span>'
+  var tag = del ? '<span class="flh-tag slate">DELETE REQUESTED</span>'
           : kind === 'rej' ? '<span class="flh-tag red">REJECTED</span>' : _flhAgeTag(r);
   var client = r.client ? getClientDisplayName(r.client) : '';
   var h = '<div class="' + cls + '"' + (del ? '' : ' data-act="open" data-i="' + i + '" role="button" tabindex="0"') + '>';
@@ -5901,7 +5901,8 @@ function _flhCard(r, i, kind){
   }
 
   if(del){
-    h += '<div class="flh-meta">Stays here until the office removes it.  Not counted as outstanding.</div>';
+    var _dd = _flhParse(r.deleteRequested);
+    h += '<div class="flh-meta">Requested delete on ' + _flhEsc(_dd ? _dd.toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'}) : r.deleteRequested) + '</div>';
   } else {
     var meta = r.entryCount + (r.entryCount === 1 ? ' entry' : ' entries');
     var names = Object.keys(r.byInspector || {});
