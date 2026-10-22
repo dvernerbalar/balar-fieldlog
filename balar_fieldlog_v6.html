@@ -266,14 +266,15 @@ textarea{resize:vertical;min-height:90px;}
 .v6-ready-top{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:600;color:#31465e;margin-bottom:7px;}
 .v6-ready-n{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:var(--navy);}
 .v6-bar{height:8px;background:#e8ecf0;border-radius:4px;overflow:hidden;}
-.v6-bar-fill{height:100%;width:0;background:var(--red);border-radius:4px;transition:width 0.3s,background 0.3s;}
+.v6-bar-fill{height:100%;width:0;background:#8d9fb5;border-radius:4px;transition:width 0.3s,background 0.3s;}
 .v6-ready.all .v6-bar-fill{background:#1e8449;}
-.v6-ready-miss{font-size:12px;font-weight:600;color:var(--red);margin-top:7px;line-height:1.35;}
+.v6-ready-miss{font-size:12px;font-weight:600;color:#5a6b7e;margin-top:7px;line-height:1.35;}
 .v6-ready-miss:empty{display:none;}
 .v6-ready.all .v6-ready-miss{color:#1e7e34;}
 /* Rejected, not submitted (2026-10-21): both ready bars carry the engineer note */
 .v6-ready.rej{border:1.5px solid #e3b4bb;}
 .v6-ready.rej .v6-ready-txt{color:var(--red);font-weight:700;}
+.v6-ready.ok .v6-ready-txt{color:#1e7e34;font-weight:700;}
 .v6-ready-rej{display:none;background:#fbeef0;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:13px;line-height:1.35;color:#5c1220;}
 .v6-ready.rej .v6-ready-rej{display:block;}
 .v6-ready-rej .act{display:block;margin-top:4px;font-size:12px;font-weight:600;color:var(--red);line-height:1.3;}
@@ -282,8 +283,11 @@ textarea{resize:vertical;min-height:90px;}
 @media (pointer:coarse){
   input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]), select, textarea{font-size:16px !important;}
 }
+/* Two-step Day Type picker (2026-10-22) */
+.fl-dt{display:flex;flex-direction:column;gap:8px;}
+.fl-dt select, .fl-dt input{width:100%;box-sizing:border-box;font-size:16px;}
 /* v6 My Reports landing (2026-10-21) */
-#fl-home{position:fixed;inset:0;z-index:9000;background:#f4f6f8;display:none;flex-direction:column;}
+#fl-home{position:fixed;inset:0;z-index:9000;background:#e4e8ed;display:none;flex-direction:column;}
 #fl-home.open{display:flex;}
 .flh-top{background:var(--navy);border-bottom:3px solid var(--red);padding:calc(12px + env(safe-area-inset-top)) 16px 12px;display:flex;flex-direction:column;gap:5px;flex-shrink:0;}
 .flh-row{display:flex;justify-content:space-between;align-items:center;gap:8px;}
@@ -302,20 +306,22 @@ html.flh-lock, html.flh-lock body, html.flh-lock main{overflow:hidden !important
 .flh-check.fail{background:#fff8e1;border:1px solid #ffc107;color:#5c4500;flex-direction:column;align-items:flex-start;}
 .flh-lnk{background:none;border:none;padding:4px 0;font:inherit;font-size:12px;font-weight:600;color:inherit;text-decoration:underline;cursor:pointer;}
 .flh-retry{background:#7a5c00;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;}
-.flh-sh{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;background:#fff;border:1px solid #e0e5ea;border-radius:10px;padding:12px 14px;min-height:48px;cursor:pointer;font:inherit;text-align:left;}
-.flh-sh.hot{border-color:#e3b4bb;}
-.flh-lbl{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--red);}
-.flh-lbl.quiet{color:#31465e;}
-.flh-chev{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;color:#5a6b7e;white-space:nowrap;}
+.flh-sh{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;background:#1b2d42;border:none;border-radius:8px;padding:12px 14px;min-height:48px;cursor:pointer;font:inherit;text-align:left;margin-top:4px;}
+.flh-cnt{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;background:#fff;color:var(--navy);border-radius:10px;padding:1px 8px;}
+.flh-lbl{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;}
+.flh-lbl.quiet{color:#fff;}
+.flh-chev{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:#b8c6d6;white-space:nowrap;}
+.flh-dash .flh-chev{color:#5a6b7e;}
 .flh-tag{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;border-radius:4px;padding:2px 7px;letter-spacing:.5px;white-space:nowrap;}
 .flh-tag.red{background:var(--red);color:#fff;}
 .flh-tag.gold{background:#f6c343;color:#3d2c00;}
 .flh-tag.gray{background:#e8ecf0;color:#31465e;}
 .flh-tag.slate{background:#5a6b7e;color:#fff;}
 .flh-list{display:flex;flex-direction:column;gap:8px;}
-.flh-card{background:#fff;border:1px solid #e0e5ea;border-radius:10px;padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;flex-direction:column;gap:6px;cursor:pointer;}
-.flh-card.rej{border-color:#e3b4bb;}
-.flh-card.other{background:#fafbfc;}
+.flh-card{background:#fff;border:1px solid #d5dce3;border-left:5px solid #8d9fb5;border-radius:10px;padding:12px 14px 12px 15px;box-shadow:0 2px 6px rgba(13,27,42,0.12);display:flex;flex-direction:column;gap:6px;cursor:pointer;}
+.flh-card.rej{border-left-color:var(--red);}
+.flh-card.ready{border-left-color:#1e8449;}
+.flh-card.other{border-left-color:#31465e;}
 .flh-card.del{opacity:.7;cursor:default;}
 .flh-cd{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--navy);letter-spacing:.3px;}
 .flh-sub{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;color:#5a6b7e;letter-spacing:.4px;text-transform:uppercase;}
@@ -323,14 +329,16 @@ html.flh-lock, html.flh-lock body, html.flh-lock main{overflow:hidden !important
 .flh-meta{font-size:12px;color:#5a6b7e;}
 .flh-note{background:#fbeef0;border-radius:6px;padding:8px 10px;font-size:13px;line-height:1.35;color:#5c1220;}
 .flh-bar{height:6px;background:#e8ecf0;border-radius:3px;overflow:hidden;}
-.flh-bar div{height:100%;background:var(--red);}
+.flh-bar div{height:100%;background:#8d9fb5;}
 .flh-bar.all div{background:#1e8449;}
 .flh-miss{font-size:12px;font-weight:600;color:var(--red);line-height:1.3;}
+.flh-prog{font-size:12px;font-weight:600;color:#5a6b7e;line-height:1.3;}
+.flh-prog.ok{color:#1e7e34;}
 .flh-miss.ok{color:#1e7e34;}
-.flh-pend{background:#fff;border:1px solid #e0e5ea;border-radius:10px;padding:4px 14px;}
+.flh-pend{background:#fff;border:1px solid #d5dce3;box-shadow:0 2px 6px rgba(13,27,42,0.12);border-radius:10px;padding:4px 14px;}
 .flh-pend > div{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eef1f4;}
 .flh-pend > div:last-child{border-bottom:none;}
-.flh-dash{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border:1px solid #e0e5ea;border-radius:10px;padding:12px 14px;text-decoration:none;margin-top:4px;}
+.flh-dash{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border:1px solid #d5dce3;box-shadow:0 2px 6px rgba(13,27,42,0.12);border-radius:10px;padding:12px 14px;text-decoration:none;margin-top:4px;}
 .flh-empty{background:#fff;border:1px solid #b9dfc3;border-radius:10px;padding:24px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;}
 .flh-modal{position:fixed;inset:0;z-index:9500;background:rgba(13,27,42,.55);display:none;align-items:center;justify-content:center;padding:16px;}
 .flh-modal.open{display:flex;}
@@ -522,7 +530,7 @@ html.flh-lock, html.flh-lock body, html.flh-lock main{overflow:hidden !important
       <div id="daytype-form-view">
         <div class="card header-card" id="daytype-card">
           <select id="day-type" style="width:100%;font-size:16px;" onchange="if(this.value) saveDayType();"><option value="">Select day type...</option><option value="Working Day">Working Day</option><option value="Non-Working Day (No Contractor)">Non-Working Day (No Contractor)</option><option value="Non-Working Day (Weather)">Non-Working Day (Weather)</option><option value="Non-Working Day (Holiday)">Non-Working Day (Holiday)</option><option value="Non-Working Day (Weekend)">Non-Working Day (Weekend)</option></select>
-          <div id="daytype-hint" style="font-size:12px;color:#888;margin-top:6px;">Required before the report.  Saves as soon as you pick one.</div>
+          <div id="daytype-hint" style="font-size:12px;color:#888;margin-top:6px;">Required before the report.  Saves as soon as the day type (and reason, for a non-working day) is picked.</div>
           <div id="daytype-error" class="error-box" style="margin-top:8px;"></div>
           <button type="button" id="daytype-cancel" onclick="_flDayTypeShow(dailyHeader)" style="display:none;margin-top:8px;border:none;background:none;color:#1565c0;font-size:14px;font-weight:600;cursor:pointer;padding:4px 0;">Cancel</button>
         </div>
@@ -3445,6 +3453,7 @@ function _flSetDayTypeSelect(id, val){
     }
   }
   sel.value = val;
+  if(typeof _flDTSync === 'function') _flDTSync(id);   // two-step Day Type picker (2026-10-22)
 }
 function closeEditHeaderModal(){document.getElementById('edit-header-modal').classList.remove('open');}
 function saveEditHeader(){
@@ -5519,8 +5528,9 @@ function _v6ReadyItems(){
     {name:'Daily Conditions', short:'Conditions', ok: _v6Done('conditions'), k:'conditions'},
     {name:'Equipment',        ok: _v6Done('equipment'),  k:'equipment'},
     {name:'Workforce',        ok: _v6Done('workforce'),  k:'workforce'},
-    {name:'Daily Summary', short:'Summary',    ok: _v6Done('narrative'),  k:'narrative'},
-    {name: u ? (u + ' unsynced entr' + (u === 1 ? 'y' : 'ies')) : 'Entries synced', ok: u === 0, k:'log'}
+    {name:'Daily Summary', short:'Summary',    ok: _v6Done('narrative'),  k:'narrative'}
+    // 2026-10-22: "Entries synced" no longer counted.  Entries aren't required, and
+    // Generate already refuses while any entry is unsynced.  Shown as a note instead.
   ];
 }
 
@@ -5583,15 +5593,17 @@ function v6Refresh(){
   items.forEach(function(it){ if(it.ok) n++; else miss.push(it.short || it.name); });
   var all = n === items.length, locked = _v6Locked();
   var rej = !locked && p2_currentReportStatus === 'rejected';
-  var rt = locked ? (p2_currentReportStatus === 'approved' ? 'Report approved' : 'Submitted, awaiting engineer review') : (rej ? 'Rejected, not submitted' : 'Ready for report');
+  var rt = locked ? (p2_currentReportStatus === 'approved' ? 'Report approved' : 'Submitted, awaiting engineer review') : (rej ? 'Rejected, not submitted' : (all ? 'Ready for report' : 'Report progress'));
   var rejNote = rej && typeof flHomeRejectNoteText === 'function' ? flHomeRejectNoteText() : '';
   var rejHtml = rej ? (rejNote ? '<b>Engineer note:</b> ' + String(rejNote).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '') + '<span class="act">Regenerate and resubmit once the corrections are made.</span>' : '';
   var mt = locked ? '' : (all ? 'Ready to generate' : 'Still needed: ' + miss.join(', '));
+  var _un = locked ? 0 : _v6Unsynced();
+  if(_un) mt += (mt ? '  \u00b7  ' : '') + _un + (_un === 1 ? ' entry' : ' entries') + ' not synced yet';
   var w = (locked ? 100 : Math.round(n * 100 / items.length)) + '%';
   var bars = document.querySelectorAll('.v6-ready');
   for(var bi = 0; bi < bars.length; bi++){
     var rb = bars[bi];
-    _v6Set(rb, 'className', 'v6-ready' + ((all || locked) ? ' all' : '') + (rej ? ' rej' : ''));
+    _v6Set(rb, 'className', 'v6-ready' + ((all || locked) ? ' all' : '') + (rej ? ' rej' : '') + (all && !locked && !rej ? ' ok' : ''));
     _v6Set(rb.querySelector('.v6-ready-rej'), 'innerHTML', rejHtml);
     _v6Set(rb.querySelector('.v6-ready-txt'), 'textContent', rt);
     _v6Set(rb.querySelector('.v6-ready-n'), 'textContent', locked ? '' : n + ' of ' + items.length);
@@ -5842,7 +5854,8 @@ function _flhAgeTag(r){
 
 function _flhCard(r, i, kind){
   var del = !!r.deleteRequested;
-  var cls = 'flh-card' + (kind === 'rej' ? ' rej' : '') + (kind === 'other' ? ' other' : '') + (del ? ' del' : '');
+  var _rdy = kind !== 'rej' && !del && Array.isArray(r.ready) && r.ready.length && r.ready.every(function(it){ return it.ok; });
+  var cls = 'flh-card' + (kind === 'rej' ? ' rej' : '') + (kind === 'other' ? ' other' : '') + (_rdy ? ' ready' : '') + (del ? ' del' : '');
   var tag = del ? '<span class="flh-tag slate">DELETE REQUESTED ' + _flhEsc(_flhShort(r.deleteRequested)) + '</span>'
           : kind === 'rej' ? '<span class="flh-tag red">REJECTED</span>' : _flhAgeTag(r);
   var client = r.client ? getClientDisplayName(r.client) : '';
@@ -5862,10 +5875,9 @@ function _flhCard(r, i, kind){
     var n = 0, miss = [];
     r.ready.forEach(function(it){ if(it.ok) n++; else miss.push(it.name); });
     var all = n === r.ready.length, pct = r.ready.length ? Math.round(n * 100 / r.ready.length) : 0;
-    h += '<div class="flh-row" style="margin-top:2px;"><span style="font-size:12px;color:#31465e;font-weight:600;">Ready for report</span><span class="flh-cd" style="font-size:14px;">' + n + ' of ' + r.ready.length + '</span></div>';
+    h += '<div class="flh-row" style="margin-top:2px;"><span style="font-size:12px;font-weight:700;color:' + (all ? '#1e7e34' : '#31465e') + ';">' + (all ? 'Ready for report' : 'Report progress') + '</span><span class="flh-cd" style="font-size:14px;">' + n + ' of ' + r.ready.length + '</span></div>';
     h += '<div class="flh-bar' + (all ? ' all' : '') + '"><div style="width:' + pct + '%;"></div></div>';
-    if(!r.entryCount) h += '<div class="flh-miss">No entries logged.' + (miss.length ? '  Still needed: ' + _flhEsc(miss.join(', ')) : '') + '</div>';
-    else h += '<div class="flh-miss' + (all ? ' ok' : '') + '">' + (all ? 'Ready to generate and submit' : 'Still needed: ' + _flhEsc(miss.join(', '))) + '</div>';
+    h += '<div class="flh-prog' + (all ? ' ok' : '') + '">' + (all ? 'Ready to generate and submit' : 'Still needed: ' + _flhEsc(miss.join(', '))) + '</div>';
   }
 
   if(del){
@@ -5888,8 +5900,8 @@ function _flhCard(r, i, kind){
 function _flhSection(g, label, quiet, count, flag, body){
   var open = !!_flHome.open[g];
   return '<div class="flh-list">' +
-    '<button type="button" class="flh-sh' + (g === 'att' ? ' hot' : '') + '" data-act="tog" data-g="' + g + '" aria-expanded="' + open + '">' +
-      '<span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span class="flh-lbl' + (quiet ? ' quiet' : '') + '">' + label + ' · ' + count + '</span>' + (flag || '') + '</span>' +
+    '<button type="button" class="flh-sh" data-act="tog" data-g="' + g + '" aria-expanded="' + open + '">' +
+      '<span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span class="flh-lbl' + (quiet ? ' quiet' : '') + '">' + label + '</span><span class="flh-cnt">' + count + '</span>' + (flag || '') + '</span>' +
       '<span class="flh-chev">' + (open ? 'HIDE ▲' : 'SHOW ▼') + '</span>' +
     '</button>' + (open ? body : '') + '</div>';
 }
@@ -5979,6 +5991,94 @@ function _flhRender(){
   body.addEventListener('click', act);
   body.addEventListener('keydown', function(ev){ if(ev.key === 'Enter' && ev.target.getAttribute && ev.target.getAttribute('data-act') === 'open') act(ev); });
 })();
+
+// =============================================================================
+// TWO-STEP DAY TYPE (2026-10-22)
+// First pick Working Day / Non-Working Day; a non-working day then asks why:
+// No Contractor, Weather, Holiday, Weekend or Other.  No free text (Drew,
+// 2026-10-22): long reasons would land in the report header; the narrative is
+// the place to explain.  The result is written into the ORIGINAL select in the
+// same text it always held, e.g. "Non-Working Day (Weather)", so the sheet
+// column, the report and existing values are unchanged.  The original select is
+// hidden and stays the source of truth.
+// =============================================================================
+var FL_DT_REASONS = ['No Contractor', 'Weather', 'Holiday', 'Weekend', 'Other'];
+var FL_DT_TARGETS = { 'day-type': function(){ saveDayType(); }, 'edit-header-daytype': null };
+
+function _flDTParse(v){
+  v = String(v || '').trim();
+  if(!v) return { kind: '', why: '' };
+  if(v === 'Working Day') return { kind: 'Working Day', why: '' };
+  var m = v.match(/^Non-Working Day\s*\((.*)\)\s*$/);
+  if(m && FL_DT_REASONS.indexOf(m[1].trim()) >= 0) return { kind: 'Non-Working Day', why: m[1].trim() };
+  // "Non-Working Day" alone, or an older custom reason: shown as Non-Working Day
+  // with no reason picked; the saved text stays as is until someone changes it.
+  if(/^Non-Working Day/.test(v)) return { kind: 'Non-Working Day', why: '' };
+  return { kind: '', why: '' };
+}
+
+function _flDTBuild(id){
+  var sel = document.getElementById(id);
+  if(!sel || document.getElementById(id + '-kind')) return;
+  sel.style.display = 'none';
+  var wrap = document.createElement('div'); wrap.className = 'fl-dt'; wrap.id = id + '-dt';
+  var reasons = FL_DT_REASONS.map(function(r){ return '<option value="' + r + '">' + r + '</option>'; }).join('');
+  wrap.innerHTML =
+    '<select id="' + id + '-kind" aria-label="Day type"><option value="">Select day type...</option><option value="Working Day">Working Day</option><option value="Non-Working Day">Non-Working Day</option></select>' +
+    '<select id="' + id + '-why" aria-label="Reason for non-working day" style="display:none;"><option value="">Select reason...</option>' + reasons + '</select>';
+  sel.parentNode.insertBefore(wrap, sel.nextSibling);
+  document.getElementById(id + '-kind').addEventListener('change', function(){ _flDTLayout(id); _flDTCommit(id); });
+  document.getElementById(id + '-why').addEventListener('change', function(){ _flDTCommit(id); });
+  _flDTSync(id);
+}
+
+function _flDTLayout(id){
+  var kind = document.getElementById(id + '-kind'); if(!kind) return;
+  document.getElementById(id + '-why').style.display = kind.value === 'Non-Working Day' ? '' : 'none';
+}
+
+// Compose the value; write it to the original select once it is complete.
+function _flDTCommit(id){
+  var kind = document.getElementById(id + '-kind'); if(!kind) return;
+  var why = document.getElementById(id + '-why');
+  var v = '';
+  if(kind.value === 'Working Day') v = 'Working Day';
+  else if(kind.value === 'Non-Working Day' && why.value) v = 'Non-Working Day (' + why.value + ')';
+  var sel = document.getElementById(id);
+  if(!v){ if(!FL_DT_TARGETS[id] && sel) sel.value = ''; return; }
+  _flSetDayTypeSelect(id, v);
+  if(FL_DT_TARGETS[id]) FL_DT_TARGETS[id]();
+}
+
+// Original select -> the two-step picker (called from _flSetDayTypeSelect).
+function _flDTSync(id){
+  var kind = document.getElementById(id + '-kind'); if(!kind) return;
+  var sel = document.getElementById(id);
+  var p = _flDTParse(sel ? sel.value : '');
+  kind.value = p.kind;
+  document.getElementById(id + '-why').value = p.why;
+  _flDTLayout(id);
+}
+
+Object.keys(FL_DT_TARGETS).forEach(_flDTBuild);
+
+// Tap the navy top bar to scroll back to the top (2026-10-22).  iOS's own
+// tap-the-clock gesture doesn't reach the app's scroll areas when opened from a
+// home screen shortcut, so the app bar does it instead.  Buttons in the bar
+// keep their normal jobs.
+document.addEventListener('click', function(ev){
+  var t = ev.target; if(!t || !t.closest) return;
+  var bar = t.closest('header, .flh-top'); if(!bar) return;
+  if(t.closest('button, a, input, select, textarea, label')) return;
+  var smooth = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var opt = smooth ? { top: 0, behavior: 'smooth' } : { top: 0 };
+  if(bar.classList.contains('flh-top')){
+    var b = document.getElementById('flh-body'); if(b && b.scrollTo) b.scrollTo(opt);
+    return;
+  }
+  try{ window.scrollTo(opt); }catch(e){ window.scrollTo(0, 0); }
+  var m = document.querySelector('main'); if(m && m.scrollTop && m.scrollTo) m.scrollTo(opt);   // native: main is the scroller
+});
 
 // Open a report through the normal selection path: same reset as the old
 // Switch > "Select or Create Different Project", then date, client, project.
