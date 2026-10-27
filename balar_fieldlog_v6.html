@@ -759,7 +759,8 @@ html.flh-lock, html.flh-lock body, html.flh-lock main{overflow:hidden !important
             <div style="font-size:13px;color:#555;margin-bottom:10px;">Upload additional site photos for this date. Saved at full quality to the project photo folder and linked in the report.</div>
             <div id="batch-wifi-banner" style="display:none;background:#fef9e7;border:1px solid #f9e79f;color:#9a7d0a;font-size:12px;padding:8px 12px;border-radius:5px;margin-bottom:10px;">&#128246; For best results, connect to WiFi before uploading large amounts of photos.</div>
             <input type="file" id="batch-photo-input" accept="image/*" multiple style="display:none;">
-            <button class="btn-post-header" onclick="batchSelectPhotos()" style="background:#1a3a5c;margin-bottom:10px;">&#128247; Select Photos from Library</button>
+            <button class="btn-post-header" onclick="batchSelectPhotos()" style="background:#1a3a5c;margin-bottom:6px;">&#128247; Select Photos from Library</button>
+            <div style="font-size:12px;color:#777;margin-bottom:10px;">After you tap &#10003;, a large selection can sit on the photo screen for a minute or more while your phone prepares the photos.  That's normal; uploading starts on its own.</div>
             <div id="batch-upload-status" style="display:none;font-size:13px;margin-top:8px;"></div>
             <div id="batch-upload-results" style="margin-top:8px;font-size:12px;"></div>
           </div>
@@ -4949,13 +4950,14 @@ var _batchWakeLock = null;
 
 function batchSelectPhotos(){
   if(_batch && _batch.active){ showToast('Photos are still uploading. Wait for this batch to finish.', true); return; }
+  _batchAcquireWakeLock();   // inside the tap: iOS only grants it on a user gesture
   var banner=document.getElementById('batch-wifi-banner');
   if(banner) banner.style.display='block';
   var status=document.getElementById('batch-upload-status');
   if(status){
     status.style.display='block';
     status.style.color='#555';
-    status.textContent='Opening your photo library…  After you tap ✓, a large selection can take a minute or more to prepare before uploading starts.  Keep the app open.';
+    status.textContent='Opening your photo library…';
   }
   var input=document.getElementById('batch-photo-input');
   if(input) input.click();
@@ -4981,8 +4983,20 @@ document.addEventListener('visibilitychange',function(){
   }
 });
 
+// iOS refuses wake lock requests that don't come from a tap (e.g. after the
+// picker returns or the app comes back).  While a batch runs, any tap on the
+// page re-requests it if it isn't held.
+['touchend','click'].forEach(function(ev){
+  document.addEventListener(ev, function(){
+    if(_batch && _batch.active && !(_batchWakeLock && !_batchWakeLock.released)){
+      _batchAcquireWakeLock().then(function(){ _batchRender(); });
+    }
+  }, true);
+});
+
 function _batchClearPrompt(){
   if(_batch && _batch.active) return;
+  _batchReleaseWakeLock();
   var status=document.getElementById('batch-upload-status');
   if(status && !(_batch && _batch.items.length)){ status.style.display='none'; status.textContent=''; }
 }
@@ -5004,6 +5018,7 @@ async function _batchAcquireWakeLock(){
     if(!('wakeLock' in navigator) || document.visibilityState!=='visible') return;
     if(_batchWakeLock && !_batchWakeLock.released) return;
     _batchWakeLock=await navigator.wakeLock.request('screen');
+    _batchWakeLock.addEventListener('release', function(){ if(_batch && _batch.active) _batchRender(); });
   }catch(e){ _batchWakeLock=null; }   // unsupported or refused: upload still works
 }
 function _batchReleaseWakeLock(){
@@ -5174,7 +5189,9 @@ function _batchRender(override){
   if(override){ status.style.color='#555'; status.textContent=override; return; }
   if(_batch.active || c.queued || c.uploading){
     status.style.color='#1a3a5c';
-    status.textContent='Uploading…  '+c.done+' of '+sent+' done.  Keep the app open; the screen will stay on.'+skipNote;
+    var held=_batchWakeLock && !_batchWakeLock.released;
+    status.textContent='Uploading…  '+c.done+' of '+sent+' done.  Keep the app open; '+
+      (held ? 'the screen will stay on.' : 'tap anywhere on the page to keep the screen on.  If it locks, uploading picks up when you return.')+skipNote;
   } else if(c.failed===0){
     status.style.color='#1a5e35';
     status.textContent='✅ All '+sent+' photo'+(sent===1?'':'s')+' uploaded successfully.'+skipNote;
