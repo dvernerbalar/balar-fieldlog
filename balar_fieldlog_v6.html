@@ -1081,7 +1081,7 @@ function onClientChange(){
   if(batchStatus){batchStatus.style.display='none';batchStatus.textContent='';}
   if(batchResults) batchResults.innerHTML='';
   if(batchWifi) batchWifi.style.display='none';
-  window._batchFailedFiles=[];
+  _batchReset();
   p2_currentReportStatus='';
   p2_currentApprovedBy='';
   p2_currentApprovedTimestamp='';
@@ -4081,7 +4081,7 @@ function switchToProject(key){
   if(batchStatus){batchStatus.style.display='none';batchStatus.textContent='';}
   if(batchResults) batchResults.innerHTML='';
   if(batchWifi) batchWifi.style.display='none';
-  window._batchFailedFiles=[];
+  _batchReset();
   p2_currentReportStatus=dailyHeader.report_status||'';
   p2_currentApprovedBy=dailyHeader.approved_by||'';
   p2_currentApprovedTimestamp=dailyHeader.approved_timestamp||'';
@@ -4102,7 +4102,7 @@ function startNewProjectHeader(){
   if(batchStatus){batchStatus.style.display='none';batchStatus.textContent='';}
   if(batchResults) batchResults.innerHTML='';
   if(batchWifi) batchWifi.style.display='none';
-  window._batchFailedFiles=[];
+  _batchReset();
   p2_currentReportStatus='';
   p2_currentApprovedBy='';
   p2_currentApprovedTimestamp='';
@@ -4927,91 +4927,273 @@ var p2_currentApprovedBy        = '';
 var p2_currentApprovedTimestamp = '';
 
 // ── BATCH PHOTO UPLOAD ──────────────────────────────────────────
+// v6 (2026-10-27): 3 uploads at a time, screen kept awake while uploading,
+// automatic resume after the phone locks or the app is switched away,
+// status line always recounted from the real per-photo state, and a
+// per-device "already uploaded" list so re-selecting the same photos after
+// iOS closes the page skips the ones that made it.
+//
+// Backend (Code.gs 2026-10-27, additive): batchUploadPhoto returns folderId;
+// later photos send it back so the server skips the Drive folder search.
+// dedupe:true makes the server skip a file already in the folder with the
+// same name AND size (a retry after a lost response).  An older backend
+// ignores both.  Photos go one at a time until the first one lands (the
+// date folder then exists), then BATCH_CONCURRENCY at a time.
+var BATCH_CONCURRENCY   = 3;
+var BATCH_TIMEOUT_MS    = 90000;
+var BATCH_AUTO_ATTEMPTS = 2;      // automatic tries before a manual Retry button
+var BATCH_DONE_PREFIX   = 'fl_batch_done_';
+var BATCH_DONE_DAYS     = 14;
+var _batch = null;
+var _batchWakeLock = null;
+
 function batchSelectPhotos(){
+  if(_batch && _batch.active){ showToast('Photos are still uploading. Wait for this batch to finish.', true); return; }
   var banner=document.getElementById('batch-wifi-banner');
   if(banner) banner.style.display='block';
+  var status=document.getElementById('batch-upload-status');
+  if(status){
+    status.style.display='block';
+    status.style.color='#555';
+    status.textContent='Opening your photo library…  After you tap ✓, a large selection can take a minute or more to prepare before uploading starts.  Keep the app open.';
+  }
   var input=document.getElementById('batch-photo-input');
   if(input) input.click();
 }
 
 document.addEventListener('DOMContentLoaded',function(){
   var input=document.getElementById('batch-photo-input');
-  if(input) input.addEventListener('change',function(e){
-    var files=Array.from(e.target.files);
-    if(!files.length) return;
-    batchUploadPhotos(files);
+  if(!input) return;
+  input.addEventListener('change',function(e){
+    var files=Array.from(e.target.files||[]);
     e.target.value='';
+    if(!files.length){ _batchClearPrompt(); return; }
+    batchUploadPhotos(files);
   });
+  // Picker closed with nothing chosen (Chrome 113+, Safari 16.4+).
+  input.addEventListener('cancel',function(){ _batchClearPrompt(); });
 });
 
-async function batchUploadPhotos(files){
-  if(!dailyHeader){showToast('Post a Daily Header first.',true);return;}
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible' && _batch && _batch.active){
+    _batchAcquireWakeLock();
+    _batchRender();
+  }
+});
+
+function _batchClearPrompt(){
+  if(_batch && _batch.active) return;
   var status=document.getElementById('batch-upload-status');
-  var results=document.getElementById('batch-upload-results');
-  status.style.display='block';
-  results.innerHTML='';
-  var total=files.length, uploaded=0;
+  if(status && !(_batch && _batch.items.length)){ status.style.display='none'; status.textContent=''; }
+}
+
+// Called by onClientChange / switchProject / startNewProjectHeader.
+function _batchReset(){
+  if(_batch && _batch.active){
+    var left=_batch.items.filter(function(it){ return it.state==='queued'; }).length;
+    _batch.cancelled=true;
+    if(left) showToast('Photo upload stopped: '+left+' photo'+(left===1?'':'s')+' not sent.', true);
+  }
+  _batch=null;
+  _batchReleaseWakeLock();
   window._batchFailedFiles=[];
-  for(var i=0;i<files.length;i++){
-    var file=files[i];
-    status.textContent='Uploading '+(uploaded+window._batchFailedFiles.length+1)+' of '+total+'...';
-    try{
-      var dataUrl=await readFileAsDataUrl(file);
-      var resp=await fetch(GOOGLE_SCRIPT_URL,{
-        method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',
-        body:JSON.stringify({action:'batchUploadPhoto',projectNumber:dailyHeader.projectNumber,
-          project:dailyHeader.project,client:dailyHeader.client,date:dailyHeader.date,
-          fileName:file.name,photoOriginal:dataUrl})
-      });
-      var data=await resp.json();
-      if(data.status==='success'){
-        uploaded++;
-        var row=document.createElement('div');
-        row.style.cssText='padding:3px 0;color:#1a5e35;font-size:12px;';
-        row.textContent='✓ '+file.name;
-        results.appendChild(row);
-      } else { throw new Error(data.message||'Upload failed'); }
-    } catch(err){
-      window._batchFailedFiles.push({file:file,name:file.name});
-      var row=document.createElement('div');
-      row.style.cssText='padding:3px 0;color:#9b1c2e;font-size:12px;display:flex;align-items:center;gap:8px;';
-      row.dataset.fileIndex=String(window._batchFailedFiles.length-1);
-      row.innerHTML='✗ '+file.name+' <button onclick="retryBatchPhoto(this)" style="font-size:11px;padding:2px 8px;border:1px solid #9b1c2e;border-radius:4px;background:none;color:#9b1c2e;cursor:pointer;">Retry</button>';
-      results.appendChild(row);
+}
+
+async function _batchAcquireWakeLock(){
+  try{
+    if(!('wakeLock' in navigator) || document.visibilityState!=='visible') return;
+    if(_batchWakeLock && !_batchWakeLock.released) return;
+    _batchWakeLock=await navigator.wakeLock.request('screen');
+  }catch(e){ _batchWakeLock=null; }   // unsupported or refused: upload still works
+}
+function _batchReleaseWakeLock(){
+  try{ if(_batchWakeLock) _batchWakeLock.release(); }catch(e){}
+  _batchWakeLock=null;
+}
+
+// Per-device list of photos already uploaded for a report (name only; camera
+// roll names are unique on one phone).  Pruned after BATCH_DONE_DAYS.
+function _batchDoneKey(h){ return BATCH_DONE_PREFIX+[h.projectNumber,h.project,h.date].join('|'); }
+function _batchDoneLoad(h){
+  try{ var o=JSON.parse(localStorage.getItem(_batchDoneKey(h))||'null'); return (o&&o.n)?o.n:[]; }catch(e){ return []; }
+}
+function _batchDoneAdd(h,name){
+  try{
+    var key=_batchDoneKey(h), list=_batchDoneLoad(h);
+    if(list.indexOf(name)<0) list.push(name);
+    localStorage.setItem(key, JSON.stringify({t:Date.now(), n:list}));
+  }catch(e){}
+}
+function _batchDonePrune(){
+  try{
+    var cutoff=Date.now()-BATCH_DONE_DAYS*86400000, drop=[];
+    for(var i=0;i<localStorage.length;i++){
+      var k=localStorage.key(i);
+      if(k && k.indexOf(BATCH_DONE_PREFIX)===0){
+        var o=null; try{ o=JSON.parse(localStorage.getItem(k)); }catch(e){}
+        if(!o || !o.t || o.t<cutoff) drop.push(k);
+      }
+    }
+    drop.forEach(function(k){ localStorage.removeItem(k); });
+  }catch(e){}
+}
+
+async function batchUploadPhotos(files){
+  if(!dailyHeader){ showToast('Post a Daily Header first.',true); _batchClearPrompt(); return; }
+  if(_batch && _batch.active){ showToast('Photos are still uploading.', true); return; }
+  _batchDonePrune();
+  // Snapshot the header so switching projects mid-batch can't redirect photos.
+  var hdr={projectNumber:dailyHeader.projectNumber, project:dailyHeader.project,
+           client:dailyHeader.client, date:dailyHeader.date};
+  var done=_batchDoneLoad(hdr);
+  var results=document.getElementById('batch-upload-results');
+  results.innerHTML='';
+  var b={hdr:hdr, items:[], active:true, cancelled:false, folderId:'', anyDone:false, skipped:0};
+  files.forEach(function(f){
+    var it={file:f, name:f.name, state:'queued', attempts:0, row:null};
+    if(done.indexOf(f.name)>=0){ it.state='skipped'; b.skipped++; }
+    b.items.push(it);
+  });
+  _batch=b;
+  _batchRender('Preparing '+files.length+' photo'+(files.length===1?'':'s')+'…');
+  b.items.forEach(function(it){ if(it.state==='skipped') _batchRow(it); });
+  _batchAcquireWakeLock();
+
+  await _batchRunPool(b, b.items.filter(function(it){ return it.state==='queued'; }));
+  // Automatic second pass for anything that failed (usually a lock or app switch).
+  var again=b.items.filter(function(it){ return it.state==='failed' && it.attempts<BATCH_AUTO_ATTEMPTS; });
+  if(again.length && !b.cancelled){
+    await _batchWaitVisible();
+    await new Promise(function(r){ setTimeout(r, 2000); });   // let the network come back
+    again.forEach(function(it){ it.state='queued'; _batchRow(it); });
+    _batchRender();
+    await _batchRunPool(b, again);
+  }
+  b.active=false;
+  if(_batch===b){ _batchReleaseWakeLock(); _batchRender(); }
+}
+
+function _batchWaitVisible(){
+  return new Promise(function(resolve){
+    if(document.visibilityState==='visible') return resolve();
+    function h(){ if(document.visibilityState==='visible'){ document.removeEventListener('visibilitychange',h); resolve(); } }
+    document.addEventListener('visibilitychange',h);
+  });
+}
+
+async function _batchRunPool(b, list){
+  var next=0;
+  // One at a time until something lands: batchUploadPhoto takes no lock, so
+  // parallel first uploads on a date with no folder yet could each create
+  // their own date folder.  Once one photo is in, the folder exists.
+  while(!b.cancelled && !b.anyDone && next<list.length){
+    var first=list[next++];
+    await _batchWaitVisible();
+    if(b.cancelled) return;
+    await _batchUploadOne(b, first);
+  }
+  async function worker(){
+    while(!b.cancelled && next<list.length){
+      var it=list[next++];
+      await _batchWaitVisible();          // a frozen page can't upload; wait, don't burn attempts
+      if(b.cancelled) return;
+      await _batchUploadOne(b, it);
     }
   }
-  if(window._batchFailedFiles.length===0){
-    status.textContent='✅ All '+total+' photo'+(total===1?'':'s')+' uploaded successfully.';
-    status.style.color='#1a5e35';
-  } else {
-    status.textContent=uploaded+' of '+total+' uploaded. '+window._batchFailedFiles.length+' failed — tap Retry to try again.';
-    status.style.color='#9a7d0a';
+  var n=Math.min(BATCH_CONCURRENCY, list.length), ws=[];
+  for(var i=0;i<n;i++) ws.push(worker());
+  await Promise.all(ws);
+}
+
+async function _batchUploadOne(b, it){
+  it.state='uploading'; it.attempts++;
+  _batchRender();
+  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var timer=ctrl?setTimeout(function(){ ctrl.abort(); }, BATCH_TIMEOUT_MS):null;
+  try{
+    var dataUrl=await readFileAsDataUrl(it.file);
+    var body={action:'batchUploadPhoto', projectNumber:b.hdr.projectNumber,
+      project:b.hdr.project, client:b.hdr.client, date:b.hdr.date,
+      fileName:it.name, photoOriginal:dataUrl, dedupe:true};
+    if(b.folderId) body.folderId=b.folderId;
+    var resp=await fetch(GOOGLE_SCRIPT_URL,{
+      method:'POST', headers:{'Content-Type':'text/plain'}, redirect:'follow',
+      body:JSON.stringify(body), signal:ctrl?ctrl.signal:undefined
+    });
+    var data=await resp.json();
+    if(data.status!=='success') throw new Error(data.message||'Upload failed');
+    if(data.folderId && !b.folderId) b.folderId=data.folderId;
+    b.anyDone=true;
+    it.state='done';
+    _batchDoneAdd(b.hdr, it.name);
+  }catch(err){
+    it.state='failed';
+    it.error=(err&&err.name==='AbortError')?'timed out':String(err&&err.message||err);
+  }finally{
+    if(timer) clearTimeout(timer);
+  }
+  if(_batch===b){ _batchRow(it); _batchRender(); }
+}
+
+function _batchRow(it){
+  var results=document.getElementById('batch-upload-results');
+  if(!results || !_batch) return;
+  var idx=_batch.items.indexOf(it);
+  if(!it.row){ it.row=document.createElement('div'); it.row.dataset.idx=String(idx); results.appendChild(it.row); }
+  var r=it.row;
+  r.style.cssText='padding:3px 0;font-size:12px;display:flex;align-items:center;gap:8px;';
+  if(it.state==='done'){ r.style.color='#1a5e35'; r.textContent='✓ '+it.name; }
+  else if(it.state==='skipped'){ r.style.color='#777'; r.textContent='✓ '+it.name+' (already uploaded)'; }
+  else if(it.state==='queued' || it.state==='uploading'){ r.style.color='#9a7d0a'; r.textContent='↻ '+it.name+' (retrying)'; }
+  else if(it.state==='failed'){
+    r.style.color='#9b1c2e';
+    if(_batch.active && it.attempts<BATCH_AUTO_ATTEMPTS){
+      r.textContent='✗ '+it.name+' (will retry automatically)';
+    } else {
+      r.innerHTML='';
+      r.appendChild(document.createTextNode('✗ '+it.name+' '));
+      var btn=document.createElement('button');
+      btn.textContent='Retry';
+      btn.style.cssText='font-size:11px;padding:2px 8px;border:1px solid #9b1c2e;border-radius:4px;background:none;color:#9b1c2e;cursor:pointer;';
+      btn.onclick=function(){ retryBatchPhoto(this); };
+      r.appendChild(btn);
+    }
   }
 }
 
-async function retryBatchPhoto(btn){
-  var idx=parseInt(btn.closest('div').dataset.fileIndex);
-  var item=window._batchFailedFiles&&window._batchFailedFiles[idx];
-  if(!item) return;
-  btn.textContent='Retrying...';btn.disabled=true;
-  try{
-    var dataUrl=await readFileAsDataUrl(item.file);
-    var resp=await fetch(GOOGLE_SCRIPT_URL,{
-      method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',
-      body:JSON.stringify({action:'batchUploadPhoto',projectNumber:dailyHeader.projectNumber,
-        project:dailyHeader.project,client:dailyHeader.client,date:dailyHeader.date,
-        fileName:item.name,photoOriginal:dataUrl})
-    });
-    var data=await resp.json();
-    if(data.status==='success'){
-      var row=btn.closest('div');
-      row.style.color='#1a5e35';
-      row.innerHTML='✓ '+item.name;
-    } else { throw new Error(data.message||'failed'); }
-  } catch(err){
-    btn.textContent='Retry';btn.disabled=false;
-    showToast('Retry failed: '+err.toString(),true);
+// Status line is always recounted from per-photo state, so a successful
+// manual retry clears the "failed" count.
+function _batchRender(override){
+  var status=document.getElementById('batch-upload-status');
+  if(!status || !_batch) return;
+  var c={queued:0,uploading:0,done:0,failed:0,skipped:0};
+  _batch.items.forEach(function(it){ c[it.state]++; });
+  var total=_batch.items.length, sent=total-c.skipped;
+  var skipNote=c.skipped?'  ('+c.skipped+' already uploaded from this phone, skipped.)':'';
+  status.style.display='block';
+  if(override){ status.style.color='#555'; status.textContent=override; return; }
+  if(_batch.active || c.queued || c.uploading){
+    status.style.color='#1a3a5c';
+    status.textContent='Uploading…  '+c.done+' of '+sent+' done.  Keep the app open; the screen will stay on.'+skipNote;
+  } else if(c.failed===0){
+    status.style.color='#1a5e35';
+    status.textContent='✅ All '+sent+' photo'+(sent===1?'':'s')+' uploaded successfully.'+skipNote;
+  } else {
+    status.style.color='#9a7d0a';
+    status.textContent=c.done+' of '+sent+' uploaded.  '+c.failed+' failed; tap Retry next to '+(c.failed===1?'it':'each one')+'.'+skipNote;
   }
+  window._batchFailedFiles=_batch.items.filter(function(it){ return it.state==='failed'; });
+}
+
+async function retryBatchPhoto(btn){
+  var row=btn.closest('div');
+  var b=_batch;
+  if(!b || !row) return;
+  var it=b.items[parseInt(row.dataset.idx,10)];
+  if(!it || it.state!=='failed') return;
+  btn.textContent='Retrying...'; btn.disabled=true;
+  await _batchUploadOne(b, it);
+  if(it.state==='failed') showToast('Retry failed: '+(it.error||'unknown error'), true);
 }
 
 function readFileAsDataUrl(file){
