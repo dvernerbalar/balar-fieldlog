@@ -181,6 +181,7 @@ textarea{resize:vertical;min-height:90px;}
 .photo-upload-zone{border:2px dashed #c0c8d0;border-radius:10px;padding:24px 20px;text-align:center;cursor:pointer;transition:all 0.2s;position:relative;background:#f8fafc;}
 .photo-upload-zone:hover{border-color:var(--red);}
 .photo-upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;}
+.drop-hover{outline:3px dashed #1a3a5c !important;outline-offset:2px;background:#eaf1f8 !important;}
 .upload-text{font-size:14px;color:#888;}.upload-text strong{color:var(--red);}
 .photo-previews{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;margin-top:12px;}
 .photo-thumb{aspect-ratio:1;border-radius:6px;overflow:hidden;position:relative;background:#eee;}
@@ -697,7 +698,7 @@ html.flh-lock, html.flh-lock body, html.flh-lock main{overflow:hidden !important
         </div>
         <div class="form-row">
           <label>Photo</label>
-          <div class="photo-upload-zone" onclick="takePhotoWithCamera()" style="cursor:pointer;"><input type="file" id="photo-input" accept=".jpg,.jpeg,.png,.gif,.heic,.webp,.JPG,.JPEG,.PNG" style="display:none;"><div style="font-size:28px;margin-bottom:6px;">📷</div><div class="upload-text"><strong>Take or select a photo</strong><br><span style="font-size:12px;color:#aaa;">Photos taken in-app save to your camera roll</span></div></div>
+          <div class="photo-upload-zone" id="photo-drop-zone" onclick="takePhotoWithCamera()" style="cursor:pointer;"><input type="file" id="photo-input" accept=".jpg,.jpeg,.png,.gif,.heic,.webp,.JPG,.JPEG,.PNG" style="display:none;"><div style="font-size:28px;margin-bottom:6px;">📷</div><div class="upload-text"><strong>Take or select a photo</strong><br><span style="font-size:12px;color:#aaa;">Photos taken in-app save to your camera roll</span><span class="fl-drop-hint" style="display:none;font-size:12px;color:#aaa;"><br>On a computer, you can also drag a photo here</span></div></div>
           <div class="photo-previews" id="photo-previews"></div>
         </div>
         <div class="form-row">
@@ -755,11 +756,12 @@ html.flh-lock, html.flh-lock body, html.flh-lock main{overflow:hidden !important
       <div id="batch-upload-section" class="sec" style="display:none;">
         <button type="button" class="sec-head" aria-expanded="false" onclick="v6Toggle('photos')"><span class="sec-name">Site Photos</span><span class="sec-pill" id="v6pill-photos"></span><span class="sec-chev" aria-hidden="true">&#9656;</span></button>
         <div class="sec-body">
-          <div class="card header-card" style="padding:14px 16px;">
+          <div class="card header-card" id="batch-drop-zone" style="padding:14px 16px;">
             <div style="font-size:13px;color:#555;margin-bottom:10px;">Upload additional site photos for this date. Saved at full quality to the project photo folder and linked in the report.</div>
             <div id="batch-wifi-banner" style="display:none;background:#fef9e7;border:1px solid #f9e79f;color:#9a7d0a;font-size:12px;padding:8px 12px;border-radius:5px;margin-bottom:10px;">&#128246; For best results, connect to WiFi before uploading large amounts of photos.</div>
             <input type="file" id="batch-photo-input" accept="image/*" multiple style="display:none;">
             <button class="btn-post-header" onclick="batchSelectPhotos()" style="background:#1a3a5c;margin-bottom:6px;">&#128247; Select Photos from Library</button>
+            <div class="fl-drop-hint" style="display:none;font-size:12px;color:#777;margin-bottom:6px;">On a computer, you can also drag photos onto this box.</div>
             <div style="font-size:12px;color:#777;margin-bottom:10px;">After you tap &#10003;, a large selection can sit on the photo screen for a minute or more while your phone prepares the photos.  That's normal; uploading starts on its own.</div>
             <div id="batch-upload-status" style="display:none;font-size:13px;margin-top:8px;"></div>
             <div id="batch-upload-results" style="margin-top:8px;font-size:12px;"></div>
@@ -828,8 +830,8 @@ html.flh-lock, html.flh-lock body, html.flh-lock main{overflow:hidden !important
       <div><label>Weather Update</label><select id="edit-weather"><option value="">Same as daily</option><option>Clear / Sunny</option><option>Partly Cloudy</option><option>Overcast</option><option>Rain / Drizzle</option><option>Heavy Rain</option><option>Windy</option><option>Extreme Heat</option><option>Thunderstorms</option><option>Fog</option></select></div>
       <div><label>Temp (°F)</label><input type="text" id="edit-temperature"></div>
     </div>
-    <div class="form-row" style="margin-top:10px;">
-      <label>Photo</label>
+    <div class="form-row" id="edit-photo-drop" style="margin-top:10px;">
+      <label>Photo <span class="fl-drop-hint" style="display:none;font-weight:400;text-transform:none;font-size:11px;color:#aaa;">(or drag one here)</span></label>
       <div id="edit-photo-preview" style="margin-bottom:8px;"></div>
       <input type="file" id="edit-photo-input" accept=".jpg,.jpeg,.png,.gif,.heic,.webp,.JPG,.JPEG,.PNG" style="font-size:13px;width:100%;max-width:100%;box-sizing:border-box;" onchange="handleEditPhoto(this)">
     </div>
@@ -2171,6 +2173,40 @@ function compressForReport(img, callback){
   callback(canvas.toDataURL('image/jpeg', 0.75));
 }
 
+// ── HEIC SUPPORT (added 2026-10-27) ──
+// iPhones shoot HEIC.  The phone converts to JPG when a photo is picked there,
+// but a HEIC file copied to a computer reaches the browser as is, and Chrome
+// can't decode it.  When a photo fails to decode and it's HEIC, the converter
+// (heic2any, ~1.3 MB) is loaded once from the CDN and the photo is converted
+// to JPG.  Browsers that decode HEIC natively (Safari) never load it.
+var HEIC2ANY_URL='https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+var _heicLibPromise=null;
+function _flIsHeic(file){
+  return /^image\/hei[cf]/i.test((file&&file.type)||'') || /\.hei[cf]$/i.test((file&&file.name)||'');
+}
+function _flLoadHeicLib(){
+  if(window.heic2any) return Promise.resolve();
+  if(!_heicLibPromise){
+    _heicLibPromise=new Promise(function(resolve,reject){
+      var sc=document.createElement('script');
+      sc.src=HEIC2ANY_URL; sc.async=true;
+      sc.onload=function(){ window.heic2any ? resolve() : reject(new Error('HEIC converter failed to load.')); };
+      sc.onerror=function(){ _heicLibPromise=null; reject(new Error('Couldn\'t load the HEIC converter. Check your internet connection.')); };
+      document.head.appendChild(sc);
+    });
+  }
+  return _heicLibPromise;
+}
+function _flHeicToJpeg(file){
+  return _flLoadHeicLib().then(function(){
+    return window.heic2any({blob:file, toType:'image/jpeg', quality:0.92});
+  }).then(function(out){
+    var blob=Array.isArray(out)?out[0]:out;   // burst/multi image HEIC: first frame
+    var base=((file&&file.name)||'photo').replace(/\.hei[cf]$/i,'');
+    return new File([blob], base+'.jpg', {type:'image/jpeg'});
+  });
+}
+
 function compressPhoto(file, callback){
   var reader = new FileReader();
   reader.onload = function(e){
@@ -2181,6 +2217,17 @@ function compressPhoto(file, callback){
           callback(small, large);
         });
       });
+    };
+    img.onerror = function(){
+      // HEIC (iPhone) photos copied to a computer: Chrome can't decode them,
+      // so convert to JPG and run the result through this same pipeline.
+      if(_flIsHeic(file)){
+        showToast('Converting iPhone photo...');
+        _flHeicToJpeg(file).then(function(jpg){ compressPhoto(jpg, callback); })
+          .catch(function(err){ showToast((err&&err.message)||'Couldn\'t convert that photo.', true); });
+        return;
+      }
+      showToast('Couldn\'t read that photo.', true);
     };
     img.src = e.target.result;
   };
@@ -5129,7 +5176,8 @@ async function _batchUploadOne(b, it){
     var dataUrl=await readFileAsDataUrl(it.file);
     var body={action:'batchUploadPhoto', projectNumber:b.hdr.projectNumber,
       project:b.hdr.project, client:b.hdr.client, date:b.hdr.date,
-      fileName:it.name, photoOriginal:dataUrl, dedupe:true};
+      fileName:(_flIsHeic(it.file)&&dataUrl.indexOf('data:image/jpeg')===0)?it.name.replace(/\.hei[cf]$/i,'.jpg'):it.name,
+      photoOriginal:dataUrl, dedupe:true};
     if(b.folderId) body.folderId=b.folderId;
     var resp=await fetch(GOOGLE_SCRIPT_URL,{
       method:'POST', headers:{'Content-Type':'text/plain'}, redirect:'follow',
@@ -5224,7 +5272,11 @@ function readFileAsDataUrl(file){
           resolve(compressed);
         });
       };
-      img.onerror=function(){ resolve(e.target.result); }; // fallback to raw if img fails
+      img.onerror=function(){
+        // HEIC from a computer: convert to JPG, then compress like any other photo.
+        if(_flIsHeic(file)){ _flHeicToJpeg(file).then(readFileAsDataUrl).then(resolve, reject); return; }
+        resolve(e.target.result);   // fallback to raw if img fails
+      };
       img.src=e.target.result;
     };
     reader.onerror=function(){reject(new Error('Failed to read file'));};
@@ -5286,6 +5338,68 @@ async function retryDrivePhoto(entryId){
   if(btn){btn.textContent='Retry Photo';btn.disabled=false;}
   showToast('Photo no longer available locally. Tap Edit on the entry to re-add the photo.',true);
 }
+
+// ── DESKTOP DRAG AND DROP (added 2026-10-27) ──
+// Lets a computer browser drop photos on the entry photo box, the Edit Entry
+// photo row, and the Site Photos batch box.  Dropped files go through the same
+// handlers as the file picker.  A drop anywhere else on the page is swallowed
+// so the browser doesn't navigate away to the image and lose an unsaved entry.
+// Touch devices never fire these events, so iOS/native behavior is unchanged.
+function _flDragHasFiles(e){
+  var t=e.dataTransfer&&e.dataTransfer.types;
+  return !!t && Array.prototype.indexOf.call(t,'Files')!==-1;
+}
+function _flDropImages(e){
+  return Array.from((e.dataTransfer&&e.dataTransfer.files)||[]).filter(function(f){
+    return /^image\//.test(f.type) || /\.(jpe?g|png|gif|webp|heic)$/i.test(f.name||'');
+  });
+}
+function _flDropZone(el, onFiles){
+  if(!el) return;
+  var depth=0;
+  el.addEventListener('dragenter',function(e){
+    if(!_flDragHasFiles(e)) return;
+    e.preventDefault(); depth++; el.classList.add('drop-hover');
+  });
+  el.addEventListener('dragover',function(e){
+    if(!_flDragHasFiles(e)) return;
+    e.preventDefault(); e.dataTransfer.dropEffect='copy';
+  });
+  el.addEventListener('dragleave',function(){
+    if(--depth<=0){ depth=0; el.classList.remove('drop-hover'); }
+  });
+  el.addEventListener('drop',function(e){
+    if(!_flDragHasFiles(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    depth=0; el.classList.remove('drop-hover');
+    var files=_flDropImages(e);
+    if(!files.length){ showToast('Only photo files can be dropped here.', true); return; }
+    onFiles(files);
+  });
+}
+document.addEventListener('DOMContentLoaded',function(){
+  window.addEventListener('dragover',function(e){ if(_flDragHasFiles(e)) e.preventDefault(); });
+  window.addEventListener('drop',function(e){ if(_flDragHasFiles(e)) e.preventDefault(); });
+  // Show the "drag a photo here" hints only on a mouse-driven screen.
+  if(window.matchMedia && window.matchMedia('(hover:hover) and (pointer:fine)').matches){
+    document.querySelectorAll('.fl-drop-hint').forEach(function(h){ h.style.display=h.tagName==='DIV'?'block':'inline'; });
+  }
+  _flDropZone(document.getElementById('photo-drop-zone'), function(files){
+    var pi=document.getElementById('photo-input');
+    if(pi && pi.disabled){ showToast('Wait for the current entry to finish saving.', true); return; }
+    if(files.length>1) showToast('One photo per entry.  Used the first one; use Site Photos for the rest.');
+    handlePhotos({target:{files:[files[0]]}});
+  });
+  _flDropZone(document.getElementById('edit-photo-drop'), function(files){
+    if(files.length>1) showToast('One photo per entry.  Used the first one.');
+    handleEditPhoto({files:[files[0]]});
+  });
+  _flDropZone(document.getElementById('batch-drop-zone'), function(files){
+    if(_batch && _batch.active){ showToast('Photos are still uploading. Wait for this batch to finish.', true); return; }
+    var banner=document.getElementById('batch-wifi-banner'); if(banner) banner.style.display='block';
+    batchUploadPhotos(files);
+  });
+});
 
 async function takePhotoWithCamera(){
   if(!window._capacitorReady){
